@@ -203,7 +203,7 @@ function connect(A,B,k){const key=A.id<B.id?A.id+'_'+B.id+'_'+k:B.id+'_'+A.id+'_
   const ax=A.x+ux*ra,ay=A.y+uy*ra,bx=B.x-ux*rb,by=B.y-uy*rb;
   const cfg=k===0?[0.1,60,420,900,0.2]:k===1?[0.1,50,300,450,0.15]:k===5?[0.07,30,380,700,0.2]:[0.13,40,160,150,0.1];
   for(let a=0;a<4;a++){const ph=hr(A.id,B.id,k*13+a)*100;const pts=routePts(ax,ay,bx,by,cfg[0]*(a%2?-1:1),cfg[1],ph,cfg[2]);
-    if(waterRunOK(pts,cfg[3],cfg[4])){const r=mkRoad(k,pts);if(r){bridgesOf(r);if(k===0){if(A.type===3)JUNC.push([A,ax,ay]);if(B.type===3)JUNC.push([B,bx,by])}}return}}}
+    if(waterRunOK(pts,cfg[3],cfg[4])){const r=mkRoad(k,pts);if(r){bridgesOf(r);if(k===0){const p=r.pts,n=r.n;if(A.type===3)JUNC.push([A,ax,ay,p[2]-p[0],p[3]-p[1]]);if(B.type===3)JUNC.push([B,bx,by,p[n*2-4]-p[n*2-2],p[n*2-3]-p[n*2-1]])}}return}}}
 const JUNC=[];
 function ringR(c,a){return c.R*(1.08+0.07*noise(M.cos(a)*1.5+c.id,M.sin(a)*1.5))}
 const bigs=live.filter(c=>c.type>=2),towns=live.filter(c=>c.type===1),vills=live.filter(c=>c.type===0);
@@ -273,7 +273,10 @@ function addClover(Jx,Jy,tx,ty,nx,ny,half){const rl=46,D=17,E=RW[0]/2-2.5;
     const p1x=Jx+ax*(D+3)+bx*rl*3.3,p1y=Jy+ay*(D+3)+by*rl*3.3,p2x=Jx+bx*(D+3)+ax*rl*3.3,p2y=Jy+by*(D+3)+ay*rl*3.3,cx=Jx+(ax+bx)*rl*3.05,cy=Jy+(ay+by)*rl*3.05;
     const op=[Jx+ax*E+bx*(rl*3.3-130),Jy+ay*E+by*(rl*3.3-130)];for(let q=0;q<=14;q++){const t=q/14,u=1-t;op.push(u*u*p1x+2*u*t*cx+t*t*p2x,u*u*p1y+2*u*t*cy+t*t*p2y)}op.push(Jx+bx*E+ax*(rl*3.3-130),Jy+by*E+ay*(rl*3.3-130));mkRoad(6,op)}}
 function nearestS(r,x,y){let best=1e18,bs=0;for(let i=0;i<r.n-1;i++){const ax=r.pts[i*2],ay=r.pts[i*2+1],bx=r.pts[i*2+2],by=r.pts[i*2+3];const dx=bx-ax,dy=by-ay,l2=dx*dx+dy*dy||1;let t=((x-ax)*dx+(y-ay)*dy)/l2;t=clamp(t,0,1);const px=ax+dx*t,py=ay+dy*t;const d=(px-x)**2+(py-y)**2;if(d<best){best=d;bs=r.cum[i]+t*M.sqrt(l2)}}return [M.sqrt(best),bs]}
-for(const [c,jx,jy] of JUNC){if(landE(jx,jy,0)<0)continue;const L=M.hypot(jx-c.x,jy-c.y);const nx=(jx-c.x)/L,ny=(jy-c.y)/L;addClover(jx,jy,-ny,nx,nx,ny,true);
+for(const [c,jx,jy,hx,hy] of JUNC){if(landE(jx,jy,0)<0)continue;const L=M.hypot(jx-c.x,jy-c.y);const nx=(jx-c.x)/L,ny=(jy-c.y)/L;
+  // half cloverleaf only where the highway meets the ring almost radially and on dry land
+  const hl=M.hypot(hx,hy)||1;let ok=(hx*nx+hy*ny)/hl>0.93;for(let q=0;q<16&&ok;q++){const a=q/16*TAU,rr=q&1?150:280;if(landE(jx+M.cos(a)*rr,jy+M.sin(a)*rr,0.002)<0)ok=false}
+  if(ok)addClover(jx,jy,-ny,nx,nx,ny,true);
   mkRoad(2,[jx,jy,c.x+(jx-c.x)*0.8,c.y+(jy-c.y)*0.8]);
   for(const r of c.rings||[]){const [d,s]=nearestS(r,jx,jy);if(d<120){(r.ov=r.ov||[]).push([s-42,s+42]);break}}}
 // grade-separated crossings ----------------------------------------------

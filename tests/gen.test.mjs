@@ -15,7 +15,7 @@ const WorldGen = ctx.WorldGen;
 test('seed 1337 совпадает с эталоном этапа 4', () => {
   const W = WorldGen(1337);
   assert.equal(W.cities.length, 433, 'число населённых пунктов');
-  assert.equal(W.roads.length, 6173, 'число дорог (этап 4: полуразвязки у кольцевых)');
+  assert.equal(W.roads.length, 6161, 'число дорог (этап 4: полуразвязки у кольцевых)');
   assert.equal(W.WORLD, 131072);
 });
 
