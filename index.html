@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Живой мир — этап 3</title>
+<link rel="stylesheet" href="src/style.css">
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="loading"><div class="sp"></div><div>Генерация мира…</div></div>
+<div class="pn" id="top"><h1>Живой мир <i>· этап 3</i></h1><div id="st"></div>
+ <div class="row"><button id="home">🌍 Весь мир</button><button id="rnd">🎲 Случайное место</button><button id="newworld">✨ Новый мир</button></div>
+ <div class="row"><label><input type="checkbox" id="o_clouds">Облака</label><label><input type="checkbox" id="o_traffic">Транспорт</label><label><input type="checkbox" id="o_labels">Подписи</label><span id="seed"></span></div>
+ <div class="row"><span id="clock">17:00</span><input type="range" id="tod" min="0" max="1439" step="1"><div class="seg"><button id="tpause" title="Пауза (P)">⏸</button><button id="tplay" class="on" title="Обычная скорость">▶</button><button id="tfast" title="Быстро">⏩</button></div></div>
+ <div class="row"><div class="seg" id="seasons"><button data-s="0" class="on">☀️ Лето</button><button data-s="1">🍂 Осень</button><button data-s="2">❄️ Зима</button></div><select id="wx" title="Погода"></select></div></div>
+<div class="pn" id="insp"><button class="x" id="inspx">✕</button><div id="inspc"></div></div>
+<div class="pn" id="side"><input id="q" placeholder="Поиск города…" autocomplete="off"><div id="list"></div></div>
+<button id="tg">☰</button>
+<div class="pn" id="bl"><div id="alt">—</div><div id="scalewrap"><div id="scalebar"></div><span id="scalet"></span></div><div id="pos"></div><div id="fps"></div></div>
+<canvas id="mini" width="256" height="256"></canvas>
+<div class="pn" id="help">Колесо / щипок — масштаб · Перетаскивание — движение · Клик — инспектор · Двойной клик — приблизить · WASD, +/− · N — день/ночь · P — пауза</div>
+<script src="src/gen.js"></script>
+<script src="src/main.js"></script>
+</body></html>
