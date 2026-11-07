@@ -123,12 +123,13 @@ const GL_W=glow(255,244,220),GL_R=glow(255,40,28),GL_G=glow(60,255,120),GL_S=glo
 const PLANES=[],PLANESH=[];for(let c=0;c<5;c++){const p=mk(128,128),x=p.getContext('2d');x.translate(64,64);x.scale(2,2);W.drawPlane(x,1,c);PLANES.push(p);
   const s=mk(128,128),y=s.getContext('2d');y.drawImage(p,0,0);y.globalCompositeOperation='source-in';y.fillStyle='#000';y.fillRect(0,0,128,128);PLANESH.push(s)}
 // headlight beam: origin at left-middle, two lamps + cone (local: x forward)
-const BEAM=(()=>{const c=mk(128,48),x=c.getContext('2d');const g=x.createLinearGradient(0,0,128,0);g.addColorStop(0,'rgba(255,240,200,0.55)');g.addColorStop(0.35,'rgba(255,236,190,0.22)');g.addColorStop(1,'rgba(255,230,180,0)');
-  x.fillStyle=g;x.beginPath();x.moveTo(0,16);x.lineTo(128,0);x.lineTo(128,48);x.lineTo(0,32);x.closePath();x.fill();
-  const g2=x.createRadialGradient(0,24,0,0,24,40);g2.addColorStop(0,'rgba(255,245,215,0.6)');g2.addColorStop(1,'rgba(255,245,215,0)');x.fillStyle=g2;x.fillRect(0,0,128,48);
-  x.fillStyle='rgba(255,255,240,1)';x.beginPath();x.arc(3,17,3,0,TAU);x.arc(3,31,3,0,TAU);x.fill();return c})();
+const BEAM=(()=>{const Wd=256,Hd=96,c=mk(Wd,Hd),x=c.getContext('2d');const im=x.createImageData(Wd,Hd),d=im.data; // 22 x 8 m, lamps at +-0.75 m
+  for(let py=0;py<Hd;py++)for(let px=0;px<Wd;px++){const u=px/Wd,v=(py+0.5-Hd/2)/12;let I=0;
+    for(const ly of [-0.75,0.75]){const sp=0.35+u*22*0.2,dv=(v-ly-u*ly*0.6)/sp;I+=M.exp(-dv*dv*1.4)}
+    I*=M.pow(1-u,1.7)*M.min(1,u*14+0.15)*0.32;const o=(py*Wd+px)*4;d[o]=255;d[o+1]=238;d[o+2]=205;d[o+3]=M.min(255,I*255)}
+  x.putImageData(im,0,0);x.globalCompositeOperation='lighter';for(const ly of [-0.75,0.75]){const cy=Hd/2+ly*12;const g=x.createRadialGradient(2,cy,0,2,cy,7);g.addColorStop(0,'rgba(255,255,245,1)');g.addColorStop(0.35,'rgba(255,250,230,0.5)');g.addColorStop(1,'rgba(255,245,220,0)');x.fillStyle=g;x.fillRect(0,cy-7,9,14)}return c})();
 const TAIL=(()=>{const c=mk(32,32),x=c.getContext('2d');const g=x.createRadialGradient(16,16,0,16,16,16);g.addColorStop(0,'rgba(255,40,30,0.9)');g.addColorStop(0.4,'rgba(255,20,10,0.35)');g.addColorStop(1,'rgba(255,0,0,0)');x.fillStyle=g;x.fillRect(0,0,32,32);
-  x.fillStyle='rgba(255,90,70,1)';x.fillRect(13,7,4,5);x.fillRect(13,20,4,5);return c})();
+  x.fillStyle='rgba(255,90,70,1)';x.beginPath();x.arc(16,9.5,1.6,0,TAU);x.arc(16,22.5,1.6,0,TAU);x.fill();return c})();
 const FLAKE=(()=>{const c=mk(16,16),x=c.getContext('2d');const g=x.createRadialGradient(8,8,0,8,8,8);g.addColorStop(0,'rgba(255,255,255,1)');g.addColorStop(0.45,'rgba(255,255,255,0.7)');g.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=g;x.fillRect(0,0,16,16);return c})();
 const TRAM=(()=>{const c=mk(124,12),x=c.getContext('2d');x.fillStyle='rgba(0,0,0,0.3)';x.fillRect(3,3,121,9);for(let i=0;i<3;i++){x.fillStyle='#c8322a';x.fillRect(2+i*40.5,1,39,9.6);x.fillStyle='#eeeeea';x.fillRect(4+i*40.5,3,35,5.6);x.fillStyle='rgba(40,50,60,0.6)';for(let q=0;q<5;q++)x.fillRect(6+i*40.5+q*6.8,3.6,4.6,1.2)}x.fillStyle='#333';x.fillRect(118,2,4,8);x.fillStyle='#555';x.fillRect(30,5,6,1.6);return c})();
 // tileable fog texture
@@ -223,9 +224,9 @@ function drawTraffic(roads){const m=cam.m,k=1/m,dots=m>1.5;carCount=0;cbn=0;
   if(dots){ctx.setTransform(DPR,0,0,DPR,0,0);for(let ci=0;ci<10;ci++){const A=DOTS[ci];if(!A.length)continue;ctx.fillStyle=ci===8?'#ddd':ci===9?'#e8c040':DOTC[ci];ctx.beginPath();for(let i=0;i<A.length;i+=3){const sz=A[i+2];ctx.rect(A[i]-sz/2,A[i+1]-sz/2,sz,sz)}ctx.fill()}}}
 function drawCarLights(a){if(!cbn||a<0.02)return;const m=cam.m,k=1/m;ctx.globalCompositeOperation='lighter';
   if(m>1.5){ctx.setTransform(DPR,0,0,DPR,0,0);const d=M.max(1.1,2.6*k),sz=M.max(1.3,2.2*k);
-    ctx.globalAlpha=a*0.9;ctx.fillStyle='rgb(255,232,180)';for(let i=0;i<cbn;i++){const o=i*5;ctx.fillRect(CB[o]+CB[o+2]*d-sz/2,CB[o+1]+CB[o+3]*d-sz/2,sz,sz)}
-    ctx.globalAlpha=a*0.8;ctx.fillStyle='rgb(255,36,24)';for(let i=0;i<cbn;i++){const o=i*5;ctx.fillRect(CB[o]-CB[o+2]*d-sz/2,CB[o+1]-CB[o+3]*d-sz/2,sz,sz)}}
-  else{for(let i=0;i<cbn;i++){const o=i*5,L=CB[o+4];setRot(CB[o],CB[o+1],CB[o+2],CB[o+3],k);ctx.globalAlpha=a*0.75;ctx.drawImage(BEAM,L-0.3,-4.5,26,9);ctx.globalAlpha=a*0.9;ctx.drawImage(TAIL,-L-1.6,-1.6,3.2,3.2)}}
+    ctx.globalAlpha=a*0.7;ctx.fillStyle='rgb(255,232,180)';for(let i=0;i<cbn;i++){const o=i*5;ctx.fillRect(CB[o]+CB[o+2]*d-sz/2,CB[o+1]+CB[o+3]*d-sz/2,sz,sz)}
+    ctx.globalAlpha=a*0.6;ctx.fillStyle='rgb(255,36,24)';for(let i=0;i<cbn;i++){const o=i*5;ctx.fillRect(CB[o]-CB[o+2]*d-sz/2,CB[o+1]-CB[o+3]*d-sz/2,sz,sz)}}
+  else{for(let i=0;i<cbn;i++){const o=i*5,L=CB[o+4];setRot(CB[o],CB[o+1],CB[o+2],CB[o+3],k);ctx.globalAlpha=a*0.8;ctx.drawImage(BEAM,L-0.25,-4,22,8);ctx.globalAlpha=a*0.85;ctx.drawImage(TAIL,-L-1.6,-1.6,3.2,3.2)}}
   ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}
 function drawTrains(roads,lp){const m=cam.m,k=1/m;if(lp)ctx.globalCompositeOperation='lighter';
   for(const r of roads){if(r.k!==5)continue;const nt=M.max(1,M.round(r.L/14000));

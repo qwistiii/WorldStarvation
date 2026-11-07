@@ -8,7 +8,7 @@
     "start": "node tools/serve.mjs",
     "build": "node tools/build.mjs",
     "test": "node --test tests/gen.test.mjs",
-    "test:browser": "node tests/smoke.mjs"
+    "test:browser": "node tools/build.mjs && node tests/smoke.mjs"
   },
   "engines": {
     "node": ">=18"
