@@ -21,7 +21,7 @@ const opt={clouds:true,labels:true,traffic:true};
 
 // ------------------------------------------------------------ workers / tile caches
 // cache: day tiles of the current season; stale: previous season (fallback while re-rendering); lcache: night-light tiles
-const cache=new Map(),pending=new Set();const LCS=[null,new Map(),new Map(),new Map()],LPS=[null,new Set(),new Set(),new Set()],lcache=LCS[1];const LHB=[0,0,2,3];let stale=new Map(),staleT=0;let frameNo=0,queue=[];
+const cache=new Map(),pending=new Set();const LCS=[null,new Map(),new Map(),new Map()],LPS=[null,new Set(),new Set(),new Set()],lcache=LCS[1];const LHB=[0,0,2,2];let stale=new Map(),staleT=0;let frameNo=0,queue=[];
 const workers=[];let mainRender=false;
 const NW=M.max(2,M.min(5,(navigator.hardwareConcurrency||4)-2));
 const wsrc=WorldGen.toString()+`
@@ -97,9 +97,15 @@ addEventListener('blur',()=>{for(const k in keys)keys[k]=false});
 
 // ------------------------------------------------------------ procedural assets (main thread)
 function mk(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;return c}
-const wavePat=(()=>{const c=mk(256,256),x=c.getContext('2d'),id=x.createImageData(256,256),d=id.data;const R=W.rng(99);const waves=[];
-  for(let i=0;i<9;i++)waves.push([1+(R()*7|0),(R()*9|0)-4,R()*TAU,0.5+R()]);
-  for(let j=0;j<256;j++)for(let i=0;i<256;i++){let v=0;for(const w of waves)v+=M.sin((w[0]*i+w[1]*j)/256*TAU+w[2])*w[3];v/=4;const h=M.pow(M.max(0,v),3.2);const o=(j*256+i)*4;d[o]=235;d[o+1]=245;d[o+2]=255;d[o+3]=clamp(h*255,0,255)}
+// water ripples: tileable height field (sum of wind-aligned waves with integer wave vectors), lit by the sun:
+// faces toward the sun -> light, away -> dark, plus sparse sun glints. Signed alpha like the ground materials.
+const wavePat=(()=>{const N=256,c=mk(N,N),x=c.getContext('2d'),id=x.createImageData(N,N),d=id.data;const R=W.rng(99);const waves=[];const wa=M.atan2(W.WDY,W.WDX);
+  for(let i=0;i<64;i++){const k=4+R()*R()*40,a=wa+(R()-0.5)*(i<20?1.6:TAU);const kx=M.round(M.cos(a)*k),ky=M.round(M.sin(a)*k);if(!kx&&!ky)continue;waves.push([kx,ky,R()*TAU,1/M.pow(M.hypot(kx,ky),1.15)])}
+  const S=new Float32Array(N*N),Hh=new Float32Array(N*N);let ms=0,mh=0;const lx=-W.SUNX,ly=-W.SUNY;
+  for(let j=0;j<N;j++)for(let i=0;i<N;i++){let gx=0,gy=0,h=0;for(const w of waves){const ph=(w[0]*i+w[1]*j)/N*TAU+w[2],cv=M.cos(ph)*w[3];gx+=cv*w[0];gy+=cv*w[1];h+=M.sin(ph)*w[3]}
+    const q=j*N+i;S[q]=gx*lx+gy*ly;Hh[q]=h;ms=M.max(ms,M.abs(S[q]));mh=M.max(mh,h)}
+  for(let q=0;q<N*N;q++){const v=S[q]/ms,gl=M.pow(M.max(0,v),6)*1.6+M.pow(M.max(0,Hh[q]/mh),8)*0.6;const o=q*4;
+    if(v>=0){d[o]=230;d[o+1]=242;d[o+2]=255;d[o+3]=clamp((v*0.55+gl)*200,0,255)}else{d[o]=4;d[o+1]=20;d[o+2]=44;d[o+3]=clamp(-v*0.7*200,0,255)}}
   x.putImageData(id,0,0);return ctx.createPattern(c,'repeat')})();
 function cloudSprite(seed){const N=256,c=mk(N,N),x=c.getContext('2d'),id=x.createImageData(N,N),d=id.data;const den=new Float32Array(N*N);const ox=seed*17.3,oy=seed*5.1;
   for(let j=0;j<N;j++)for(let i=0;i<N;i++){const u=i/N-0.5,v=j/N-0.5;const r=M.sqrt(u*u+v*v)*2;let n=0,a=0.55,f=2.2;for(let o=0;o<5;o++){n+=a*W.noise(u*f+ox+o*3.1,v*f+oy-o*1.7);a*=0.48;f*=2.05}
@@ -168,7 +174,7 @@ function inView(x,y,r){return x>vx0-r&&x<vx1+r&&y>vy0-r&&y<vy1+r}
 function setRot(x,y,hx,hy,k){ctx.setTransform(DPR*k*hx,DPR*k*hy,-DPR*k*hy,DPR*k*hx,DPR*x,DPR*y)}
 function tileZ(){const md=cam.m/M.min(DPR,1.5);let z=M.ceil(M.log2(WORLD/(256*md))-0.25);return clamp(z,0,12)}
 function tileRect(tx,ty,ts){return [M.round(((tx*ts-cam.x)/cam.m+VW/2)*DPR),M.round((((tx+1)*ts-cam.x)/cam.m+VW/2)*DPR),M.round(((ty*ts-cam.y)/cam.m+VH/2)*DPR),M.round((((ty+1)*ts-cam.y)/cam.m+VH/2)*DPR)]}
-function ancestor(mp,z,tx,ty,X0,Y0,X1,Y1){for(let d=1;d<=z;d++){const ax=tx>>d,ay=ty>>d;const a=mp.get(tkey(z-d,ax,ay));if(a&&a.b){a.f=frameNo;const sz=256/(1<<d);ctx.drawImage(a.b,(tx-(ax<<d))*sz,(ty-(ay<<d))*sz,sz,sz,X0,Y0,X1-X0,Y1-Y0);return true}}return false}
+function ancestor(mp,z,tx,ty,X0,Y0,X1,Y1,md){for(let d=1;d<=M.min(z,md||99);d++){const ax=tx>>d,ay=ty>>d;const a=mp.get(tkey(z-d,ax,ay));if(a&&a.b){a.f=frameNo;const sz=256/(1<<d);ctx.drawImage(a.b,(tx-(ax<<d))*sz,(ty-(ay<<d))*sz,sz,sz,X0,Y0,X1-X0,Y1-Y0);return true}}return false}
 function drawTiles(){
   const z=tileZ(),n=1<<z,ts=WORLD/n;
   const tx0=M.max(0,M.floor(vx0/ts)),tx1=M.min(n-1,M.floor(vx1/ts)),ty0=M.max(0,M.floor(vy0/ts)),ty1=M.min(n-1,M.floor(vy1/ts));
@@ -188,11 +194,11 @@ function lightLevel(z,a,L,prio){const n=1<<z,ts=WORLD/n,mp=LCS[L];
   const tx0=M.max(0,M.floor(vx0/ts)),tx1=M.min(n-1,M.floor(vx1/ts)),ty0=M.max(0,M.floor(vy0/ts)),ty1=M.min(n-1,M.floor(vy1/ts));ctx.globalAlpha=a;
   for(let ty=ty0;ty<=ty1;ty++)for(let tx=tx0;tx<=tx1;tx++){const k=tkey(z,tx,ty);const e=mp.get(k);const [X0,X1,Y0,Y1]=tileRect(tx,ty,ts);
     if(e){e.f=frameNo;if(e.b)ctx.drawImage(e.b,X0,Y0,X1-X0,Y1-Y0);continue}
-    requestL(z,tx,ty,prio+M.hypot((tx+0.5)*ts-cam.x,(ty+0.5)*ts-cam.y)/ts,L);ancestor(mp,z,tx,ty,X0,Y0,X1,Y1)}}
+    requestL(z,tx,ty,prio+M.hypot((tx+0.5)*ts-cam.x,(ty+0.5)*ts-cam.y)/ts,L);ancestor(mp,z,tx,ty,X0,Y0,X1,Y1,L===1?1:2)}}
 function drawLights(z,a){if(a<0.01)return;ctx.setTransform(1,0,0,1,0,0);ctx.globalCompositeOperation='lighter';
   const fogB=1+wcur.fog*0.9+wcur.rain*0.3;
   requestL(0,0,0,-1e9,1);
-  lightLevel(M.max(0,z-3),a*(lowQ?0.75:0.5)*fogB,3,-2e5);if(!lowQ)lightLevel(M.max(0,z-1),a*0.42*fogB,2,-1e5);
+  const far=1-smooth(15,200,cam.m)*0.55;lightLevel(M.max(0,z-2),a*(lowQ?0.7:0.45)*fogB*far,3,-2e5);if(!lowQ)lightLevel(M.max(0,z-1),a*0.42*fogB,2,-1e5);
   lightLevel(z,a*(1-wcur.fog*0.3),1,0.3);
   ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}
 
@@ -348,7 +354,7 @@ let sel=null;
 const BPOP=[0,3200,950,1700,60,0,0,0,0,0,40,0,180,45,0,0,0,0,300,0];
 function cityStats(c){if(c._st)return c._st;let pop=0,area=0;const cnt={};
   if(c.type===0){let L=0;for(const s of c.vst)L+=s.L;const houses=M.round(L/31*2*0.84);pop=houses*3;cnt.houses=houses;area=L*90}
-  else{const BD=c.D-1;for(let j=0;j<BD;j++)for(let i=0;i<BD;i++){const t=c.blocks[j*BD+i];if(!t)continue;const a=(c.us[i+1]-c.us[i])*(c.vs[j+1]-c.vs[j]);area+=a;pop+=BPOP[t]*a/14000;cnt[t]=(cnt[t]||0)+1}}
+  else{const BD=c.D-1;for(let j=0;j<BD;j++)for(let i=0;i<BD;i++){const t=c.blocks[j*BD+i];if(!t||t===20)continue;const a=(c.us[i+1]-c.us[i])*(c.vs[j+1]-c.vs[j]);area+=a;pop+=BPOP[t]*a/14000;cnt[t]=(cnt[t]||0)+1}}
   const zs=W.zones.filter(z=>z.city===c);const roads=[0,0,0,0,0,0];
   c._st={pop:pop<1000?M.round(pop/10)*10:pop<1e5?M.round(pop/100)*100:M.round(pop/1000)*1000,area,cnt,zs};return c._st}
 const fmtN=n=>String(M.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g,' ');
@@ -396,9 +402,12 @@ function frame(now){const dt=M.min(0.06,(now-last)/1000);last=now;T+=dt;frameNo+
   const A=LG.amb,NL=LG.lights;
   ctx.setTransform(DPR,0,0,DPR,0,0);ctx.fillStyle='#0e2e52';ctx.fillRect(0,0,VW,VH);
   // animated water glints (seen through translucent water in tiles)
-  const P=M.max(cam.m,0.3),sc=P/cam.m;const ga=(0.2+0.8*LG.day)*(1-wcur.cover*0.35);
-  for(let l=0;l<2;l++){const dr=l?-1:1;const ox=VW/2-cam.x/cam.m+T*(l?3:5)*dr/cam.m*sc,oy=VH/2-cam.y/cam.m+T*(l?4:-2)/cam.m*sc;
-    wavePat.setTransform(new DOMMatrix([sc*(l?1.37:1),0,0,sc*(l?1.37:1),ox+l*77,oy+l*31]));ctx.fillStyle=wavePat;ctx.globalAlpha=(l?0.5:0.7)*(1-smooth(4,60,cam.m)*0.75)*ga;ctx.fillRect(0,0,VW,VH)}ctx.globalAlpha=1;
+  // world-anchored octaves: texel size 0.08*2^k m; the two octaves around the current zoom cross-fade,
+  // so ripples stay glued to the water and never look like a stretched picture
+  {const ga=(0.2+0.8*LG.day)*(1-wcur.cover*0.35)*(1-smooth(6,90,cam.m)*0.8);const lv=M.log2(M.max(cam.m,0.01)/0.08)+0.6,k0=M.floor(lv),fr=lv-k0;
+    for(let o=0;o<2;o++){const wgt=o?fr:1-fr;if(wgt<0.03)continue;const tm=0.08*M.pow(2,k0+o),sp=M.sqrt(tm/0.08);
+      for(let l=0;l<2;l++){const sc=tm*(l?1.41:1)/cam.m,ang=l?0.35:0,ca=M.cos(ang)*sc,sa=M.sin(ang)*sc;const dx=W.WDX*T*(l?2.2:3.4)*sp+l*61*tm,dy=W.WDY*T*(l?2.2:3.4)*sp+l*29*tm;
+        wavePat.setTransform(new DOMMatrix([ca,sa,-sa,ca,(dx-cam.x)/cam.m+VW/2,(dy-cam.y)/cam.m+VH/2]));ctx.fillStyle=wavePat;ctx.globalAlpha=(l?0.45:0.65)*wgt*ga;ctx.fillRect(0,0,VW,VH)}}ctx.globalAlpha=1}
   pf('water');zNow=drawTiles();pf('tiles');
   {ctx.setTransform(DPR,0,0,DPR,0,0);ctx.fillStyle='rgba(14,46,82,0.8)';const X0=sxw(0),Y0=syw(0),X1=sxw(WORLD),Y1=syw(WORLD);if(X0>0||Y0>0||X1<VW||Y1<VH){ctx.beginPath();ctx.rect(-5,-5,VW+10,VH+10);ctx.rect(X0,Y0,X1-X0,Y1-Y0);ctx.fill('evenodd')}}
   if(opt.clouds)drawClouds(true);

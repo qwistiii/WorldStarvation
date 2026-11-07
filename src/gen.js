@@ -180,7 +180,7 @@ function buildVillage(c){
       if(okk){if(!cur)cur=[t,t];cur[1]=t}else{if(cur&&(!best||cur[1]-cur[0]>best[1]-best[0]))best=cur;cur=null}}
     if(cur&&(!best||cur[1]-cur[0]>best[1]-best[0]))best=cur;
     if(best&&best[1]-best[0]>80){const s={x0:c.x+ca*best[0],y0:c.y+sa*best[0],x1:c.x+ca*best[1],y1:c.y+sa*best[1],ca,sa,L:best[1]-best[0]};c.vst.push(s);
-      const r=mkRoad(4,[s.x0,s.y0,s.x1,s.y1]);}};
+      s.r=mkRoad(4,[s.x0,s.y0,s.x1,s.y1]);}};
   mk(c.ang,c.R*1.1);if(R()<0.6)mk(c.ang+PI/2+(R()-0.5)*0.4,c.R*0.75);
   if(c.R>280&&R()<0.5){const o=(R()<0.5?1:-1)*c.R*0.45;const ox=-c.sa*o,oy=c.ca*o;const cc={x:c.x+ox,y:c.y+oy};const sv=c.x;c.x=cc.x;c.y=cc.y;mk(c.ang,c.R*0.7);c.x=sv;c.y-=oy;}
 }
@@ -244,8 +244,10 @@ function placeZone(c,kind){
     const d=c.R*1.05+rad+120+ring;const x=c.x+ca*d,y=c.y+sa*d;if(x<4000||y<4000||x>WORLD-4000||y>WORLD-4000)continue;
     const za=a+PI/2+(R()-0.5)*0.3,zc=M.cos(za),zs=M.sin(za);let okk=true;
     for(let q=0;q<25&&okk;q++){const u=((q%5)/4-0.5)*W*1.05,v=((q/5|0)/4-0.5)*H*1.05;const px=x+u*zc-v*zs,py=y+u*zs+v*zc;const e=landE(px,py,0.003);if(e<0||e>(kind==='air'?0.3:0.4))okk=false}
-    if(!okk||!zoneFree(x,y,rad,c))continue;if(!OLDK.includes(kind)&&roadHits(x,y,za,W,H,6,null))continue;return mkZone(c,kind,x,y,za,W,H,rad)}
+    if(!okk||!zoneFree(x,y,rad,c))continue;if((ZSTRICT||!OLDK.includes(kind))&&roadHits(x,y,za,W,H,6,null))continue;return mkZone(c,kind,x,y,za,W,H,rad)}
+  if(ZSTRICT&&OLDK.includes(kind)){ZSTRICT=false;const z=placeZone(c,kind);ZSTRICT=true;return z}
   return null}
+let ZSTRICT=true;
 function mkZoneRaw(c,kind,x,y,a,W,H){const rad=M.hypot(W,H)/2;const z={kind:'zone',zk:kind,id:zones.length,city:c,x,y,ang:a,ca:M.cos(a),sa:M.sin(a),W,H,rad,seed:hh(c?c.id:7,zones.length,93)};
   z.bb=[x-rad-50,y-rad-50,x+rad+50,y+rad+50];zones.push(z);genZone(z);addF(z,z.bb[0],z.bb[1],z.bb[2],z.bb[3]);return z}
 function mkZone(c,kind,x,y,a,W,H,rad){const z={kind:'zone',zk:kind,id:zones.length,city:c,x,y,ang:a,ca:M.cos(a),sa:M.sin(a),W,H,rad,seed:hh(c.id,zones.length,91)};
@@ -264,14 +266,14 @@ for(const c of live){const R=rng(c.seed^0x5151);
   if(c.type>=1){if(R()<(c.type>=2?0.85:0.3))placeZone(c,'dacha');if(R()<0.55)placeZone(c,'cem');if(R()<0.3)placeZone(c,'agro');if(baseH(c.x,c.y,6)>0.18&&R()<0.45)placeZone(c,'quarry')}
   else if(R()<0.32)placeZone(c,'farm')}
 // interchanges -------------------------------------------------------------
-function addClover(Jx,Jy,tx,ty,nx,ny){const rl=46,D=17;
-  for(const sa of [-1,1])for(const sb of [-1,1]){const ax=tx*sa,ay=ty*sa,bx=nx*sb,by=ny*sb;const qx=Jx+(ax+bx)*(rl+D),qy=Jy+(ay+by)*(rl+D);
-    const pts=[qx-ax*rl+bx*55,qy-ay*rl+by*55];for(let d=180;d>=-90;d-=10){const t=d*PI/180;pts.push(qx+rl*(M.cos(t)*ax+M.sin(t)*bx),qy+rl*(M.cos(t)*ay+M.sin(t)*by))}
-    pts.push(qx-bx*rl+ax*55,qy-by*rl+ay*55);mkRoad(6,pts);
+function addClover(Jx,Jy,tx,ty,nx,ny,half){const rl=46,D=17,E=RW[0]/2-2.5;
+  for(const sa of [-1,1])for(const sb of (half?[1]:[-1,1])){const ax=tx*sa,ay=ty*sa,bx=nx*sb,by=ny*sb;const qx=Jx+(ax+bx)*(rl+D),qy=Jy+(ay+by)*(rl+D);
+    const pts=[Jx+ax*E+bx*(rl+D+150),Jy+ay*E+by*(rl+D+150),qx-ax*rl+bx*70,qy-ay*rl+by*70];for(let d=180;d>=-90;d-=10){const t=d*PI/180;pts.push(qx+rl*(M.cos(t)*ax+M.sin(t)*bx),qy+rl*(M.cos(t)*ay+M.sin(t)*by))}
+    pts.push(qx-bx*rl+ax*70,qy-by*rl+ay*70,Jx+bx*E+ax*(rl+D+150),Jy+by*E+ay*(rl+D+150));mkRoad(6,pts);
     const p1x=Jx+ax*(D+3)+bx*rl*3.3,p1y=Jy+ay*(D+3)+by*rl*3.3,p2x=Jx+bx*(D+3)+ax*rl*3.3,p2y=Jy+by*(D+3)+ay*rl*3.3,cx=Jx+(ax+bx)*rl*3.05,cy=Jy+(ay+by)*rl*3.05;
-    const op=[];for(let q=0;q<=14;q++){const t=q/14,u=1-t;op.push(u*u*p1x+2*u*t*cx+t*t*p2x,u*u*p1y+2*u*t*cy+t*t*p2y)}mkRoad(6,op)}}
+    const op=[Jx+ax*E+bx*(rl*3.3-130),Jy+ay*E+by*(rl*3.3-130)];for(let q=0;q<=14;q++){const t=q/14,u=1-t;op.push(u*u*p1x+2*u*t*cx+t*t*p2x,u*u*p1y+2*u*t*cy+t*t*p2y)}op.push(Jx+bx*E+ax*(rl*3.3-130),Jy+by*E+ay*(rl*3.3-130));mkRoad(6,op)}}
 function nearestS(r,x,y){let best=1e18,bs=0;for(let i=0;i<r.n-1;i++){const ax=r.pts[i*2],ay=r.pts[i*2+1],bx=r.pts[i*2+2],by=r.pts[i*2+3];const dx=bx-ax,dy=by-ay,l2=dx*dx+dy*dy||1;let t=((x-ax)*dx+(y-ay)*dy)/l2;t=clamp(t,0,1);const px=ax+dx*t,py=ay+dy*t;const d=(px-x)**2+(py-y)**2;if(d<best){best=d;bs=r.cum[i]+t*M.sqrt(l2)}}return [M.sqrt(best),bs]}
-for(const [c,jx,jy] of JUNC){if(landE(jx,jy,0)<0)continue;const L=M.hypot(jx-c.x,jy-c.y);const nx=(jx-c.x)/L,ny=(jy-c.y)/L;addClover(jx,jy,-ny,nx,nx,ny);
+for(const [c,jx,jy] of JUNC){if(landE(jx,jy,0)<0)continue;const L=M.hypot(jx-c.x,jy-c.y);const nx=(jx-c.x)/L,ny=(jy-c.y)/L;addClover(jx,jy,-ny,nx,nx,ny,true);
   mkRoad(2,[jx,jy,c.x+(jx-c.x)*0.8,c.y+(jy-c.y)*0.8]);
   for(const r of c.rings||[]){const [d,s]=nearestS(r,jx,jy);if(d<120){(r.ov=r.ov||[]).push([s-42,s+42]);break}}}
 // grade-separated crossings ----------------------------------------------
@@ -293,7 +295,7 @@ for(const [c,jx,jy] of JUNC){if(landE(jx,jy,0)<0)continue;const L=M.hypot(jx-c.x
       let up,lo,su;if(ka===5){up=rb;lo=ra;su=sB}else if(kb===5){up=ra;lo=rb;su=sA}else if(ka===0&&kb===0){if(ra.id>rb.id){up=ra;lo=rb;su=sA}else{up=rb;lo=ra;su=sB}}
       else if(ka===0){up=ra;lo=rb;su=sA}else{up=rb;lo=ra;su=sB}
       const hw=RW[lo.k]/2+24;(up.ov=up.ov||[]).push([su-hw,su+hw]);
-      if(ka===0&&kb===0&&!ra.ring&&!rb.ring){const l1=M.hypot(r1x,r1y),l2=M.hypot(r2x,r2y);const cosA=M.abs((r1x*r2x+r1y*r2y)/(l1*l2));if(cosA<0.6){addClover(X,Y,r1x/l1,r1y/l1,r2x/l2,r2y/l2)}}}}}}
+      if(ka===0&&kb===0&&!ra.ring&&!rb.ring){const l1=M.hypot(r1x,r1y),l2=M.hypot(r2x,r2y);const cosA=M.abs((r1x*r2x+r1y*r2y)/(l1*l2));let dry=cosA<0.3;for(let q=0;q<16&&dry;q++){const a=q/16*TAU,rr=q&1?140:260;if(landE(X+M.cos(a)*rr,Y+M.sin(a)*rr,0.002)<0)dry=false}if(dry){addClover(X,Y,r1x/l1,r1y/l1,r2x/l2,r2y/l2)}}}}}}
 // gas stations along highways / trunk roads ---------------------------------
 var GASOFF=40,GASHW=false;
 {const base=roads.length;for(let i=0;i<base;i++){const r=roads[i];if((r.k!==0&&r.k!==1)||r.ring||r.L<5000)continue;const R=rng(hh(r.id,5,55));
@@ -312,6 +314,13 @@ for(const r of roads.slice()){if(r.k!==5)continue;for(const end of [0,1]){
 for(const z of zones.slice()){if(z.zk!=='pow')continue;const targets=[z.city].concat(nearest(z.city,live.filter(c=>c.type>=1),2,26000));
   for(const c of targets){const dx=c.x-z.x,dy=c.y-z.y,L=M.hypot(dx,dy);const ex=c.x-dx/L*c.R*0.92,ey=c.y-dy/L*c.R*0.92;const sx=z.x+dx/L*z.rad*0.6,sy=z.y+dy/L*z.rad*0.6;const LL=M.hypot(ex-sx,ey-sy);if(LL<400)continue;
     const n=M.ceil(LL/330);const pts=[];const ph=hr(z.id,c.id,3)*50;for(let q=0;q<=n;q++){const t=q/n;const o=M.sin(PI*t)*noise(t*3+ph,ph)*LL*0.06;pts.push(sx+(ex-sx)*t+(-(ey-sy)/LL)*o,sy+(ey-sy)*t+((ex-sx)/LL)*o)}mkRoad(8,pts)}}
+// city blocks never sit on through-roads (highways, trunk roads, railways, ramps, access roads)
+for(const r of roads){if(r.city!==undefined||r.k===8)continue;const hw=RW[r.k]/2+7;
+  for(const c of queryF(r.bb[0],r.bb[1],r.bb[2],r.bb[3])){if(c.kind!=='city'||c.type<1)continue;const BD=c.D-1,bl=c.blocks;
+    for(let i=0;i<r.n-1;i++){const ax=r.pts[i*2],ay=r.pts[i*2+1],bx=r.pts[i*2+2],by=r.pts[i*2+3];if(M.max(ax,bx)<c.bb[0]||M.min(ax,bx)>c.bb[2]||M.max(ay,by)<c.bb[1]||M.min(ay,by)>c.bb[3])continue;
+      const L=M.hypot(bx-ax,by-ay)||1,nx=-(by-ay)/L,ny=(bx-ax)/L;
+      for(let t=0;t<=L;t+=6)for(const o of [-hw,-hw/2,0,hw/2,hw]){const x=ax+(bx-ax)*t/L+nx*o-c.x,y=ay+(by-ay)*t/L+ny*o-c.y;const u=x*c.ca+y*c.sa,v=-x*c.sa+y*c.ca;
+        const bi=bsr(c.us,u),bj=bsr(c.vs,v);if(bi>=0&&bj>=0&&bi<BD&&bj<BD&&bl[bj*BD+bi])bl[bj*BD+bi]=20}}}}
 // wind farms
 {const CELL=7000,NC=M.floor(WORLD/CELL);for(let cy=0;cy<NC;cy++)for(let cx=0;cx<NC;cx++){const R=rng(hh(cx,cy,313));if(R()>0.3)continue;
   const x=(cx+0.2+0.6*R())*CELL,y=(cy+0.2+0.6*R())*CELL;const e=landE(x,y,0.01);if(e<0.03||e>0.3)continue;
@@ -554,6 +563,9 @@ const gH=new Float32Array(GN*GN),gR=new Float32Array(GN*GN),gW=new Float32Array(
 const LX=-0.55,LY=-0.62,LZ=0.56;const LN_=M.hypot(LX,LY,LZ);
 let VCx=1e9,VCy=1e9;const VP=new Float64Array(27);
 const AUT=[[178,96,30],[200,160,44],[156,52,30],[150,124,44]];
+// SPLIT: part of the hillshade is kept in SHD and applied after the vector layers (grain), so houses,
+// plots and roads on slopes are lit like the terrain under them instead of looking pasted on flat ground
+let SPLIT=false;const SHD=new Float32Array(256*256);
 function raster(ctx,x0,y0,mpp,near){const WIN=SEASON===2;
   const st=GS*mpp;const oct=clamp(M.ceil(M.log2(30000/(st*1.2))),3,13);
   const ex=1+clamp(M.log2(mpp)*0.25,0,1.6);
@@ -578,7 +590,7 @@ function raster(ctx,x0,y0,mpp,near){const WIN=SEASON===2;
   const id1=1/(4*mpp),id2=1/(16*mpp);const crowns=mpp<1.7,fieldsOn=mpp<120,stripes=mpp<2.5;
   let o=0;
   for(let py=0;py<TS;py++){const gy=(py+0.5)/GS+1.5;const j=gy|0,ty=gy-j;const wy=y0+(py+0.5)*mpp;
-    for(let px=0;px<TS;px++,o+=4){const gx=(px+0.5)/GS+1.5;const i=gx|0,tx=gx-i;const k=j*GN+i;
+    for(let px=0;px<TS;px++,o+=4){SHD[o>>2]=1;const gx=(px+0.5)/GS+1.5;const i=gx|0,tx=gx-i;const k=j*GN+i;
       const w00=(1-tx)*(1-ty),w10=tx*(1-ty),w01=(1-tx)*ty,w11=tx*ty;
       const e=gH[k]*w00+gH[k+1]*w10+gH[k+GN]*w01+gH[k+GN+1]*w11;
       const rv=gR[k]*w00+gR[k+1]*w10+gR[k+GN]*w01+gR[k+GN+1]*w11;
@@ -635,10 +647,15 @@ function raster(ctx,x0,y0,mpp,near){const WIN=SEASON===2;
             if(ea>0){if(WIN){fr=lerp(fr,214,ea);fg=lerp(fg,218,ea);fb=lerp(fb,224,ea)}else if(SEASON===1){fr=lerp(fr,138,ea);fg=lerp(fg,128,ea);fb=lerp(fb,72,ea)}else{fr=lerp(fr,96,ea);fg=lerp(fg,124,ea);fb=lerp(fb,62,ea)}}}
           if(WIN){fr=fr*0.92+14;fg=fg*0.92+16;fb=fb*0.92+18}else{fr=fr*0.72+36;fg=fg*0.72+38;fb=fb*0.72+24}fr+=dt*10;fg+=dt*10;fb+=dt*7;
           // region boundary: dirt field track with verges, or a hedgerow / shelter belt
-          if(dB<12&&mpp<14){const hp=hh(M.min(VP[i1+2],VP[i2+2]),M.max(VP[i1+2],VP[i2+2]),9);const belt=(hp&3)===0;
-            if(belt){const bw=5+(hp>>>4&3)*1.5+d1*2;const ba=clamp((bw-dB)/mpp+0.5,0,1);if(ba>0){const cr=0.75+0.5*(noise(wx/3.2,wy/3.2)*0.5+0.5);
-                let br=WIN?92:SEASON===1?118:44,bg=WIN?88:SEASON===1?88:72,bb=WIN?84:SEASON===1?46:40;if(WIN&&(hp&16)){br=36;bg=54;bb=44}
-                const lit=clamp(0.9+(dB/bw-0.5)*0.4*(((wx-VP[i1])*SUNX+(wy-VP[i1+1])*SUNY)>0?-1:1),0.6,1.2);fr=lerp(fr,br*cr*lit,ba);fg=lerp(fg,bg*cr*lit,ba);fb=lerp(fb,bb*cr*lit,ba)}}
+          if(dB<12&&mpp<14){const hp=hh(M.min(VP[i1+2],VP[i2+2]),M.max(VP[i1+2],VP[i2+2]),9);const belt=(hp&7)===0;
+            if(belt){const bw=3+((hp>>>4)&3)*0.8;const bnx=pdx,bny=pdy,bl=M.sqrt(bnx*bnx+bny*bny)+1e-9;const sd=(bnx*SUNX+bny*SUNY)/bl; // >0: shadow falls into the neighbour region
+              if(dB<bw+0.5*mpp){const C=4.2;const cxi=M.floor(wx/C),cyi=M.floor(wy/C);let bd=9,bx=0,by=0;
+                for(let b2=-1;b2<=1;b2++)for(let a2=-1;a2<=1;a2++){const hq=hh(cxi+a2,cyi+b2,29);const fx=(cxi+a2+((hq&255)/255)*0.8+0.1)*C,fy=(cyi+b2+(((hq>>>8)&255)/255)*0.8+0.1)*C;const dx=wx-fx,dy=wy-fy,dd=(dx*dx+dy*dy)/(C*C*0.5);if(dd<bd){bd=dd;bx=dx;by=dy}}
+                const cr=clamp(1.2-M.sqrt(bd),0,1),lit=clamp(0.55-(bx*SUNX+by*SUNY)/(C*0.9),0.1,1);const edge=clamp((bw-dB)/M.max(mpp,0.6)+0.5,0,1)*(dB<bw*0.6?1:0.35+0.65*cr);
+                let br,bg,bb;if(WIN){br=96;bg=88;bb=82;if(hp&16){br=34;bg=52;bb=42}}else if(SEASON===1&&!(hp&16)){br=150;bg=106;bb=42}else{br=46;bg=78;bb=40}
+                const kk=mpp<1.7?0.55+cr*(0.5+lit*0.55):0.85;if(WIN&&!(hp&16)){br=lerp(212,br,cr*0.7);bg=lerp(214,bg,cr*0.7);bb=lerp(220,bb,cr*0.7)}
+                fr=lerp(fr,br*kk,edge);fg=lerp(fg,bg*kk,edge);fb=lerp(fb,bb*kk,edge)}
+              else if(sd<-0.05&&dB<bw+7*-sd){const sh=clamp((bw+7*-sd-dB)/M.max(mpp,1),0,1)*0.3;fr*=1-sh;fg*=1-sh;fb*=1-sh*0.8}}
             else{const tw=2.6,vw=5;const va=clamp((vw-dB)/mpp+0.5,0,1);if(va>0){const gr=WIN?[220,224,230]:SEASON===1?[146,132,80]:[104,128,66];fr=lerp(fr,gr[0],va);fg=lerp(fg,gr[1],va);fb=lerp(fb,gr[2],va)}
               const ta=clamp((tw/2-dB)/mpp+0.5,0,1);if(ta>0){const rut=mpp<1.2&&M.abs(dB-0.8)<0.3?0.82:1;const tr=WIN?[200,198,196]:[142,122,90];fr=lerp(fr,tr[0]*rut+dt*8,ta);fg=lerp(fg,tr[1]*rut+dt*8,ta);fb=lerp(fb,tr[2]*rut+dt*6,ta)}}}
           const a=agv*(1-fo);R=lerp(R,fr,a);Gc=lerp(Gc,fg,a);Bc=lerp(Bc,fb,a)}
@@ -666,7 +683,7 @@ function raster(ctx,x0,y0,mpp,near){const WIN=SEASON===2;
         const sn=smooth(0.8,0.88,e+dt*0.05)*(1-smooth(0.7,1.4,slope)*0.8);if(sn>0){R=lerp(R,238,sn);Gc=lerp(Gc,242,sn);Bc=lerp(Bc,248,sn)}
         if(u>0){const uc=0.92+dt*0.18;if(WIN){R=lerp(R,178*uc,u*0.6);Gc=lerp(Gc,180*uc,u*0.6);Bc=lerp(Bc,184*uc,u*0.6)}else{R=lerp(R,138*uc,u*0.7);Gc=lerp(Gc,138*uc,u*0.7);Bc=lerp(Bc,118*uc,u*0.7)}}
         if(ww>0){const r2=rv<0?-rv:rv;const bk=smooth(ww*2.2+0.002,ww,r2)*(1-u*0.7);if(bk>0){const bc=WIN?[150,150,146]:SEASON===1?[120,96,46]:[62,88,48];R=lerp(R,bc[0]+dt*10,bk*0.75);Gc=lerp(Gc,bc[1]+dt*12,bk*0.75);Bc=lerp(Bc,bc[2],bk*0.75)}}
-        let s2=clamp(sh>1?1+(sh-1)*0.65:1-(1-sh)*0.72,0.32,1.38);if(WIN){s2=M.min(s2,1.06);Bc+=(1-s2)*34;Gc+=(1-s2)*8}if(sn>0){const ss=0.62+0.38*s2;s2=lerp(s2,ss,sn);Bc+=sn*(1-s2)*40}R*=s2;Gc*=s2;Bc*=s2;
+        let s2=clamp(sh>1?1+(sh-1)*0.65:1-(1-sh)*0.72,0.32,1.38);if(WIN){s2=M.min(s2,1.06);Bc+=(1-s2)*34;Gc+=(1-s2)*8}if(sn>0){const ss=0.62+0.38*s2;s2=lerp(s2,ss,sn);Bc+=sn*(1-s2)*40}if(SPLIT){const v=1+0.45*(s2-1);SHD[o>>2]=v;s2/=v}R*=s2;Gc*=s2;Bc*=s2;
       }
       // water
       if(land<1){let wr,wg,wb;
@@ -674,10 +691,10 @@ function raster(ctx,x0,y0,mpp,near){const WIN=SEASON===2;
           const sh2=smooth(0.0,-0.012,e);wr=lerp(wr+40,wr,sh2);wg=lerp(wg+36,wg,sh2);wb=lerp(wb+18,wb,sh2)}
         else{wr=50;wg=96;wb=100}
         if(aR>0&&e>0.003){const r2=rv<0?-rv:rv;const dp=M.sqrt(clamp((ww-r2)/(ww+1e-7),0,1));const rr2=lerp(78,30,dp),rg2=lerp(112,74,dp),rb2=lerp(96,90,dp);wr=lerp(wr,rr2,aR);wg=lerp(wg,rg2,aR);wb=lerp(wb,rb2,aR)}
-        wr+=dt*5;wg+=dt*6;wb+=dt*6;let wa=0.8;
+        wr+=dt*5;wg+=dt*6;wb+=dt*6;let wa=0.66;
         if(WIN){let ice=0;if(aR>0&&e>0.003){const r2=rv<0?-rv:rv;const dp=clamp((ww-r2)/(ww+1e-7),0,1);ice=1-smooth(0.55,0.85,dp)*smooth(0.006,0.012,ww)}
           else if(e<0.003){const t=clamp(-e/0.13,0,1);ice=smooth(0.05,0.015,t+d1*0.025)}
-          if(ice>0){const ck=M.abs(d2)<0.025?-26:0;wr=lerp(wr,196+dt*14+ck,ice);wg=lerp(wg,212+dt*14+ck,ice);wb=lerp(wb,224+dt*12+ck,ice);wa=lerp(0.8,1,ice)}}
+          if(ice>0){const ck=M.abs(d2)<0.025?-26:0;wr=lerp(wr,196+dt*14+ck,ice);wg=lerp(wg,212+dt*14+ck,ice);wb=lerp(wb,224+dt*12+ck,ice);wa=lerp(0.66,1,ice)}}
         R=lerp(wr,R,land);Gc=lerp(wg,Gc,land);Bc=lerp(wb,Bc,land);
         d[o+3]=(land+(1-land)*wa)*255}
       else d[o+3]=255;
@@ -687,7 +704,7 @@ function raster(ctx,x0,y0,mpp,near){const WIN=SEASON===2;
 
 // ---------------------------------------------------------------- block generation
 const MASS_=[0,[128,130,136],[138,130,122],[134,136,132],[122,126,104],[96,118,74],[160,160,160],[126,132,108],[124,118,110],[118,128,100],[134,134,124],[140,128,110],[142,136,128]];
-const MASS=MASS_.concat([[112,132,90],[180,182,180],[130,120,120],[112,130,96],[132,132,134],[0,0,0],[120,132,146]]);
+const MASS=MASS_.concat([[112,132,90],[180,182,180],[130,120,120],[112,130,96],[132,132,134],[0,0,0],[120,132,146],[100,122,76]]);
 function occ(O,x,y,m){for(let i=0;i<O.length;i+=4){if(x>O[i]-m&&x<O[i]+O[i+2]+m&&y>O[i+1]-m&&y<O[i+1]+O[i+3]+m)return true}return false}
 let LITE=false,LITE2=false;
 function treesIn(P,O,R,x0,y0,w,h,n,dmin,dmax,vset){if(LITE)n=M.min(n,LITE2?4:10);for(let q=0;q<n;q++){const x=x0+R()*w,y=y0+R()*h,d=dmin+R()*(dmax-dmin);if(occ(O,x,y,d*0.45))continue;TR(P,x,y,d,vset[R()*vset.length|0])}}
@@ -820,6 +837,10 @@ function genBlock(c,bi,bj,t){
       const col=gl?[[80,110,128],[96,120,136],[70,96,120]][R()*3|0]:[[186,182,176],[160,160,162]][R()*2|0];const o=(horiz?H:W)-oh-8;const off=R()*o;
       if(horiz)bld(a,Y0+4+off,ow,oh,fl,col,gl?'gl':'f',{rg:!gl&&R()<0.5,sol:!gl&&R()<0.4});else bld(X0+4+off,a,oh,ow,fl,col,gl?'gl':'f',{rg:!gl&&R()<0.5,sol:!gl&&R()<0.4})}
     P.push({k:'gc',x:cx,y:cy,r:5,c:[120,160,180]});treesIn(P,O,R,X0,Y0,W,H,10,4,8,[0,2,4]);streetTrees(P,R,sx0,sy0,sx1,sy1,11);break}
+  case 20:{ // green buffer along a through-road: meadow + tree groups kept clear of the carriageway
+    G(P,X0,Y0,W,H,[104,124,72]);const ca=c.ca,sa=c.sa,u0=(c.us[bi]+c.us[bi+1])/2,v0=(c.vs[bj]+c.vs[bj+1])/2,bx=c.x+u0*ca-v0*sa,by=c.y+u0*sa+v0*ca;
+    const n=M.floor(W*H/90);for(let q=0;q<n;q++){const x=X0+3+R()*(W-6),y=Y0+3+R()*(H-6),d=4+R()*6;const wx=bx+x*ca-y*sa,wy=by+x*sa+y*ca;if(roadHits(wx,wy,0,d,d,4,null))continue;TR(P,x,y,d,[0,1,2,4,6][R()*5|0])}
+    streetTrees(P,R,sx0,sy0,sx1,sy1,12);break}
   }
   return P;
 }
@@ -829,6 +850,7 @@ function genVillage(c,si){
     const Rl=R;const lw=24+Rl()*4,ld=36+Rl()*26;const ly=side>0?5:-5-ld;
     const wx=s.x0+s.ca*a-s.sa*(side*(5+ld/2)),wy=s.y0+s.sa*a+s.ca*(side*(5+ld/2));if(landE(wx,wy,0.002)<0)continue;
     let inZ=false;for(const z of zones){if(M.hypot(z.x-wx,z.y-wy)<z.rad){inZ=true;break}}if(inZ)continue;
+    if(roadHits(wx,wy,M.atan2(s.sa,s.ca),lw,ld,1.5,s.r))continue;
     const gc=[[100,124,66],[112,128,72],[118,120,74],[92,118,62]][Rl()*4|0];G(P,a-lw/2,ly,lw,ld,gc);P.push({k:'fence',x:a-lw/2+0.3,y:ly+0.3,w:lw-0.6,h:ld-0.6});
     if(Rl()<0.75)P.push({k:'rows',x:a-lw/2+3,y:side>0?ly+ld*0.62:ly+3,w:(lw-6)*(0.4+Rl()*0.5),h:ld*0.3,o:Rl()<0.5?0:1});
     const hw=7.5+Rl()*4,hd=6.5+Rl()*3;const hy=side>0?ly+3:ly+ld-3-hd;
@@ -884,12 +906,17 @@ function mats(){if(MATS)return MATS;MATS={};const K=[0,0,0],Wh=[255,255,255];
   {const N=128,f=tfbm(N,4,5,91);MATS.soil=mkMat(N,0.04,[28,18,8],[236,214,170],(x,y)=>f[y*N+x]*0.38+(hq(x,y,11)-0.5)*0.4)}
   return MATS}
 // pattern for material `name` at s px/m; rot (rad) and origin (ox,oy) in current user space (metres)
-function matP(ctx,name,s,rot,ox,oy){if(!HASDM)return null;const m=mats()[name];const want=1/(s*m.t);
+function matP(ctx,name,s,rot,ox,oy,k){if(!HASDM)return null;const m=mats()[name];k=k||1;const want=1/(s*m.t*k);
   const lv=M.max(0,M.round(M.log2(want)));if(lv>=m.l.length)return null;
   if(PCTX!==ctx){PCTX=ctx;PCACHE={}}const key=name+lv;let P=PCACHE[key];if(!P){P=ctx.createPattern(m.l[lv],'repeat');PCACHE[key]=P}
-  const sc=m.t*(1<<lv),c=rot?M.cos(rot):1,sn=rot?M.sin(rot):0;P.setTransform(new DOMMatrix([sc*c,sc*sn,-sc*sn,sc*c,ox||0,oy||0]));return P}
-function matRect(ctx,name,s,a,x,y,w,h,rot,seed){const P=matP(ctx,name,s,rot,seed?(seed&1023)*0.37:x,seed?((seed>>>10)&1023)*0.29:y);if(!P)return;ctx.globalAlpha=a;ctx.fillStyle=P;ctx.fillRect(x,y,w,h);ctx.globalAlpha=1}
-function matFill(ctx,name,s,a,rot,ox,oy){const P=matP(ctx,name,s,rot,ox,oy);if(!P)return;ctx.globalAlpha=a;ctx.fillStyle=P;ctx.fill();ctx.globalAlpha=1}
+  const sc=m.t*k*(1<<lv),c=rot?M.cos(rot):1,sn=rot?M.sin(rot):0;P.setTransform(new DOMMatrix([sc*c,sc*sn,-sc*sn,sc*c,ox||0,oy||0]));return P}
+// two layers of the same material at incommensurate scale/angle hide the tiling period;
+// structured materials (tiles, seams, slabs) keep their exact grid in layer 1 and only get a faint layer 2
+const MAT2={tile:0.25,seam:0.25,pave:0.3,corr:0.2,mem:0.25,conc:0.3};
+function matRect(ctx,name,s,a,x,y,w,h,rot,seed){const ox=seed?(seed&1023)*0.37:x,oy=seed?((seed>>>10)&1023)*0.29:y;const P=matP(ctx,name,s,rot,ox,oy);if(!P)return;const b=MAT2[name]||0.6;
+  ctx.globalAlpha=a*(MAT2[name]?0.9:0.62);ctx.fillStyle=P;ctx.fillRect(x,y,w,h);const P2=matP(ctx,name,s,(rot||0)+0.73,ox*1.7+13.1,oy*1.3+7.7,2.618);if(P2){ctx.globalAlpha=a*b;ctx.fillStyle=P2;ctx.fillRect(x,y,w,h)}ctx.globalAlpha=1}
+function matFill(ctx,name,s,a,rot,ox,oy){const P=matP(ctx,name,s,rot,ox,oy);if(!P)return;const b=MAT2[name]||0.6;ctx.globalAlpha=a*(MAT2[name]?0.9:0.62);ctx.fillStyle=P;ctx.fill();
+  const P2=matP(ctx,name,s,(rot||0)+0.73,(ox||0)*1.7+13.1,(oy||0)*1.3+7.7,2.618);if(P2){ctx.globalAlpha=a*b;ctx.fillStyle=P2;ctx.fill()}ctx.globalAlpha=1}
 function setFrame(ctx,wx,wy,ca,sa,x0,y0,s){FCA=ca;FSA=sa;FOX=(wx-x0)*s;FOY=(wy-y0)*s;FS=s;
   ctx.setTransform(s*ca,s*sa,-s*sa,s*ca,FOX,FOY);SDX=SUNX*ca+SUNY*sa;SDY=-SUNX*sa+SUNY*ca;LNX=LEANX*ca+LEANY*sa;LNY=-LEANX*sa+LEANY*ca}
 const HP=new Float64Array(64);
@@ -1077,9 +1104,9 @@ function drawPrims(ctx,P,pass,mpp){const s=1/mpp;
   for(let q=0;q<P.length;q++){const p=P[q];const k=p.k;
     if(pass===0){
       if(k==='g'){if(p.w*s<0.4&&p.h*s<0.4)continue;ctx.fillStyle=cs(seasonC(p.c,p.tr?4:0),1);ctx.fillRect(p.x,p.y,p.w,p.h);
-        if(s>0.45&&p.w*s>3&&p.h*s>3){const m=p.gm||(p.gm=groundMat(p));matRect(ctx,m,s,SEASON===2?(m==='grass'||m==='soil'?0.18:0.45):m==='grass'?0.75:0.6,p.x,p.y,p.w,p.h,0,0)}}
+        if(s>0.45&&p.w*s>3&&p.h*s>3){const m=p.gm||(p.gm=groundMat(p));matRect(ctx,m,s,SEASON===2?(m==='grass'||m==='soil'?0.15:0.35):m==='grass'?0.6:0.5,p.x,p.y,p.w,p.h,0,(p.x*7.3+p.y*3.1)|0)}}
       else if(k==='gl'){ctx.strokeStyle=cs(seasonC(p.c,4),1);ctx.lineWidth=M.max(p.w,mpp*0.6);ctx.lineCap='butt';if(p.dash)ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(p.pts[0],p.pts[1]);for(let i=2;i<p.pts.length;i+=2)ctx.lineTo(p.pts[i],p.pts[i+1]);ctx.stroke();if(p.dash)ctx.setLineDash([])}
-      else if(k==='gc'){ctx.fillStyle=cs(seasonC(p.c,0),1);ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,TAU);ctx.fill()}
+      else if(k==='gc'){ctx.fillStyle=cs(seasonC(p.c,0),1);ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,TAU);ctx.fill();if(s>0.45){matFill(ctx,groundMat(p),s,0.45,0,3.3,1.7);ctx.strokeStyle='rgba(0,0,0,0.18)';ctx.lineWidth=0.3;ctx.stroke()}}
       else if(k==='pond'){const wi=SEASON===2;ctx.fillStyle=wi?'#c8cfd4':'#6a8a5a';ctx.beginPath();ctx.ellipse(p.x,p.y,p.rx+1.5,p.ry+1.5,0,0,TAU);ctx.fill();const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.rx);g.addColorStop(0,wi?'#b8ccd8':'#2e5a66');g.addColorStop(1,wi?'#d6e2ea':'#4a7e80');ctx.fillStyle=g;ctx.beginPath();ctx.ellipse(p.x,p.y,p.rx,p.ry,0,0,TAU);ctx.fill()}
       else if(k==='pk'){ctx.fillStyle='#55585c';ctx.fillRect(p.x,p.y,p.w,p.h);matRect(ctx,'asph',s,0.8,p.x,p.y,p.w,p.h,0,0);if(s>1.2){ctx.strokeStyle='rgba(235,235,230,0.65)';ctx.lineWidth=0.12;ctx.beginPath();const hor=p.w>=p.h;
           if(hor){const rows=M.max(1,M.floor(p.h/5.4));for(let r=0;r<rows;r++){for(let x=p.x;x<=p.x+p.w;x+=2.6){ctx.moveTo(x,p.y+r*5.4);ctx.lineTo(x,p.y+r*5.4+5)}}}else{const rows=M.max(1,M.floor(p.w/5.4));for(let r=0;r<rows;r++){for(let y=p.y;y<=p.y+p.h;y+=2.6){ctx.moveTo(p.x+r*5.4,y);ctx.lineTo(p.x+r*5.4+5,y)}}}ctx.stroke()}}
@@ -1182,11 +1209,14 @@ function drawRoads(ctx,list,mpp,over){const s=1/mpp;
       ctx.globalAlpha=1;continue}
     ctx.lineCap=over?'butt':'round';
     const dirt=[],paved=[];if(k===4){for(const it of L)(isDirt(it.r||it)?dirt:paved).push(it)}
+    // rural roads: mown grass verge, hides field margins / tree belts under the road
+    if(!over&&px>1.2&&(k===0||k===1||k===4)){const V=L.filter(it=>(it.r||it).city===undefined);if(V.length){ctx.strokeStyle=SEASON===2?'#d6dade':SEASON===1?'#8e8a52':'#6c8a4a';ctx.lineWidth=lw+(k===0?14:k===1?10:6);strokeAll(ctx,V,0);
+      if(s>0.4){const P=matP(ctx,'grass',s,0,0,0);if(P){ctx.globalAlpha=alpha*(SEASON===2?0.2:0.6);ctx.strokeStyle=P;strokeAll(ctx,V,0);ctx.globalAlpha=alpha}}}}
     // casing / curbs
     if(px>1.2){ctx.strokeStyle=SEASON===2&&k!==6?(k===4?'#c4c6c8':'#d2d6da'):k===0?'#8c8a84':k===1?'#9a968a':k===4?'#8a8070':k===6?'#8c8a84':'#a8a69e';ctx.lineWidth=lw+(k===0?2:k===4?1.5:1.2);strokeAll(ctx,L,0)}
     if(!over)for(const r of L)if(r.br&&px>0.8)bridgeDecks(ctx,r,w+4,s);
     const fc=px<2?(k===0?'#c0b8a8':k===1?'#aaa396':k===4?(SEASON===2?'#c8c8c4':'#a89c86'):SEASON===2?'#8a8c90':'#9a9890'):(k===0?'#56585c':k===1?'#5e6064':k===2?'#58595d':k===3?'#626366':k===6?'#5a5c60':k===7?'#5a5b5f':SEASON===2?'#b4b6b8':'#76726a');
-    const tex=(m,wd,offs,LL)=>{if(s<0.4)return;const P=matP(ctx,m,s,0,0,0);if(!P)return;ctx.globalAlpha=alpha*(m==='asph'?0.6:0.7);ctx.strokeStyle=P;ctx.lineWidth=wd;if(offs)strokeSym(ctx,LL||L,offs);else strokeAll(ctx,LL||L,0);ctx.globalAlpha=alpha};
+    const tex=(m,wd,offs,LL)=>{if(s<0.4)return;for(let l=0;l<2;l++){const P=l?matP(ctx,m,s,0.73,13.1,7.7,2.618):matP(ctx,m,s,0,0,0);if(!P)continue;ctx.globalAlpha=alpha*(m==='asph'?0.4:0.45);ctx.strokeStyle=P;ctx.lineWidth=wd;if(offs)strokeSym(ctx,LL||L,offs);else strokeAll(ctx,LL||L,0)}ctx.globalAlpha=alpha};
     if(k===0&&px>4){ctx.strokeStyle='#8a8880';ctx.lineWidth=w;strokeAll(ctx,L,0);tex('conc',w);ctx.strokeStyle=fc;ctx.lineWidth=12;ctx.lineCap='butt';strokeSym(ctx,L,[7.6]);tex('asph',12,[7.6]);ctx.lineCap=over?'butt':'round';
       ctx.strokeStyle='#b8b6ae';ctx.lineWidth=0.8;strokeAll(ctx,L,0)}
     else if(k===7&&px>4){ctx.strokeStyle=fc;ctx.lineWidth=w-1;strokeAll(ctx,L,0);tex('asph',w-1);ctx.strokeStyle='#b0aea6';ctx.lineWidth=6;strokeAll(ctx,L,0);ctx.strokeStyle=SEASON===2?'#dde2e6':SEASON===1?'#8a8a46':'#628a48';ctx.lineWidth=5;strokeAll(ctx,L,0);
@@ -1271,7 +1301,8 @@ function drawLightPrims(ctx,P,mpp,ind){const s=1/mpp;
   for(let q=0;q<P.length;q++){const p=P[q],k=p.k;
     if(k==='b'){
       if(p.r==='glh'){LCNT++;ctx.fillStyle=la(LC.sod,0.22);ctx.fillRect(p.x,p.y,p.w,p.h);continue}
-      if(p.cnp){LCNT++;ctx.fillStyle=la(LC.led,0.55);ctx.fillRect(p.x,p.y,p.w,p.h);fdot(ctx,'led',p.x+p.w/2,p.y+p.h/2,M.max(p.w,p.h)*1.6,0.5);continue}
+      if(p.cnp){LCNT++;ctx.strokeStyle=la(LC.led,0.4);ctx.lineWidth=M.max(0.6,LMPP*0.8);ctx.strokeRect(p.x,p.y,p.w,p.h);ctx.fillStyle=la(LC.led,0.06);ctx.fillRect(p.x,p.y,p.w,p.h);
+        for(const [u,v] of [[0,0],[1,0],[0,1],[1,1],[0.5,-0.15],[0.5,1.15]])fdot(ctx,'led',p.x+p.w*u,p.y+p.h*v,M.min(p.w,p.h)*0.9,0.16);continue}
       if(p.nd)continue;const hs=hh(p.x*10|0,p.y*10|0,77),lit=(hs&255)/255;
       if(p.r!=='g'&&p.r!=='h'&&facadeLights(ctx,p,s,hs,lit,ind))continue;
       if(p.r==='g'||p.r==='h'){if(lit<0.3)continue;fdot(ctx,'win',p.x+p.w*(((hs>>>8)&255)/255*0.6+0.2),p.y+p.h*(((hs>>>16)&255)/255*0.6+0.2),6,0.85);
@@ -1313,12 +1344,12 @@ function lightRoads(ctx,list,mpp,bx0,by0,bx1,by1){const s=1/mpp;ctx.lineCap='rou
           if(x<bx0-D||x>bx1+D||y<by0-D||y>by1+D)continue;fdot(ctx,col,x,y,D,a);fdot(ctx,col,x,y,D*0.12,1)}}}}
     else{const w=M.max(D*0.8,mpp*1.15);const aa=a*0.4*M.min(1,D*0.8/w)*(k===0?1.3:k===3?0.8:k===7?1.1:1)*(k===3?1.7-smooth(22,70,mpp)*1.1:(k===2||k===7)?1-smooth(40,130,mpp)*0.5:1);ctx.strokeStyle=la(LC[col],M.min(1,aa));ctx.lineWidth=w;ctx.beginPath();for(const r of L)offsetPath(ctx,r,0);ctx.stroke()}}
   ctx.lineCap='butt'}
-const BLA=[0,0.95,0.7,0.62,0.3,0.06,0.9,0.3,0.12,0.55,0.45,0.25,0.8,0.3,0.7,0.5,0.55,0.45,0.3,0.85];
+const BLA=[0,0.95,0.7,0.62,0.3,0.06,0.9,0.3,0.12,0.55,0.45,0.25,0.8,0.3,0.7,0.5,0.55,0.45,0.3,0.85,0.02];
 const ZLA={ref:0.42,port:0.36,ind:0.2,air:0.16,pow:0.26,solar:0,gas:0.55,stn:0.42,agro:0.5,farm:0.08,dacha:0.1,quarry:0.05,cem:0};
-const ZFL={gas:[22,16,'led',0.5],stn:[40,22,'wled',0.42],farm:[90,14,'warm',0.4],quarry:[150,34,'sod',0.32],dacha:[70,10,'warm',0.3]};
+const ZFL={gas:[22,16,'led',0.28],stn:[40,22,'wled',0.42],farm:[90,14,'warm',0.4],quarry:[150,34,'sod',0.32],dacha:[70,10,'warm',0.3]};
 function lightFeat(ctx,f,x0,y0,s,mpp,qx0,qy0,qx1,qy1){
   if(f.kind==='city'){
-    if(f.type===0){if(mpp>9){ctx.setTransform(s,0,0,s,-x0*s,-y0*s);fdot(ctx,'warm',f.x,f.y,f.R*2.4,M.min(0.6,0.18+mpp*0.004))}
+    if(f.type===0){if(mpp>9){ctx.setTransform(s,0,0,s,-x0*s,-y0*s);fdot(ctx,'warm',f.x,f.y,f.R*1.5,M.min(0.35,0.1+mpp*0.002))}
       for(let i=0;i<f.vst.length;i++){const st=f.vst[i];setFrame(ctx,st.x0,st.y0,st.ca,st.sa,x0,y0,s);
         if(mpp>9){const R=rng(hh(f.id,i,72));for(let a=12;a<st.L-12;a+=30){for(const sd of [-1,1]){if(R()<0.35)continue;fdot(ctx,'win',a,sd*12,8,0.7)}if(R()<0.4)fdot(ctx,'warm',a,0,11,0.45)}continue}
         const vk='v'+f.id+'_'+i+(LITE2?'b':LITE?'a':'');let P=bcGet(vk);if(!P){P=genVillage(f,i);bcSet(vk,P)}drawLightPrims(ctx,P,mpp,false);
@@ -1361,7 +1392,7 @@ function renderTile(z,tx,ty){
   const tsz=WORLD/(1<<z),mpp=tsz/TS,x0=tx*tsz,y0=ty*tsz,s=1/mpp;
   const cv=mkCanvas(TS,TS),ctx=cv.getContext('2d',{willReadFrequently:true});
   const near=queryF(x0-5000,y0-5000,x0+tsz+5000,y0+tsz+5000).filter(o=>o.kind==='city'||o.kind==='zone');
-  raster(ctx,x0,y0,mpp,near);
+  SPLIT=true;raster(ctx,x0,y0,mpp,near);
   const mg=mpp<6?260:mpp*45;const qx0=x0-mg,qy0=y0-mg,qx1=x0+tsz+mg,qy1=y0+tsz+mg;
   const feats=queryF(qx0,qy0,qx1,qy1);const rl=queryRoads(x0-mpp*20-40,y0-mpp*20-40,x0+tsz+mpp*20+40,y0+tsz+mpp*20+40);
   blockCache=new Map();TREEQ.length=0;mppG=mpp;LITE=mpp>2.2;LITE2=mpp>4.5;
@@ -1369,7 +1400,7 @@ function renderTile(z,tx,ty){
   const T=()=>ctx.setTransform(s,0,0,s,-x0*s,-y0*s);
   // pass 0 (grounds)
   for(const f of feats)drawFeat(ctx,f,0,x0,y0,s,mpp,qx0,qy0,qx1,qy1);
-  TX0=x0;TY0=y0;T();drawRoads(ctx,rl,mpp);T();drawOverpasses(ctx,rl,mpp);if(mpp<0.75)for(const f of feats)drawCross(ctx,f,x0,y0,s,qx0,qy0,qx1,qy1);
+  TX0=x0;TY0=y0;T();drawRoads(ctx,rl,mpp);if(mpp<0.75)for(const f of feats)drawCross(ctx,f,x0,y0,s,qx0,qy0,qx1,qy1);T();drawOverpasses(ctx,rl,mpp);
   if(detail){
     ctx.fillStyle=SHADOW;
     for(const f of feats){drawFeat(ctx,f,1,x0,y0,s,mpp,qx0,qy0,qx1,qy1)}
@@ -1392,11 +1423,11 @@ function drawCross(ctx,f,x0,y0,s,qx0,qy0,qx1,qy1){if(f.kind!=='city'||f.type===0
     if(up)zeb(1,0,hvI+1.6,hvJ-0.4);if(um)zeb(-1,0,hvI+1.6,hvJ-0.4);if(vp)zeb(0,1,hvJ+1.6,hvI-0.4);if(vm)zeb(0,-1,hvJ+1.6,hvI-0.4);
     if(up)ctx.rect(cx+hvI+5.4,cy,0.35,hvJ-0.6);if(um)ctx.rect(cx-hvI-5.75,cy-hvJ+0.6,0.35,hvJ-0.6);if(vp)ctx.rect(cx-hvI+0.6,cy+hvJ+5.4,hvI-0.6,0.35);if(vm)ctx.rect(cx,cy-hvJ-5.75,hvI-0.6,0.35)}
   ctx.fill()}
-function grain(ctx,x0,y0,mpp,vec){if(!vec)return;
+function grain(ctx,x0,y0,mpp,vec){if(!vec&&!SPLIT)return;
   const img=ctx.getImageData(0,0,TS,TS),d=img.data;const i1=1/(2.2*mpp),i2=1/(7*mpp);let o=0;const fine=mpp<3;
-  for(let py=0;py<TS;py++){const wy=y0+(py+0.5)*mpp;for(let px=0;px<TS;px++,o+=4){if(d[o+3]<250)continue;const wx=x0+(px+0.5)*mpp;
+  for(let py=0;py<TS;py++){const wy=y0+(py+0.5)*mpp;for(let px=0;px<TS;px++,o+=4){if(d[o+3]<250)continue;if(!vec){const v=SHD[o>>2];if(v!==1){d[o]*=v;d[o+1]*=v;d[o+2]*=v}continue}const wx=x0+(px+0.5)*mpp;
     let g=noise(wx*i1+3.1,wy*i1+1.7)*0.05+noise(wx*i2+9.3,wy*i2+4.1)*0.04;if(fine){const h=mix32((px*73856093)^(py*19349663)^(x0*7|0));g+=((h&255)/255-0.5)*0.05}
-    const m=1+g;d[o]*=m;d[o+1]*=m;d[o+2]*=m}}
+    const m=(1+g)*SHD[o>>2];d[o]*=m;d[o+1]*=m;d[o+2]*=m}}
   ctx.putImageData(img,0,0)}
 function drawFeat(ctx,f,pass,x0,y0,s,mpp,qx0,qy0,qx1,qy1){
   if(f.kind==='city'){if(f.type===0){if(mpp>9)return;for(let i=0;i<f.vst.length;i++){const st=f.vst[i];setFrame(ctx,st.x0,st.y0,st.ca,st.sa,x0,y0,s);const vk='v'+f.id+'_'+i+(LITE2?'b':LITE?'a':'');let P=bcGet(vk);if(!P){P=genVillage(f,i);bcSet(vk,P)}
@@ -1421,6 +1452,6 @@ function drawFeat(ctx,f,pass,x0,y0,s,mpp,qx0,qy0,qx1,qy1){
 // zone cylinder shadows need stroke not fill: patch drawPrims pass1 for cyl via stroke
 const _dp=drawPrims;
 
-return {setSeason,season:()=>SEASON,renderLights,WORLD,TS,SUNX,SUNY,WDX,WDY,LEANX,LEANY,cities:live,roads,zones,farms,ships,flights,emitters,airports,queryRoads,queryF,posAt,renderTile,sprites,drawShip,drawPlane,baseH,landE,rng,hh,noise,genTime:Date.now()-T0,mkCanvas};
+return {setSeason,season:()=>SEASON,renderLights,WORLD,TS,SUNX,SUNY,WDX,WDY,LEANX,LEANY,cities:live,roads,zones,farms,ships,flights,emitters,airports,queryRoads,queryF,posAt,renderTile,sprites,drawShip,drawPlane,baseH,landE,rng,hh,noise,genTime:Date.now()-T0,mkCanvas,_dbg:{genVillage,genBlock,RW}};
 }
 
