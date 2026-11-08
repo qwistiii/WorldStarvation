@@ -109,6 +109,7 @@ function queryRoads(x0,y0,x1,y1){stampR++;const out=[];const a=clamp(M.floor(x0/
   for(let j=c;j<=d;j++)for(let i=a;i<=b;i++){const A=gridR[j*RNC+i];if(!A)continue;for(let k=0;k<A.length;k++){const r=roads[A[k]];if(r._s===stampR)continue;r._s=stampR;
     if(r.bb[2]<x0-40||r.bb[0]>x1+40||r.bb[3]<y0-40||r.bb[1]>y1+40)continue;out.push(r)}}return out}
 function bridgesOf(r){ // water intervals along road
+  if(r.n===2){const mx=(r.pts[0]+r.pts[2])/2,my=(r.pts[1]+r.pts[3])/2;if(M.abs(riverV(mx,my))>0.0137+r.L*0.8e-4){let dry=true;for(let q=0;q<=8;q++){const t=q/8;if(baseH(r.pts[0]+(r.pts[2]-r.pts[0])*t,r.pts[1]+(r.pts[3]-r.pts[1])*t,7)<0.004){dry=false;break}}if(dry){r.br=null;return}}}
   const out=[];let inW=false,s0=0;const step=24;
   for(let s=0;s<=r.L;s+=step){const p=posAt(r,s);const w=landE(p[0],p[1],0)<0;
     if(w&&!inW){inW=true;s0=s}else if(!w&&inW){inW=false;out.push([M.max(0,s0-28),M.min(r.L,s+4)])}}
@@ -146,6 +147,7 @@ function buildCity(c){
     if(cityF(c,x,y)<1){const e=landE(x,y,0.0025);if(e>=0&&e<0.42)ok[j*D+i]=1}}
   const BD=D-1;const bl=c.blocks=new Uint8Array(BD*BD);let stad=false,cnt=0;
   for(let j=0;j<BD;j++)for(let i=0;i<BD;i++){if(!(ok[j*D+i]&&ok[j*D+i+1]&&ok[(j+1)*D+i]&&ok[(j+1)*D+i+1]))continue;
+    if(wetArea(c.x,c.y,c.ca,c.sa,us[i],vs[j],us[i+1],vs[j+1],28,0.0015))continue; // a river between the corners: no block over it
     const u=(us[i]+us[i+1])/2,v=(vs[j]+vs[j+1])/2;const x=c.x+u*c.ca-v*c.sa,y=c.y+u*c.sa+v*c.ca;
     const Rb=rng(hh(c.id,i*977+j,51));let t=pickType(c,cityF(c,x,y),Rb);if(t===9){if(stad)t=5;else stad=true}bl[j*BD+i]=t;cnt++}
   c.nblocks=cnt;
@@ -158,9 +160,15 @@ function buildCity(c){
   for(let i=0;i<D;i++){let s=-1,le=-1;for(let j=0;j<=D;j++){const e=j<D-1&&ok[j*D+i]&&ok[(j+1)*D+i]&&(blk(i-1,j)||blk(i,j));if(e)eV[j*D+i]=1;
       if(e&&s<0){s=j;if(le>=0)bridgeGap(lineKind(i-N),i-N,le-N,i-N,j-N)}if(!e&&s>=0){addStreet(c,i-N,s-N,i-N,j-N,lineKind(i-N));le=j;s=-1}}}
 }
+// any water inside the rectangle [u0,u1]x[v0,v1] of a rotated frame (origin ox,oy), sampled every ~st metres
+function wetArea(ox,oy,ca,sa,u0,v0,u1,v1,st,mg){const nu=M.max(1,M.ceil((u1-u0)/st)),nv=M.max(1,M.ceil((v1-v0)/st));
+  // fast path: far from any river channel (riverV changes by < 3e-4 per metre) only the sea can be inside
+  const um=(u0+u1)/2,vm=(v0+v1)/2,cx=ox+um*ca-vm*sa,cy=oy+um*sa+vm*ca;if(M.abs(riverV(cx,cy))>0.0137+mg+M.hypot(u1-u0,v1-v0)*1.6e-4){
+    for(let a=0;a<=2;a++)for(let b=0;b<=2;b++){const u=u0+(u1-u0)*a/2,v=v0+(v1-v0)*b/2;if(baseH(ox+u*ca-v*sa,oy+u*sa+v*ca,7)<0.004)return true}return false}
+  for(let a=0;a<=nu;a++)for(let b=0;b<=nv;b++){const u=u0+(u1-u0)*a/nu,v=v0+(v1-v0)*b/nv;if(landE(ox+u*ca-v*sa,oy+u*sa+v*ca,mg)<0)return true}return false}
 function bsr(a,v){let lo=0,hi=a.length-1;if(v<=a[0])return -1;if(v>=a[hi])return hi;while(hi-lo>1){const m=(lo+hi)>>1;if(a[m]>v)hi=m;else lo=m}return lo}
 function cpt(c,i,j){const u=c.us[i+c.N],v=c.vs[j+c.N];return [c.x+u*c.ca-v*c.sa,c.y+u*c.sa+v*c.ca]}
-function addStreet(c,i0,j0,i1,j1,k){const a=cpt(c,i0,j0),b=cpt(c,i1,j1);const r=mkRoad(k,[a[0],a[1],b[0],b[1]],{city:c.id});if(r&&k===2&&c.type>=2&&hr(c.id,i0===i1?i0*7+1:j0*7+2,88)<0.5)r.tram=1}
+function addStreet(c,i0,j0,i1,j1,k){const a=cpt(c,i0,j0),b=cpt(c,i1,j1);const r=mkRoad(k,[a[0],a[1],b[0],b[1]],{city:c.id});if(r)bridgesOf(r);if(r&&k===2&&c.type>=2&&hr(c.id,i0===i1?i0*7+1:j0*7+2,88)<0.5)r.tram=1}
 function lineKind(n){n=((n%8)+8)%8;return n===0?7:n===4?2:3}
 function lineHalf(n){const k=lineKind(n);return k===7?14.5:k===2?10:5}
 function pickW(r,T){let s=0;for(let i=1;i<T.length;i+=2)s+=T[i];r*=s;for(let i=1;i<T.length;i+=2){r-=T[i];if(r<=0)return T[i-1]}return T[T.length-2]}
@@ -279,7 +287,8 @@ function placeZone(c,kind){
     const d=c.R*1.05+rad+120+ring;const x=c.x+ca*d,y=c.y+sa*d;if(x<4000||y<4000||x>WORLD-4000||y>WORLD-4000)continue;
     const za=a+PI/2+(R()-0.5)*0.3,zc=M.cos(za),zs=M.sin(za);let okk=true;
     for(let q=0;q<25&&okk;q++){const u=((q%5)/4-0.5)*W*1.05,v=((q/5|0)/4-0.5)*H*1.05;const px=x+u*zc-v*zs,py=y+u*zs+v*zc;const e=landE(px,py,0.003);if(e<0||e>(kind==='air'?0.3:0.4))okk=false}
-    if(!okk||!zoneFree(x,y,rad,c))continue;if((ZSTRICT||!OLDK.includes(kind))&&roadHits(x,y,za,W,H,6,null))continue;return mkZone(c,kind,x,y,za,W,H,rad)}
+    if(!okk||!zoneFree(x,y,rad,c))continue;if((ZSTRICT||!OLDK.includes(kind))&&roadHits(x,y,za,W,H,6,null))continue;
+    if(wetArea(x,y,zc,zs,-W/2,-H/2,W/2,H/2,36,0.002))continue;return mkZone(c,kind,x,y,za,W,H,rad)}
   if(ZSTRICT&&OLDK.includes(kind)){ZSTRICT=false;const z=placeZone(c,kind);ZSTRICT=true;return z}
   return null}
 let ZSTRICT=true;
@@ -343,14 +352,14 @@ var GASOFF=40,GASHW=false;
   for(let s=2000+R()*3000;s<r.L-2000;s+=7000+R()*6000){const p=posAt(r,s);const dx=p[2],dy=p[3];const off=RW[r.k]/2+34;const x=p[0]-dy*off,y=p[1]+dx*off;
     if(landE(x,y,0.004)<0||landE(x+dx*40,y+dy*40,0.004)<0||landE(x-dx*40,y-dy*40,0.004)<0)continue;let bad=false;
     for(const c of live)if(M.hypot(c.x-x,c.y-y)<c.R*1.15+120){bad=true;break}if(!bad)for(const z of zones)if(M.hypot(z.x-x,z.y-y)<z.rad+60){bad=true;break}if(bad)continue;
-    if(roadHits(x,y,M.atan2(dy,dx),84,54,3,r))continue;GASOFF=off;GASHW=r.k===0;mkZoneRaw(null,'gas',x,y,M.atan2(dy,dx),84,54)}}}
+    if(roadHits(x,y,M.atan2(dy,dx),84,54,3,r)||wetArea(x,y,dx,dy,-42,-27,42,27,20,0.002))continue;GASOFF=off;GASHW=r.k===0;mkZoneRaw(null,'gas',x,y,M.atan2(dy,dx),84,54)}}}
 // railway stations at line ends --------------------------------------------
 for(const r of roads.slice()){if(r.k!==5)continue;for(const end of [0,1]){
   for(let d=300;d<3200;d+=120){const s=end?r.L-d:d;if(s<300||s>r.L-300)break;const p=posAt(r,s);const ux=p[2],uy=p[3],cx=p[0],cy=p[1];
     if(landE(cx,cy,0.003)<0||landE(cx+ux*240,cy+uy*240,0.003)<0||landE(cx-ux*240,cy-uy*240,0.003)<0)continue;let bad=false;
     for(const z of zones)if(M.hypot(z.x-cx,z.y-cy)<z.rad+260){bad=true;break}if(bad)continue;
     for(const c of live)if(M.hypot(c.x-cx,c.y-cy)<c.R*1.6+300&&(cityF(c,cx,cy)<1.08||cityF(c,cx+ux*250,cy+uy*250)<1.08||cityF(c,cx-ux*250,cy-uy*250)<1.08)){bad=true;break}
-    if(bad||roadHits(cx,cy,M.atan2(uy,ux),500,96,4,r))continue;mkZoneRaw(null,'stn',cx,cy,M.atan2(uy,ux),500,96);break}}}
+    if(bad||roadHits(cx,cy,M.atan2(uy,ux),500,96,4,r)||wetArea(cx,cy,ux,uy,-250,-48,250,48,30,0.002))continue;mkZoneRaw(null,'stn',cx,cy,M.atan2(uy,ux),500,96);break}}}
 // power lines --------------------------------------------------------------
 for(const z of zones.slice()){if(z.zk!=='pow')continue;const targets=[z.city].concat(nearest(z.city,live.filter(c=>c.type>=1),2,26000));
   for(const c of targets){const dx=c.x-z.x,dy=c.y-z.y,L=M.hypot(dx,dy);const ex=c.x-dx/L*c.R*0.92,ey=c.y-dy/L*c.R*0.92;const sx=z.x+dx/L*z.rad*0.6,sy=z.y+dy/L*z.rad*0.6;const LL=M.hypot(ex-sx,ey-sy);if(LL<400)continue;
@@ -976,7 +985,7 @@ function genVillage(c,si){
   const s=c.vst[si];const R=rng(hh(c.id,si,71));const P=[],O=[];const OP=[];for(let sj=0;sj<si;sj++)for(const q of vPlots(c,sj))OP.push(q);
   for(let a=12;a<s.L-12;a+=26+R()*12){for(const side of [-1,1]){if(R()<0.16)continue;
     const Rl=R;const lw=24+Rl()*4,ld=36+Rl()*26;const ly=side>0?5:-5-ld;
-    const wx=s.x0+s.ca*a-s.sa*(side*(5+ld/2)),wy=s.y0+s.sa*a+s.ca*(side*(5+ld/2));if(landE(wx,wy,0.002)<0)continue;
+    const wx=s.x0+s.ca*a-s.sa*(side*(5+ld/2)),wy=s.y0+s.sa*a+s.ca*(side*(5+ld/2));if(landE(wx,wy,0.002)<0||wetArea(s.x0,s.y0,s.ca,s.sa,a-lw/2,ly,a+lw/2,ly+ld,14,0.001))continue;
     let inZ=false;for(const z of zones){if(M.hypot(z.x-wx,z.y-wy)<z.rad){inZ=true;break}}if(inZ)continue;
     if(roadHits(wx,wy,M.atan2(s.sa,s.ca),lw,ld,1.5,s.r))continue;
     if(OP.length){const me=[wx,wy,lw/2+0.5,ld/2+0.5,s.ca,s.sa];let hit=false;for(const q of OP)if(obbOver(me,q)){hit=true;break}if(hit)continue}

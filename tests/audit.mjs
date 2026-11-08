@@ -269,3 +269,15 @@ export function groundClash(W) {
   for (const z of W.zones) if (z.prims) chk(z.prims, `зона ${z.zk}`);
   return out;
 }
+
+// постройки, стоящие в воде (река или море под углом или серединой здания)
+export function inWater(W) {
+  const out = [];
+  for (const o of collect(W)) {
+    for (const [a, b] of [[0, 0], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+      const x = o.x + (a * o.hw * o.ca - b * o.hh * o.sa) * 0.9, y = o.y + (a * o.hw * o.sa + b * o.hh * o.ca) * 0.9;
+      if (W.landE(x, y, 0) < 0) { out.push(o); break; }
+    }
+  }
+  return out;
+}

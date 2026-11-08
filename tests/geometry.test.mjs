@@ -2,7 +2,7 @@
 // Подробная сводка с координатами мест: node tools/audit.mjs <seed>.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { world, audit, deadEnds, groundClash, parallelRoads, where, label } from './audit.mjs';
+import { world, audit, deadEnds, groundClash, parallelRoads, inWater, where, label } from './audit.mjs';
 
 for (const seed of [20261107, 1337]) {
   const W = world(seed);
@@ -21,6 +21,9 @@ for (const seed of [20261107, 1337]) {
     assert.deepEqual(list(A.overlap, (it) => `${label(it.a)} | ${label(it.b)} @${where(it.a)}`), []);
     assert.deepEqual(list(A.overlapSame, (it) => `${label(it.a)} @${where(it.a)}`), []);
     assert.deepEqual(list(A.turbine, (it) => `ветряк @${Math.round(it.t.x)},${Math.round(it.t.y)}`), []);
+  });
+  test(`${seed}: постройки не стоят в реках и в море`, () => {
+    assert.deepEqual(list(inWater(W), (o) => `${label(o)} @${where(o)}`), []);
   });
   test(`${seed}: парковки, грядки и площадки не уходят под здания`, () => {
     assert.deepEqual(groundClash(W).slice(0, 8), []);
