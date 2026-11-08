@@ -2,7 +2,7 @@
 (function(){
 'use strict';
 const $=id=>document.getElementById(id);
-const VERSION='5.6';
+const VERSION='5.7';
 let bg=null,C=null,prevWorker=null,prevId=0,prevT=0,setFrom=null,paused=null;
 
 // ---------------------------------------------------------------- settings
@@ -60,6 +60,36 @@ function paintIcons(){const css=[];
   css.push(icon('drone',x=>{x.beginPath();x.moveTo(52,32);x.lineTo(14,14);x.lineTo(22,32);x.lineTo(14,50);x.closePath();x.fill();x.fillRect(6,30,12,4)},1));
   css.push(icon('swarm',x=>{for(const [dx,dy,k] of [[0,-14,0.6],[-6,0,0.75],[0,14,0.6]]){x.save();x.translate(32+dx,32+dy);x.scale(k,k);x.beginPath();x.moveTo(26,0);x.lineTo(-20,-18);x.lineTo(-10,0);x.lineTo(-20,18);x.closePath();x.fill();x.restore()}},1));
   css.push(icon('army',x=>{x.strokeRect(8,16,48,32);x.beginPath();x.moveTo(8,16);x.lineTo(56,48);x.moveTo(56,16);x.lineTo(8,48);x.stroke()},1));
+  // stage 5.7
+  css.push(icon('metal',x=>{for(const [dx,dy] of [[0,14],[18,14],[9,0]]){x.beginPath();x.moveTo(8+dx,38+dy-14);x.lineTo(28+dx,38+dy-14);x.lineTo(32+dx,48+dy-14);x.lineTo(4+dx,48+dy-14);x.closePath();x.fill();x.save();x.globalAlpha=0.45;x.fillStyle='#000';x.fillRect(6+dx,45+dy-14,24,3);x.restore()}}));
+  css.push(icon('solar',x=>{x.save();x.translate(30,38);x.transform(1,0,-0.45,0.62,0,0);for(let i=0;i<3;i++)for(let j=0;j<2;j++)x.fillRect(-22+i*15,-14+j*15,13,13);x.restore();x.fillRect(16,48,3,10);x.fillRect(40,48,3,10);
+    x.beginPath();x.arc(50,13,6,0,P2);x.fill();x.lineWidth=2.6;for(let i=0;i<8;i++){const a=i*P2/8;x.beginPath();x.moveTo(50+Math.cos(a)*9,13+Math.sin(a)*9);x.lineTo(50+Math.cos(a)*12.5,13+Math.sin(a)*12.5);x.stroke()}},1));
+  css.push(icon('mine',x=>{x.lineWidth=3.4;x.beginPath();x.moveTo(12,54);x.lineTo(24,10);x.lineTo(36,54);x.moveTo(17,36);x.lineTo(31,36);x.moveTo(20,24);x.lineTo(28,24);x.stroke();x.beginPath();x.arc(24,10,5,0,P2);x.stroke();
+    x.beginPath();x.moveTo(36,40);x.lineTo(58,40);x.lineTo(54,52);x.lineTo(40,52);x.closePath();x.fill();for(const cx of [43,51]){x.beginPath();x.arc(cx,56,3,0,P2);x.fill()}x.beginPath();x.moveTo(38,40);x.lineTo(44,32);x.lineTo(50,36);x.lineTo(56,32);x.lineTo(58,40);x.fill()},1));
+  css.push(icon('gaswell',x=>{x.beginPath();x.moveTo(32,6);x.bezierCurveTo(44,18,42,30,32,34);x.bezierCurveTo(22,30,20,18,32,6);x.fill();x.fillRect(29,34,6,14);x.fillRect(16,40,32,5);x.fillRect(10,50,44,7);
+    x.save();x.globalCompositeOperation='destination-out';x.beginPath();x.moveTo(32,16);x.bezierCurveTo(37,22,36,28,32,30);x.bezierCurveTo(28,28,27,22,32,16);x.fill();x.restore()},1));
+  css.push(icon('station',x=>{x.beginPath();x.moveTo(8,26);x.lineTo(32,10);x.lineTo(56,26);x.closePath();x.fill();x.fillRect(12,26,40,18);x.save();x.globalCompositeOperation='destination-out';for(let i=0;i<3;i++)x.fillRect(16+i*12,30,7,10);x.restore();
+    x.fillRect(4,50,56,3);x.fillRect(4,57,56,3);for(let i=0;i<7;i++)x.fillRect(7+i*8,47,3,14)},1));
+  css.push(icon('rail',x=>{x.lineWidth=3.4;x.beginPath();x.moveTo(20,58);x.lineTo(28,6);x.moveTo(44,58);x.lineTo(36,6);x.stroke();x.lineWidth=3;for(let i=0;i<6;i++){const t=i/5,y=54-t*44,w=13-t*6;x.beginPath();x.moveTo(32-w,y);x.lineTo(32+w,y);x.stroke()}},1));
+  const uav=(x,v,s)=>{x.save();x.translate(32,32);x.scale(s,s);x.beginPath();
+    if(v===0){x.ellipse(0,0,24,3.5,0,0,P2);x.fill();for(const [cx,sp] of [[10,15],[-12,16]])for(const sg of [-1,1]){x.beginPath();x.moveTo(cx+2,0);x.lineTo(cx-4,sg*sp);x.lineTo(cx-8,sg*sp);x.lineTo(cx-3,0);x.fill()}}
+    else if(v===1){x.moveTo(26,0);x.lineTo(8,-3);x.lineTo(-14,-20);x.lineTo(-20,-20);x.lineTo(-17,-3);x.lineTo(-25,-2.5);x.lineTo(-25,2.5);x.lineTo(-17,3);x.lineTo(-20,20);x.lineTo(-14,20);x.lineTo(8,3);x.closePath();x.fill();
+      x.globalCompositeOperation='destination-out';x.beginPath();x.ellipse(-12,0,10,2.6,0,0,P2);x.fill();x.globalCompositeOperation='source-over';x.beginPath();x.ellipse(-12,0,9,1.6,0,0,P2);x.fill()}
+    else{x.ellipse(2,0,22,3,0,0,P2);x.fill();x.fillRect(2,-26,7,52);x.fillRect(-20,-9,4,18);x.fillRect(22,-1.5,3,3);x.fillRect(24,-8,1.8,16)}
+    x.restore()};
+  css.push(icon('lancet',x=>uav(x,0,1.05),1));css.push(icon('geran',x=>uav(x,1,1.05),1));css.push(icon('orlan',x=>uav(x,2,1),1));
+  css.push(icon('droneport',x=>{x.beginPath();x.moveTo(6,44);x.quadraticCurveTo(6,18,32,18);x.quadraticCurveTo(58,18,58,44);x.closePath();x.fill();x.fillRect(4,44,56,4);x.save();x.globalCompositeOperation='destination-out';x.fillRect(22,30,20,14);x.restore();
+    x.save();x.translate(32,10);x.scale(0.42,0.42);x.beginPath();x.moveTo(26,0);x.lineTo(-14,-20);x.lineTo(-20,-20);x.lineTo(-17,0);x.lineTo(-20,20);x.lineTo(-14,20);x.closePath();x.fill();x.restore();x.fillRect(4,54,56,4)},1));
+  css.push(icon('dramp',x=>{x.save();x.translate(8,52);x.rotate(-0.5);x.fillRect(0,-2,52,5);x.restore();x.fillRect(6,50,22,8);for(const cx of [10,22]){x.beginPath();x.arc(cx,58,3.4,0,P2);x.fill()}x.fillRect(44,30,3,26);
+    x.save();x.translate(40,26);x.rotate(-0.5);x.scale(0.4,0.4);x.beginPath();x.ellipse(0,0,24,3.5,0,0,P2);x.fill();for(const sg of [-1,1]){x.beginPath();x.moveTo(10,0);x.lineTo(4,sg*15);x.lineTo(0,sg*15);x.lineTo(5,0);x.fill()}x.restore()},1));
+  css.push(icon('drwy',x=>{x.save();x.translate(32,36);x.transform(1,0,-0.6,0.5,0,0);x.fillRect(-30,-12,60,24);x.globalCompositeOperation='destination-out';for(let i=0;i<5;i++)x.fillRect(-24+i*11,-1.5,6,3);x.restore();
+    x.save();x.translate(40,14);x.rotate(-0.4);x.scale(0.42,0.42);x.beginPath();x.moveTo(26,0);x.lineTo(-14,-20);x.lineTo(-20,-20);x.lineTo(-17,0);x.lineTo(-20,20);x.lineTo(-14,20);x.closePath();x.fill();x.restore()},1));
+  css.push(icon('dstore',x=>{for(const [y,w] of [[34,40],[52,48]]){x.beginPath();x.moveTo(32-w/2,y);x.quadraticCurveTo(32-w/2,y-18,32,y-18);x.quadraticCurveTo(32+w/2,y-18,32+w/2,y);x.closePath();x.fill()}
+    x.save();x.globalCompositeOperation='destination-out';x.fillRect(26,42,12,10);x.fillRect(28,25,8,9);x.restore()},1));
+  css.push(icon('dronefab',x=>{x.beginPath();x.moveTo(4,58);x.lineTo(4,32);x.lineTo(16,24);x.lineTo(16,32);x.lineTo(28,24);x.lineTo(28,32);x.lineTo(40,24);x.lineTo(40,58);x.closePath();x.fill();x.fillRect(44,40,16,18);
+    x.save();x.translate(44,14);x.scale(0.4,0.4);x.beginPath();x.ellipse(0,0,24,3.5,0,0,P2);x.fill();for(const [cx,sp] of [[10,15],[-12,16]])for(const sg of [-1,1]){x.beginPath();x.moveTo(cx+2,0);x.lineTo(cx-4,sg*sp);x.lineTo(cx-8,sg*sp);x.lineTo(cx-3,0);x.fill()}x.restore()},1));
+  css.push(icon('tab-map',x=>{x.beginPath();x.moveTo(8,16);x.lineTo(24,10);x.lineTo(40,16);x.lineTo(56,10);x.lineTo(56,48);x.lineTo(40,54);x.lineTo(24,48);x.lineTo(8,54);x.closePath();x.stroke();x.lineWidth=2.6;x.beginPath();x.moveTo(24,10);x.lineTo(24,48);x.moveTo(40,16);x.lineTo(40,54);x.stroke()}));
+  css.push(icon('tab-pol',x=>{x.beginPath();x.arc(24,32,13,0,P2);x.stroke();x.beginPath();x.arc(40,32,13,0,P2);x.stroke()}));
   // logo: globe in a sight, with a wheat ear — «World Starvation»
   {const N=136,c=document.createElement('canvas');c.width=c.height=N;const x=c.getContext('2d');x.translate(N/2,N/2);
     const g=x.createRadialGradient(-12,-14,6,0,0,54);g.addColorStop(0,'#3a7ab8');g.addColorStop(1,'#0c2440');x.fillStyle=g;x.beginPath();x.arc(0,0,46,0,P2);x.fill();
@@ -230,7 +260,8 @@ function pause(v){if(!Game.G)return;const p=$('pause');if(v){if(p.classList.cont
 const TIPS=['Столица растёт сама: сначала прокладываются проспекты, потом стройплощадки, потом кварталы.','Колхоз ставится только в области села, нефтевышка — на месторождении нефти, лесопилка — у леса.',
   'Завод товаров — главный доход, но без энергии ТЭЦ он стоит.','Порт строится только на берегу моря с выходом в океан: он продаёт излишки и привозит нехватку.',
   'Сёла и города рядом сливают свои земли в одну область.','Пробел — пауза, F — скорость, 1–7 — вкладки нижней панели, Esc — меню паузы и сохранение.',
-  'Боты начинают войны не раньше 10–12 минуты. ПВО сбивает их дроны, армия из военной части защищает земли.','Ненужную постройку можно снести: вкладка «Города» → «Снести», вернётся 30 % цены.'];
+  'Боты начинают войны не раньше 10–12 минуты. ПВО сбивает их дроны, армия из военной части защищает земли.','Ненужную постройку можно снести: вкладка «Города» → «Снести», вернётся 30 % цены.','Туман войны прячет заводы, порты и базы соседей. Орлан-10 с пусковой рампы дронопорта раскрывает их.',
+  'Солнечные панели — резерв энергии: аккумулятор держит заводы ночью и когда ТЭЦ подбита.','Железная дорога: поставьте вокзал, выберите «ЖД путь», нажмите на вокзал и, не отпуская, ведите линию.'];
 let tipI=(Math.random()*TIPS.length)|0,tipT=0,bgSize='';
 function tip(){const e=$('ldtip');e.style.opacity=0;setTimeout(()=>{tipI=(tipI+1)%TIPS.length;e.innerHTML='<b>Совет</b>'+TIPS[tipI];e.style.opacity=1},350)}
 function drawLdBg(){const c=$('ldbg');const w=Math.ceil(innerWidth*1.08/2),h=Math.ceil(innerHeight*1.08/2),key=w+'x'+h;if(key===bgSize)return;bgSize=key;c.width=w;c.height=h;const x=c.getContext('2d');
