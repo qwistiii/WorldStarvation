@@ -354,13 +354,13 @@ const CLO=mk(4,4),cxl=CLO.getContext('2d');const CLK=0.25;
 function drawClouds(shadowPass){const H=camH();const cloudFar=MODE==='game'?1-smooth(9000,26000,H):1;if(cloudFar<0.02)return; // strategic view of the game: a clear map
   const span=WORLD*1.3;
   if(shadowPass&&LG.day<0.03)return;
-  const lw=M.max(4,M.ceil(VW*CLK)),lh=M.max(4,M.ceil(VH*CLK));if(CLO.width!==lw||CLO.height!==lh){CLO.width=lw;CLO.height=lh}else cxl.clearRect(0,0,lw,lh);
+  const lw=M.max(4,M.ceil(VW*CLK)),lh=M.max(4,M.ceil(VH*CLK));if(CLO.width!==lw||CLO.height!==lh){CLO.width=lw;CLO.height=lh}else{cxl.setTransform(1,0,0,1,0,0);cxl.clearRect(0,0,lw,lh)} // clear in pixels: the layer keeps the scale transform of the last frame
   const x2=cxl;x2.setTransform(CLK,0,0,CLK,0,0);let n=0;
   for(let ci=0;ci<clouds.length;ci++){const c=clouds[ci];const vis=clamp((wcur.cover-c.g)*14,0,1);if(vis<=0)continue;
     let x=((c.x+T*9+WORLD*0.15)%span+span)%span-WORLD*0.15,y=c.y;
     if((LITE||(MODE==='game'&&VQ.dpr<2))&&ci%2)continue;
     if(shadowPass){if(cam.m<0.12)continue;const sx=x+W.SUNX*c.alt,sy=y+W.SUNY*c.alt;if(!inView(sx,sy,c.s))continue;const sz=c.s/cam.m;const sa=0.2*vis*LG.day*(1-0.45*smooth(0.6,1,wcur.cover))*cloudFar;if(sa<0.02)continue;x2.globalAlpha=sa;x2.drawImage(CLS[c.v][1],sxw(sx)-sz/2,syw(sy)-sz/2,sz,sz);n++;continue}
-    if(H<c.alt*1.12)continue;const kk=H/(H-c.alt);const a=smooth(c.alt*1.12,c.alt*2.6,H);if(a<=0.01)continue;
+    if(H<c.alt*1.12)continue;const kk=H/(H-c.alt);const a=smooth(c.alt*1.12,c.alt*2.6,H)*(MODE==='game'?smooth(c.alt*1.7,c.alt*3.2,H):1);if(a<=0.01)continue; // game: no white-out when the camera comes down through the cloud layer
     const X=VW/2+(x-cam.x)/cam.m*kk,Y=VH/2+(y-cam.y)/cam.m*kk,sz=c.s/cam.m*kk;if(X+sz/2<0||Y+sz/2<0||X-sz/2>VW||Y-sz/2>VH)continue;
     const ca=a*0.95*vis*cloudFar;if(ca<0.02)continue;x2.globalAlpha=ca;x2.drawImage(CLS[c.v][2],X-sz/2,Y-sz/2,sz,sz);n++}
   x2.globalAlpha=1;if(!n)return;ctx.setTransform(DPR,0,0,DPR,0,0);ctx.imageSmoothingEnabled=true;ctx.drawImage(CLO,0,0,lw/CLK,lh/CLK)}
