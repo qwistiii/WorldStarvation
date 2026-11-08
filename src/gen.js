@@ -890,7 +890,7 @@ function raster(ctx,x0,y0,mpp,near){const WIN=SEASON===2;
         if(e<0.003&&aR<0.999){const t=clamp(-e/0.13,0,1),t2=M.sqrt(t);wr=lerp(58,14,t2);wg=lerp(134,46,t2);wb=lerp(140,82,t2);
           const sh2=smooth(0.0,-0.012,e);wr=lerp(wr+40,wr,sh2);wg=lerp(wg+36,wg,sh2);wb=lerp(wb+18,wb,sh2)}
         else{wr=50;wg=96;wb=100}
-        if(aR>0&&e>0.003){const r2=rv<0?-rv:rv;const dp=M.sqrt(clamp((ww-r2)/(ww+1e-7),0,1));let rr2=lerp(78,30,dp),rg2=lerp(112,74,dp),rb2=lerp(96,90,dp);{const m=smooth(0.03,0.004,e)*0.85;rr2=lerp(rr2,92,m);rg2=lerp(rg2,166,m);rb2=lerp(rb2,160,m)} /* the estuary takes on the colour of the shallow sea */wr=lerp(wr,rr2,aR);wg=lerp(wg,rg2,aR);wb=lerp(wb,rb2,aR)}
+        if(aR>0&&e>0.003){const r2=rv<0?-rv:rv;const dp=M.sqrt(clamp((ww-r2)/(ww+1e-7),0,1));let rr2=lerp(78,30,dp),rg2=lerp(112,74,dp),rb2=lerp(96,90,dp);{const m=smooth(0.011,0.004,e)*0.8;rr2=lerp(rr2,80,m);rg2=lerp(rg2,150,m);rb2=lerp(rb2,150,m)} /* the estuary takes on the colour of the shallow sea */wr=lerp(wr,rr2,aR);wg=lerp(wg,rg2,aR);wb=lerp(wb,rb2,aR)}
         wr+=dt*5;wg+=dt*6;wb+=dt*6;let wa=0.66;
         if(WIN){let ice=0;if(aR>0&&e>0.003){const r2=rv<0?-rv:rv;const dp=clamp((ww-r2)/(ww+1e-7),0,1);ice=1-smooth(0.55,0.85,dp)*smooth(0.006,0.012,ww)}
           else if(e<0.003){const t=clamp(-e/0.13,0,1);ice=smooth(0.05,0.015,t+d1*0.025)}
