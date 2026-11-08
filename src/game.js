@@ -49,7 +49,7 @@ const unrle=(s,a)=>{let i=0;for(const p of s.split(',')){const [v,n]=p.split('.'
 const Game=(()=>{
 const N=256,CSZ=512; // territory grid: 256 x 256 cells of 512 m
 let api=null,W=null,cfg=null,G=null,ui=null;
-let land=null,elev=null,coast=null,jit=null,own=null,vis=null,expl=null;
+let land=null,elev=null,coast=null,jit=null,own=null,vis=null,expl=null,ocean=null;
 let polC=null,fogC=null,ovC=null,ovFa=-1,ovFg=null,ovE=false,dirtyOv=true,borders=null,dirtyPol=true,dirtyFog=true,polT=0,fogT=0,simAcc=0;
 let placing=false,pend=null,mapMode='pol',hintStep=0,hintsOff=false,tutorial=false;
 const ICONS={},DBG={};const PRF={};const prf=(n,f)=>{const t=performance.now();f();const d=performance.now()-t;const q=PRF[n]||(PRF[n]={n:0,sum:0,max:0});q.n++;q.sum+=d;q.max=M.max(q.max,d)};
@@ -70,7 +70,9 @@ function hpush(h,c,cell,w){h.push([c,cell,w]);let i=h.length-1;while(i>0){const 
 function hpop(h){const top=h[0],last=h.pop();if(h.length){h[0]=last;let i=0;for(;;){const l=i*2+1,r=l+1;let m=i;if(l<h.length&&h[l][0]<h[m][0])m=l;if(r<h.length&&h[r][0]<h[m][0])m=r;if(m===i)break;[h[m],h[i]]=[h[i],h[m]];i=m}}return top}
 
 // ---------- world analysis
-function analyse(){land=new Uint8Array(N*N);elev=new Float32Array(N*N);coast=new Uint8Array(N*N);jit=new Float32Array(N*N);
+function analyse(){analyseLand();ocean=new Uint8Array(N*N);const st=[];for(let i=0;i<N;i++)for(const c of [i,(N-1)*N+i,i*N,i*N+N-1])if(!land[c]&&!ocean[c]){ocean[c]=1;st.push(c)}
+  while(st.length){const c=st.pop(),i=c%N,j=(c/N)|0;for(const [a,b] of [[1,0],[-1,0],[0,1],[0,-1]]){const ii=i+a,jj=j+b;if(ii<0||jj<0||ii>=N||jj>=N)continue;const q=jj*N+ii;if(!land[q]&&!ocean[q]){ocean[q]=1;st.push(q)}}}}
+function analyseLand(){land=new Uint8Array(N*N);elev=new Float32Array(N*N);coast=new Uint8Array(N*N);jit=new Float32Array(N*N);
   for(let j=0;j<N;j++)for(let i=0;i<N;i++){const x=(i+0.5)*CSZ,y=(j+0.5)*CSZ,e=W.baseH(x,y,6),k=j*N+i;elev[k]=e;land[k]=e>0.004?1:0;jit[k]=hsh(i,j)}
   for(let j=0;j<N;j++)for(let i=0;i<N;i++){const k=j*N+i;if(!land[k])continue;for(const [a,b] of [[1,0],[-1,0],[0,1],[0,-1]]){const q=(j+b)*N+i+a;if(i+a<0||j+b<0||i+a>=N||j+b>=N||!land[q]){coast[k]=1;break}}}}
 function validSite(x,y){if(x<7000||y<7000||x>W.WORLD-7000||y>W.WORLD-7000)return 'Слишком близко к краю мира';
@@ -103,7 +105,16 @@ function claimDisc(s,x,y,r){const R=r/CSZ,i0=M.floor(x/CSZ),j0=M.floor(y/CSZ),n=
 // the town's planned footprint (its street grid reaches ~1.3 R) plus a margin of 1.5 km for its industry
 function placeR(p){const c=W.cities[p.id];if(!c)return 900;if(p.k==='village')return 1300;return c.R*1.3+1500}
 function initTerritory(){own=new Uint8Array(N*N);vis=new Uint8Array(N*N);expl=new Uint8Array(N*N);for(const s of G.states)s.cells=0;claimAll()}
-function claimAll(){for(const s of G.states){for(const p of s.places)claimDisc(s,p.x,p.y,placeR(p));for(const b of s.builds)if(b.done)claimDisc(s,b.x,b.y,850)}}
+// demolish: the zone leaves the world (op in all workers), 30 % of the price comes back; its army is disbanded
+function demolish(s,q){if(!q.done||q.k==='city'||q.k==='village')return false;if(q.id>=0)api.op('removeZone',q.id);s.builds.splice(s.builds.indexOf(q),1);if(q.dep!=null&&G.dep[q.dep])G.dep[q.dep].used=-1;
+  const a=s.armies.find(x=>x.home===q);if(a)s.armies.splice(s.armies.indexOf(a),1);if(s.res.money!==Infinity)s.res.money+=BLD[q.k].cost*0.3;if(s.isP)toast(`Снесено: <b>${BLD[q.k].n}</b> · возвращено ${fmt(BLD[q.k].cost*0.3)}`);updPop();return true}
+// territory as merging drops: a cell is taken where the sum of (r/d)^2 over the state's places and buildings reaches 1,
+// so neighbouring places join into one land; a new place's reach grows in over ~40 s
+function claimAll(){for(const s of G.states){if(s.dead)continue;const src=[];
+    for(const p of s.places){const age=p.t0==null?99:G.t-p.t0;src.push([p.x,p.y,placeR(p)*(0.55+0.45*M.min(1,age/40))])}for(const b of s.builds)if(b.done&&!b.gone)src.push([b.x,b.y,850]);if(!src.length)continue;
+    let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const [x,y,r] of src){x0=M.min(x0,x-r*1.6);y0=M.min(y0,y-r*1.6);x1=M.max(x1,x+r*1.6);y1=M.max(y1,y+r*1.6)}
+    const i0=M.max(0,M.floor(x0/CSZ)),i1=M.min(N-1,M.floor(x1/CSZ)),j0=M.max(0,M.floor(y0/CSZ)),j1=M.min(N-1,M.floor(y1/CSZ));
+    for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++){const c=j*N+i;if(own[c]||!land[c])continue;const X=(i+0.5)*CSZ,Y=(j+0.5)*CSZ;let F=0;for(const [x,y,r] of src){const d2=(X-x)**2+(Y-y)**2;F+=r*r/M.max(d2,1);if(F>=1)break}if(F>=1)setOwn(c,s.id)}}}
 const ownerAt=(x,y)=>{const c=cellOf(x,y);return c<0||!own?0:own[c]};
 
 // ---------- deposits
@@ -113,7 +124,7 @@ function genDeposits(){const r=cfg.rules,R=rngS(cfg.seed^0x0e5);const dep=[];let
   const mul=creative()?Infinity:[1,3,Infinity][r.reserves];
   for(const o of want){for(let t=0;t<60;t++){const x=6000+R()*(W.WORLD-12000),y=6000+R()*(W.WORLD-12000);const c=cellOf(x,y);if(!land[c]||W.landE(x,y,0)<0)continue;
       if(dep.some(d=>M.hypot(d.x-x,d.y-y)<2500))continue;
-      const amt=o.v*(700+R()*700)*mul;dep.push({k:ORES.indexOf(o),x,y,c,amt,max:amt,known:!r.fog||R()<0.6,used:-1});break}}
+      const amt=o.v*(700+R()*700)*mul;dep.push({k:ORES.indexOf(o),x,y,c,amt,max:amt,known:true,used:-1});break}}
   return dep}
 
 // ---------- buildings (shared by the player and the bots)
@@ -125,11 +136,11 @@ const BLD={
   factory:{n:'Завод товаров',cost:2500,time:16,d:'Главный доход: товары и деньги. Нужна энергия',zk:'ind',W:640,H:420,area:'town',need:{energy:6},prod:{goods:4,money:16}},
   power:{n:'ТЭЦ',cost:2000,time:16,d:'Энергия для заводов, НПЗ и портов',zk:'pow',W:760,H:560,area:'own',prod:{energy:20}},
   sawmill:{n:'Лесопилка',cost:900,time:10,d:'Древесина и деньги. Ставится у леса',zk:'saw',W:360,H:260,area:'forest',prod:{wood:4,money:2}},
-  oil:{n:'Нефтевышка',cost:1500,time:12,d:'Нефть. Только на месторождении нефти',zk:'oil',W:240,H:190,area:'oil',prod:{oil:5}},
-  refinery:{n:'НПЗ',cost:3500,time:20,d:'Нефть → топливо и деньги',zk:'ref',W:900,H:640,area:'own',need:{oil:4,energy:3},prod:{fuel:3,money:12}},
+  oil:{n:'Нефтевышка',cost:1500,time:12,d:'Нефть. Только на месторождении нефти',zk:'oil',W:130,H:95,area:'oil',prod:{oil:5}},
+  refinery:{n:'НПЗ',cost:3500,time:20,d:'Нефть → топливо и деньги',zk:'ref2',W:1000,H:700,area:'own',need:{oil:4,energy:3},prod:{fuel:3,money:12}},
   port:{n:'Порт',cost:4000,time:20,d:'Экспорт излишков, импорт нехватки, +800 к складу',zk:'port',W:820,H:900,area:'coast',need:{energy:2}},
   barracks:{n:'Военная часть',cost:2500,time:18,d:'Армия до 12 бойцов',zk:'mil',W:720,H:520,area:'own'},
-  sam:{n:'ПВО',cost:1800,time:12,d:'Сбивает вражеские дроны в радиусе 9 км',zk:'sam',W:260,H:260,area:'own'}};
+  sam:{n:'ПВО',cost:1800,time:12,d:'Сбивает вражеские дроны в радиусе 9 км',zk:'sam',W:150,H:150,area:'own'}};
 const BORDER=['village','farm','factory','power','sawmill','oil','refinery','port','city','barracks','sam'];
 const RES=['food','goods','wood','oil','fuel'];const RESN={money:'Деньги',food:'Еда',goods:'Товары',energy:'Энергия',wood:'Древесина',oil:'Нефть',fuel:'Топливо'};
 const PRICE={food:1,goods:3,wood:1.5,oil:2,fuel:3};
@@ -138,7 +149,8 @@ function canBuild(s,k,x,y){const b=BLD[k];if(!b)return 'Неизвестная �
   const e=W.landE(x,y,0.004);if(e<0)return 'Здесь вода';if(e>0.36)return 'Слишком высоко в горах';
   const o=ownerAt(x,y),mine=o===s.id+1;const rad=b.R?b.R*1.3:M.hypot(b.W||600,b.H||600)/2;
   for(const c of W.cities){const d=M.hypot(c.x-x,c.y-y);if(k==='city'||k==='village'){if(d<c.R*1.2+rad+400)return 'Слишком близко к '+c.name}else if(c.type>=1&&cityF(c,x,y)<1.1+rad/c.R)return 'Здесь кварталы '+c.name}
-  for(const z of W.zones)if(M.hypot(z.x-x,z.y-y)<z.rad+rad*0.85)return 'Занято: рядом другой объект';
+  const hw=b.zk?b.W/2:(b.R?b.R*1.3:400),hh=b.zk?b.H/2:hw;
+  for(const z of W.zones)if(!z.dead&&rectHit(z,x,y,hw+30,hh+30))return 'Занято: мешает «'+(ZLBL[z.zk]||'объект')+'»';
   if(b.zk&&k!=='port'&&footBad(x,y,b.W,b.H))return footBad(x,y,b.W,b.H);
   for(const st of G.states)for(const q of st.builds)if(!q.done&&M.hypot(q.x-x,q.y-y)<rad+600)return 'Рядом идёт стройка';
   if(b.area==='near'){if(o&&!mine)return 'Чужая территория';if(!mine&&distOwn(s,x,y)>(k==='city'?14000:10000))return 'Слишком далеко от ваших земель';return null}
@@ -147,9 +159,14 @@ function canBuild(s,k,x,y){const b=BLD[k];if(!b)return 'Неизвестная �
   if(b.area==='town'){const t=s.places.find(p=>p.k!=='village'&&M.hypot(p.x-x,p.y-y)<placeR(p)+1500);return t?null:'Завод — рядом с городом'}
   if(b.area==='forest'){let f=0;for(let a=0;a<8;a++)f=M.max(f,W.forestAt(x+M.cos(a)*450,y+M.sin(a)*450));return f>0.5||W.forestAt(x,y)>0.5?null:'Лесопилка — у леса'}
   if(b.area==='oil'){const d=G.dep.find(d=>ORES[d.k].k==='oil'&&d.known&&d.used<0&&M.hypot(d.x-x,d.y-y)<800);return d?null:'Нефтевышка — на месторождении нефти'}
-  if(b.area==='coast')return coastNear(x,y)?null:'Порт — на берегу моря';
+  if(b.area==='coast')return coastNear(x,y)?null:'Порт — только на берегу моря с выходом в океан';
   return null}
-function coastNear(x,y){return !!W.portAt(x,y)}
+// the port needs the open sea: the water it faces must be connected to the world's edge (not a lake)
+function coastNear(x,y){const p=W.portAt(x,y);if(!p)return false;for(const d of [420,600,800]){const c=cellOf(p[0]+M.cos(p[2])*d,p[1]+M.sin(p[2])*d);if(c>=0&&ocean[c])return true}return false}
+// does the zone z overlap an axis-aligned box (x±hw, y±hh)? separating axes of the two rectangles
+function rectHit(z,x,y,hw,hh){const ax=[[1,0],[0,1],[z.ca,z.sa],[-z.sa,z.ca]],dx=x-z.x,dy=y-z.y;
+  for(const [ux,uy] of ax){const pa=hw*M.abs(ux)+hh*M.abs(uy),pb=z.W/2*M.abs(ux*z.ca+uy*z.sa)+z.H/2*M.abs(-ux*z.sa+uy*z.ca);if(M.abs(dx*ux+dy*uy)>pa+pb)return false}return true}
+const ZLBL={farm:'Колхоз',ind:'Завод товаров',pow:'ТЭЦ',saw:'Лесопилка',oil:'Нефтевышка',ref2:'НПЗ',port:'Порт',mil:'Военная часть',sam:'ПВО'};
 // the footprint of a building: dry land everywhere (3 x 3 samples + corners) and no road across it
 function footBad(x,y,w,h){for(let a=0;a<=4;a++)for(let b=0;b<=4;b++){if(W.landE(x+(a/4-0.5)*w,y+(b/4-0.5)*h,0.002)<0)return 'Здесь вода'}
   const RW=W._dbg.RW;for(const r of W.queryRoads(x-w/2-40,y-h/2-40,x+w/2+40,y+h/2+40)){if(r.k===8)continue;const m=RW[r.k]/2+6;
@@ -164,8 +181,8 @@ function startBuild(s,k,x,y){const b=BLD[k],c=creative()&&s.isP?0:b.cost;if(s.re
 // construction finished: the world gets the new town or zone (same op in all workers)
 function finishBuild(s,q){q.done=true;const b=BLD[q.k];
   if(q.k==='city'||q.k==='village'){const name=NAMES.capital(rngS(hsh(q.x|0,q.y|0)*1e9));const id=api.op('addPlace',{k:q.k,x:q.x,y:q.y,st:s.id,name,R:b.R});q.id=id;
-    const p={k:q.k,id,x:q.x,y:q.y,grow:q.k==='city'?0.12:1,growQ:-1,name,st:s};s.places.push(p);if(q.k==='city')syncPlace(p);claimDisc(s,q.x,q.y,placeR(p))}
-  else{const h=homeOf(s,q.x,q.y);q.id=api.op('addZone',{zk:b.zk,x:q.x,y:q.y,city:h.id,st:s.id,W:b.W,H:b.H});if(q.id<0){q.failed=true}claimDisc(s,q.x,q.y,850)
+    const p={k:q.k,id,x:q.x,y:q.y,grow:q.k==='city'?0.12:1,growQ:-1,name,st:s,t0:G.t};s.places.push(p);if(q.k==='city')syncPlace(p);claimAll()}
+  else{const h=homeOf(s,q.x,q.y);q.id=api.op('addZone',{zk:b.zk,x:q.x,y:q.y,city:h.id,st:s.id,W:b.W,H:b.H});if(q.id<0){q.failed=true}claimAll()
     if(q.k==='barracks'){const n=(s.armyN=(s.armyN||0)+1);s.armies.push(mkArmy(s,n,q))}}
   if(s.isP){toast(`Построено: <b>${b.n}</b>`);onBuilt(q.k,true)}updPop()}
 function syncPlace(p){const g=p.grow>=1?1:M.floor(p.grow/0.07)*0.07+0.07;if(g!==p.growQ){p.growQ=g;api.setGrow(p.id,M.min(1,g))}}
@@ -398,7 +415,7 @@ function drawMini(mx,s){if(!G||G.phase!=='play'||!own)return;const S=W.WORLD*s;i
 
 // ---------- HUD and panels
 const $=id=>document.getElementById(id);
-function setSpeed(v){G.speed=v;for(const b of $('gspeed').children)b.classList.toggle('on',+b.dataset.s===v);if(api)api.setTodRate(v*4/60)}
+function setSpeed(v){G.speed=v;if(v)G._lastSp=v;$('bpause').classList.toggle('on',v===0);$('bpause').className='bb-btn'+(v===0?' on':'');$('bpause').innerHTML=`<span class="ic ${v===0?'ic-play':'ic-pause'}"></span>`;$('bspeed').textContent='×'+(v||G._lastSp||1);if(api)api.setTodRate(v*4/60)}
 function gameClock(){const mins=8*60+G.t*4;const d=M.floor(mins/1440)+1,h=M.floor(mins/60)%24,mm=M.floor(mins)%60;return `День ${d} · ${String(h).padStart(2,'0')}:${String(mm).padStart(2,'0')}`}
 const fmtT=s=>{s=M.round(s);const h=M.floor(s/3600),m=M.floor(s/60)%60,ss=s%60;return (h?h+':'+String(m).padStart(2,'0'):m)+':'+String(ss).padStart(2,'0')};
 const sgn=v=>(v>=0?'+':'−')+fmtK(M.abs(v));
@@ -416,6 +433,7 @@ function updPanel(){const el=$('gpanel');const p=player();
       <p class="note">Хорошее место: равнина у реки или моря, подальше от края мира. Боты выберут свои столицы одновременно с вами.</p>`;
     $('a-found').onclick=e=>{if(e.target.id==='a-found-x'){setPlacing(false);return}setPlacing(!placing)};return}
   const a=G.sel&&G.sel.army;if(a){armyPanel(el,a);return}
+  const sb=G.sel&&G.sel.build;if(sb){buildPanel(el,sb);return}
   if(panelSig!=='state'){panelSig='state';
     el.innerHTML=`<div class="gp-h">${esc(p.gov)} ${esc(p.name)}</div>`+['Столица','Население','Города и сёла','Постройки','Армии','Войны'].map((n,i)=>`<div class="stat"><span>${n}</span><b data-v="${i}"></b></div>`).join('')+
       `<div class="gp-h" style="margin-top:12px">Стройка</div><div id="gp-q"></div><button class="btn sm" id="a-home" style="width:100%;margin-top:8px">Перейти к столице</button>`;
@@ -439,12 +457,53 @@ function armyPanel(el,a){const p=player();const sig='army'+a.id+'|'+a.tpl+'|'+a.
     for(const b of el.querySelectorAll('[data-tpl]'))b.onclick=()=>{a.tpl=b.dataset.tpl;panelSig='';updPanel();onBuilt('assembly',true)};
     $('a-move').onclick=()=>{G.mode=G.mode==='move'?null:'move';panelSig=''};$('a-drone').onclick=()=>{G.mode=G.mode==='drone'?null:'drone';panelSig=''};
     $('a-go').onclick=()=>api.flyTo(a.x,a.y,4)}}
+function buildPanel(el,q){const b=BLD[q.k],sig='b'+q.id+'|'+(q.off>0);if(sig===panelSig)return;panelSig=sig;
+  const pr=b.prod?Object.entries(b.prod).map(([k,v])=>RESN[k]+' +'+v).join(', '):'—',nd=b.need?Object.entries(b.need).map(([k,v])=>RESN[k]+' '+v).join(', '):'—';
+  el.innerHTML=`<div class="gp-h">${b.n}<button class="btn sm ghost" id="a-close" style="float:right;padding:0 6px">✕</button></div><p class="note" style="margin-top:0">${b.d}</p>
+    <div class="stat"><span>Даёт в секунду</span><b>${pr}</b></div><div class="stat"><span>Нужно</span><b>${nd}</b></div><div class="stat"><span>Состояние</span><b>${q.off>0?'не работает '+M.ceil(q.off)+' с':'работает'}</b></div>
+    ${q.k==='barracks'?'<button class="btn sm" id="a-army" style="width:100%;margin-top:8px">Армия этой части</button>':''}<button class="btn sm danger" id="a-dem" style="width:100%;margin-top:8px">Снести · вернётся ${fmt(b.cost*0.3)}</button>`;
+  $('a-close').onclick=()=>{G.sel=null;panelSig=''};$('a-dem').onclick=()=>{demolish(player(),q);G.sel=null;panelSig='';updHUD()};
+  const ab=$('a-army');if(ab)ab.onclick=()=>{const a=player().armies.find(x=>x.home===q);if(a){G.sel={army:a};panelSig=''}}}
 const atWarAny=()=>G.states.some(t=>atWar(0,t.id));
-// bottom bar: pause / speed on the left, the catalogue of buildings on the right (scrolls with < >)
-function buildCatalog(){const el=$('bb-cat');el.innerHTML='';for(const k of BORDER){const b=BLD[k];const e=document.createElement('button');e.className='bcat';e.dataset.k=k;e.title=b.d;
-    e.innerHTML=`<span class="ic ic-b-${k}"></span><b>${b.n}</b><small>${fmt(b.cost)}</small>`;e.onclick=()=>setBuild(G.build===k?null:k);el.appendChild(e)}}
-function updCatalog(){if(!G||G.phase!=='play')return;const p=player();for(const e of $('bb-cat').children){const k=e.dataset.k;e.classList.toggle('on',G.build===k);e.classList.toggle('poor',p.res.money<BLD[k].cost&&!creative());e.classList.toggle('pulse',HINTS[hintStep]&&HINTS[hintStep][1]===k)}}
-function setBuild(k){if(!G||G.phase!=='play')return;G.build=k;G.mode=null;document.body.classList.toggle('placing',!!k);updCatalog();if(k){const e=[...$('bb-cat').children].find(q=>q.dataset.k===k);if(e)e.scrollIntoView({inline:'nearest',block:'nearest'})}}
+// bottom panel (as in DroneFlames): pause / speed and the clock on the left; tabs КАРТА ГОРОДА УДАР ПВО АРМИЯ ПОЛИТ. ФЛОТ over a row of cards
+const TABS=[['map','Карта'],['cities','Города'],['strike','Удар'],['aa','ПВО'],['army','Армия'],['pol','Полит.'],['fleet','Флот']];
+const ECON=['village','farm','factory','power','sawmill','oil','refinery','port','city'];
+const tabOf=k=>k==='sam'?'aa':k==='barracks'||k==='assembly'?'army':ECON.includes(k)?'cities':null;
+let tab='cities',tabSig='';
+function buildTabs(){const t=$('bb-tabs');t.innerHTML='';TABS.forEach(([k,n],i)=>{const b=document.createElement('button');b.dataset.t=k;b.innerHTML=`<i>${i+1}</i>${n}`;b.onclick=()=>setTab(k);t.appendChild(b)})}
+function setTab(k){tab=k;tabSig='';updCatalog()}
+const card=(o)=>`<button class="bcat${o.cls?' '+o.cls:''}" ${o.data||''} ${o.dis?'disabled':''} title="${esc(o.tip||'')}"><span class="ic ${o.ic}"></span><b>${o.n}</b><small>${o.sub||''}</small></button>`;
+function tabCards(){const p=player(),out=[];
+  if(tab==='map'){out.push(card({n:'Государства',sub:'границы',ic:'ic-land',data:'data-m="pol"',cls:mapMode==='pol'?'on':''}),card({n:'Ресурсы',sub:'месторождения',ic:'ic-ore',data:'data-m="res"',cls:mapMode==='res'?'on':''}),card({n:'Местность',sub:'без слоёв',ic:'ic-new',data:'data-m="off"',cls:mapMode==='off'?'on':''}),
+    card({n:'К столице',sub:esc(p.capital),ic:'ic-capital',data:'data-go="cap"'}),card({n:'Весь мир',sub:'131 × 131 км',ic:'ic-star',data:'data-go="world"'}))}
+  else if(tab==='cities'){for(const k of ECON){const b=BLD[k];out.push(card({n:b.n,sub:fmt(b.cost),ic:'ic-b-'+k,data:`data-k="${k}"`,tip:b.d}))}out.push(card({n:'Снести',sub:'30 % назад',ic:'ic-b-demolish',data:'data-mode="demolish"',tip:'Кликните по своей постройке, чтобы снести её'}))}
+  else if(tab==='strike'){const war=atWarAny(),base=p.builds.some(q=>q.done&&q.k==='barracks');const why=!base?'нужна военная часть':!war?'нет войны':'';
+    out.push(card({n:'Ударный дрон',sub:why||'300',ic:'ic-b-drone',data:'data-mode="drone"',dis:!!why,tip:'Кликните по цели на земле противника'}),card({n:'Рой дронов',sub:why||'800 · 3 шт.',ic:'ic-b-swarm',data:'data-mode="swarm"',dis:!!why,tip:'Три дрона по одной цели: ПВО не успевает сбить всех'}))}
+  else if(tab==='aa'){out.push(card({n:'ПВО',sub:fmt(BLD.sam.cost),ic:'ic-b-sam',data:'data-k="sam"',tip:BLD.sam.d}));p.builds.filter(q=>q.k==='sam').forEach((q,i)=>out.push(card({n:'ПВО №'+(i+1),sub:!q.done?'строится':q.off>0?'подавлена':'на дежурстве',ic:'ic-b-sam',data:`data-fly="${q.x|0},${q.y|0}"`})))}
+  else if(tab==='army'){out.push(card({n:'Военная часть',sub:fmt(BLD.barracks.cost),ic:'ic-b-barracks',data:'data-k="barracks"',tip:BLD.barracks.d}));
+    p.armies.forEach((a,i)=>out.push(card({n:'Армия №'+a.n,sub:a.units.length+'/12 · '+(a.tpl?TPL[a.tpl].n:'без сборки'),ic:'ic-b-army',data:`data-army="${i}"`,cls:G.sel&&G.sel.army===a?'on':''})))}
+  else if(tab==='pol'){for(const t of G.states){if(t.isP||!t.places.length)continue;const rel=p.allies.includes(t.id)?'союзник':atWar(p.id,t.id)?'война':'мир';out.push(card({n:esc(t.name),sub:rel,ic:'fl-'+t.id,data:`data-st="${t.id}"`,cls:rel==='война'?'war':rel==='союзник'?'ally':''}))}
+    out.push(card({n:'Дипломатия',sub:'все государства',ic:'ic-dip',data:'data-go="dip"'}))}
+  else if(tab==='fleet'){const ports=p.builds.filter(q=>q.done&&q.k==='port').length;out.push(card({n:'Верфь',sub:'следующий этап',ic:'ic-b-port',dis:true,tip:'Флот появится на следующем этапе. Для него нужен порт'}),card({n:'Порты',sub:ports?ports+' шт.':'нет',ic:'ic-b-port',data:'data-tab="cities"'}))}
+  return out.join('')}
+function updCatalog(){if(!G||G.phase!=='play')return;const p=player(),el=$('bb-cat');const hk=HINTS[hintStep]&&HINTS[hintStep][1];
+  for(const b of $('bb-tabs').children){b.classList.toggle('on',b.dataset.t===tab);b.classList.toggle('pulse',tabOf(hk)===b.dataset.t&&tab!==b.dataset.t)}
+  const sig=tab+'|'+tabCards();if(sig!==tabSig){tabSig=sig;el.innerHTML=tabCards();
+    for(const e of el.querySelectorAll('[class*="fl-"]')){const id=+[...e.classList].find(c=>c.startsWith('fl-')).slice(3);e.appendChild(flagCanvas(G.states[id].flag,26,17))}
+    for(const e of el.children)e.onclick=()=>cardClick(e)}
+  for(const e of el.children){const k=e.dataset.k;if(k){e.classList.toggle('on',G.build===k);e.classList.toggle('poor',p.res.money<BLD[k].cost&&!creative());e.classList.toggle('pulse',hk===k||(hk==='defense'&&(k==='sam'||k==='barracks')&&!p.builds.some(q=>q.k===k)))}
+    if(e.dataset.mode)e.classList.toggle('on',G.mode===e.dataset.mode)}}
+function cardClick(e){const d=e.dataset,p=player();
+  if(d.k)return setBuild(G.build===d.k?null:d.k);
+  if(d.m){mapMode=d.m;updModes();tabSig='';return updCatalog()}
+  if(d.mode){setBuild(null);G.mode=G.mode===d.mode?null:d.mode;if(G.mode==='drone'||G.mode==='swarm')toast('Кликните по цели на земле противника');if(G.mode==='demolish')toast('Кликните по своей постройке, чтобы снести её');return updCatalog()}
+  if(d.go==='cap'){const q=p.places[0];if(q)api.flyTo(q.x,q.y,3);return}if(d.go==='world')return api.flyTo(W.WORLD/2,W.WORLD/2,api.maxM()*0.9);
+  if(d.go==='dip'){$('dip').classList.add('show');updDip();return}
+  if(d.fly){const [x,y]=d.fly.split(',').map(Number);return api.flyTo(x,y,3)}
+  if(d.army!=null){const a=p.armies[+d.army];G.sel={army:a};G.mode=null;panelSig='';updPanel();api.flyTo(a.x,a.y,M.min(api.cam.m,8));return updCatalog()}
+  if(d.st!=null){$('dip').classList.add('show');updDip();return}
+  if(d.tab)return setTab(d.tab)}
+function setBuild(k){if(!G||G.phase!=='play')return;G.build=k;if(k)G.mode=null;document.body.classList.toggle('placing',!!k);if(k){const t=tabOf(k);if(t&&t!==tab)setTab(t)}updCatalog()}
 function setPlacing(v){placing=v;document.body.classList.toggle('placing',v);panelSig='';updPanel();if(v)hint(1);closeConfirm()}
 function closeConfirm(){$('confirm').classList.remove('show');pend=null}
 function openConfirm(x,y,sx,sy){pend={x,y};const c=$('confirm');$('cft').textContent='Основать столицу здесь?';const e=W.landE(x,y,0);
@@ -457,18 +516,18 @@ function toast(html,fl,btns,ms){const t=document.createElement('div');t.classNam
 const HINTS=[
   ['Выберите место для <b>столицы</b>: нажмите «Основать столицу» слева или просто кликните по карте','found'],
   ['Кликните по карте там, где будет столица. Красный круг — место не подходит. <b>Esc</b> или ✕ — отмена','found'],
-  ['Столица основана! Внизу — панель управления: слева пауза и скорость, справа — постройки. Поставьте <b>Село</b> рядом со столицей','village'],
+  ['Столица основана! Внизу — панель управления: слева пауза и скорость, справа вкладки. Во вкладке <b>Города</b> поставьте <b>Село</b> рядом со столицей','village'],
   ['Поставьте в селе <b>Колхоз</b>: еда и немного денег. Колхоз — только в области села','farm'],
   ['<b>Завод товаров</b> — главный доход. Ставится рядом с городом, ему нужна энергия','factory'],
   ['Заводу нужна энергия: постройте <b>ТЭЦ</b>','power'],
   ['<b>Лесопилка</b> — древесина и деньги. Ставится у леса','sawmill'],
-  ['<b>Нефтевышка</b> — на месторождении нефти (капля на карте, вкладка «Ресурсы»)','oil'],
+  ['<b>Нефтевышка</b> — на месторождении нефти (чёрное пятно на земле; вкладка «Карта» → «Ресурсы» покажет все месторождения)','oil'],
   ['<b>НПЗ</b> перерабатывает нефть в топливо и деньги','refinery'],
   ['<b>Порт</b> на берегу продаёт излишки за рубеж, привозит нехватку и даёт +800 к складу','port'],
   ['Расширяйтесь: поставьте <b>новый город</b> — он вырастет сам и принесёт налоги и земли','city'],
-  ['Защита: <b>Военная часть</b> (армия до 12 бойцов) и <b>ПВО</b> (сбивает вражеские дроны). Боты могут начать войну не раньше 10–12 минуты','defense'],
+  ['Защита: <b>Военная часть</b> (вкладка «Армия», армия до 12 бойцов) и <b>ПВО</b> (вкладка «ПВО», сбивает вражеские дроны). Боты могут начать войну не раньше 10–12 минуты','defense'],
   ['Кликните по военной части или по значку армии на карте: «Армия №1», выберите <b>Сборку</b> — состав армии','assembly'],
-  ['Армия выбрана: «Двигаться» и клик по карте — приказ. <b>Дипломатия</b> вверху: альянсы, война и мир. <b>Пробел</b> — пауза, <b>Esc</b> — меню','end']];
+  ['Армия выбрана: «Двигаться» и клик по карте — приказ. Вкладка <b>Полит.</b> — альянсы, война и мир, <b>Удар</b> — дроны. <b>Пробел</b> — пауза, <b>F</b> — скорость, <b>1–7</b> — вкладки, <b>Esc</b> — меню','end']];
 function hint(i){if(hintsOff&&!tutorial)return;if(i<hintStep&&i!==0)return;
   // steps already done (built out of order) are skipped
   if(G&&G.phase==='play')while(HINTS[i]&&stepDone(HINTS[i][1]))i++;hintStep=i;const h=HINTS[i];if(!h)return hideHint();$('hintn').textContent=i+1;$('hintt').innerHTML=h[0];$('hint').classList.add('show');if(G&&G.phase==='play')updCatalog()}
@@ -489,7 +548,7 @@ function updDip(){const b=$('dipb');if(!$('dip').classList.contains('show')||!G)
   for(const e of b.querySelectorAll('[data-war]'))e.onclick=()=>declareWar(p,G.states[+e.dataset.war]);
   for(const e of b.querySelectorAll('[data-peace]'))e.onclick=()=>askPeace(G.states[+e.dataset.peace]);
   for(const e of b.querySelectorAll('[data-go]'))e.onclick=()=>{const s=G.states[+e.dataset.go];const q=s.places[0];if(q)api.flyTo(q.x,q.y,6)}}
-function updModes(){for(const b of $('mapmodes').children)b.classList.toggle('on',b.dataset.m===mapMode)}
+function updModes(){tabSig=''}
 
 // ---------- map objects: construction sites, build preview, armies, drones, hits
 function drawObjects(ctx,A){const m=A.cam.m,T=A.T;ctx.textAlign='center';ctx.textBaseline='middle';
@@ -525,6 +584,7 @@ const BIC={};function bIcon(k){if(BIC[k])return BIC[k];const S=48,c=document.cre
 const ICONIMG={};
 
 // ---------- engine hooks
+function ownBuildAt(x,y){for(const q of player().builds){if(!q.done||q.id<0)continue;const z=W.zones[q.id];if(z&&!z.dead&&rectHit(z,x,y,1,1))return q}return null}
 function pickArmy(sx,sy){for(const s of G.states){if(!s.isP)continue;for(const a of s.armies){if(!a.units.length)continue;if(M.abs(api.sxw(a.x)-sx)<18&&M.abs(api.syw(a.y)-sy)<14)return a}}
   for(const s of G.states)if(s.isP)for(const a of s.armies){const q=a.home;if(!q.done)continue;const b=BLD.barracks;if(M.abs(q.x-api.toWorld(sx,sy)[0])<b.W/2&&M.abs(q.y-api.toWorld(sx,sy)[1])<b.H/2)return a}return null}
 const hooks={
@@ -535,15 +595,19 @@ const hooks={
   mini:(mx,s)=>drawMini(mx,s),
   click(x,y,sx,sy){if(!G)return false;if(G.phase==='found'){const bad=validSite(x,y);if(bad){toast(bad);if(!placing)setPlacing(true);return true}if(!placing){setPlacing(true)}openConfirm(x,y,sx,sy);return true}
     if(G.build){const k=G.build,p=player(),bad=canBuild(p,k,x,y);if(bad){toast(bad);return true}if(p.res.money<BLD[k].cost&&!creative()){toast('Не хватает денег: нужно '+fmt(BLD[k].cost));return true}startBuild(p,k,x,y);setBuild(null);updHUD();return true}
-    if(G.mode==='drone'){const o=ownerAt(x,y)-1;if(o<0||!atWar(0,o)){toast('Цель — на земле государства, с которым идёт война');return true}if(player().res.money<300){toast('Не хватает денег');return true}
-      if(launchDrone(player(),G.states[o],x,y)){if(player().res.money!==Infinity)player().res.money-=300;toast('Дрон запущен')}else toast('Нет действующей военной части');G.mode=null;panelSig='';return true}
+    if(G.mode==='drone'||G.mode==='swarm'){const o=ownerAt(x,y)-1,sw=G.mode==='swarm',cost=sw?800:300;if(o<0||!atWar(0,o)){toast('Цель — на земле государства, с которым идёт война');return true}if(player().res.money<cost){toast('Не хватает денег');return true}
+      let n=0;for(let i=0;i<(sw?3:1);i++)if(launchDrone(player(),G.states[o],x+(i-1)*120,y+(i%2)*90))n++;if(n){if(player().res.money!==Infinity)player().res.money-=cost;toast(sw?'Рой дронов запущен':'Дрон запущен')}else toast('Нет действующей военной части');G.mode=null;panelSig='';updCatalog();return true}
+    const own=ownBuildAt(x,y);
+    if(G.mode==='demolish'){if(!own){toast('Здесь нет вашей постройки');return true}toast(`Снести <b>${BLD[own.k].n}</b>? Вернётся ${fmt(BLD[own.k].cost*0.3)}`,null,[['Снести',()=>{demolish(player(),own);G.sel=null;panelSig='';updHUD()}],['Отмена',()=>{}]],9000);G.mode=null;updCatalog();return true}
     const a=pickArmy(sx,sy);if(a){G.sel={army:a};G.mode=null;panelSig='';updPanel();onBuilt('assembly',false);return true}
+    if(own&&!G.mode){G.sel={build:own};panelSig='';updPanel();return true}
     if(G.sel&&G.sel.army&&G.mode==='move'){const ar=G.sel.army;ar.tx=x;ar.ty=y;G.mode=null;panelSig='';return true}
     if(fogOn()&&!seenAt(x,y))return true;if(G.sel){G.sel=null;G.mode=null;panelSig=''}return false},
   key(e){if(!G||document.body.classList.contains('m-settings'))return !!G;if(e.code==='Escape'){if($('confirm').classList.contains('show')){closeConfirm();return true}if(placing){setPlacing(false);return true}
       if(G.build){setBuild(null);return true}if(G.mode||G.sel){G.mode=null;G.sel=null;panelSig='';return true}if($('dip').classList.contains('show')){$('dip').classList.remove('show');return true}ui.pause(true);return true}
-    if(G.phase!=='play')return false;if(e.code==='Space'){setSpeed(G.speed?0:(G._lastSp||1));if(G.speed)G._lastSp=G.speed;e.preventDefault();return true}
-    const k={Digit1:1,Digit2:2,Digit3:4,Digit0:0}[e.code];if(k!==undefined){setSpeed(k);return true}return false},
+    if(G.phase!=='play')return false;if(e.code==='Space'||e.code==='KeyP'){setSpeed(G.speed?0:(G._lastSp||1));e.preventDefault();return true}
+    if(e.code==='KeyF'||e.code==='Tab'){const n={1:2,2:4,4:1}[G._lastSp||1];G._lastSp=n;setSpeed(n);e.preventDefault();return true}
+    const d=/^Digit([1-7])$/.exec(e.code);if(d){setTab(TABS[+d[1]-1][0]);return true}return false},
   inspect(c){const o=ownerAt(c.x,c.y);if(!o)return G&&G.phase==='play'?'<tr><td>Государство</td><td>ничейная земля</td></tr>':'';const s=G.states[o-1];
     return `<tr><td>Государство</td><td><span class="own"><i class="chip" style="background:${s.color}"></i>${esc(s.name)}${c.cap!==undefined?' · столица':''}</span></td></tr>`}};
 
@@ -557,22 +621,23 @@ function initState(c){cfg=c;tutorial=!!c.tutorial;hintsOff=!ui.settings().hints;
   G={t:0,speed:1,phase:'found',states:[],dep:[],offers:[],over:false,dec:0,wars:new Set(),drones:[],fx:[],build:null,mode:null,sel:null};
   G.states.push(mkState(0,Object.assign({},c.country,{money:c.rules.money,diff:1,trait:'random'}),true));
   botList().forEach((b,i)=>G.states.push(mkState(i+1,b,false)));
-  const p=player();$('hname').textContent=p.name;$('hgov').textContent=p.gov+' · столица '+p.capital;flagCanvas(p.flag,42,28,$('hflag'));setSpeed(1);updModes();buildCatalog();
+  const p=player();$('hname').textContent=p.name;$('hgov').textContent=p.gov+' · столица '+p.capital;flagCanvas(p.flag,42,28,$('hflag'));G._lastSp=1;setSpeed(1);updModes();tab='cities';tabSig='';
   $('over').classList.remove('show');$('dip').classList.remove('show');$('toasts').innerHTML=''}
-function newGame(c){initState(c);const MT={normal:'обычная карта',cont:'материки',arch:'архипелаг',islands:'острова'};ui.loading('Создание мира',`Сид ${c.seed} · ${MT[c.map.type]} · рельеф, реки, леса, месторождения`);setTimeout(()=>{boot(null,()=>{ui.loaded();analyse();G.dep=genDeposits();hint(0);updHUD()});document.body.className='m-game';updHUD()},60)}
+function depOp(){return {f:'addDeposits',q:G.dep.map(d=>[d.k,M.round(d.x),M.round(d.y),M.round(200+ORES[d.k].v*14)])}}
+function newGame(c){initState(c);const MT={normal:'обычная карта',cont:'материки',arch:'архипелаг',islands:'острова'};ui.loading('Создание мира',`Сид ${c.seed} · ${MT[c.map.type]} · рельеф, реки, леса, месторождения`);setTimeout(()=>{boot(null,()=>{ui.loaded();analyse();G.dep=genDeposits();const o=depOp();api.op(o.f,o.q);hint(0);updHUD()});document.body.className='m-game';updHUD()},60)}
 // founding: bots pick their sites, the world is rebuilt with the capitals; land is taken around them
 function found(x,y){closeConfirm();setPlacing(false);const picks=chooseCaps(x,y);const p=player();p.cap={x,y};for(const [b,s] of picks)b.cap={x:s.x,y:s.y};
   G.phase='play';ui.loading('Основание государств',G.states.filter(s=>s.cap).map(s=>esc(s.name)).join(' · '));
   setTimeout(()=>{const caps=G.states.filter(s=>s.cap).map(s=>({x:s.cap.x,y:s.cap.y,st:s.id,name:s.capital,fl:s.flag}));cfg.caps=caps;const keep=G.dep;
-    boot(caps,()=>{ui.loaded();api.flyTo(x,y,3.2,4.5)});
-    for(const s of G.states){const c=W.cities.find(q=>q.cap===s.id);s.cityId=c?c.id:-1;s.growQ=-1;if(c)s.places=[{k:'capital',id:c.id,x:c.x,y:c.y,name:s.capital,st:s}];syncGrow(s)}
+    G.dep=keep;boot(caps,()=>{ui.loaded();api.flyTo(x,y,3.2,4.5)},[depOp()]);
+    for(const s of G.states){const c=W.cities.find(q=>q.cap===s.id);s.cityId=c?c.id:-1;s.growQ=-1;if(c)s.places=[{k:'capital',id:c.id,x:c.x,y:c.y,name:s.capital,st:s,t0:0}];syncGrow(s)}
     G.dep=keep;initTerritory();updPop();rebuildFog();
     for(const s of G.states.slice(1))if(s.cap)toast(`<b>${esc(s.name)}</b> основала столицу <b>${esc(s.capital)}</b>`,s.flag);
     toast(`Вы основали столицу <b>${esc(p.capital)}</b>. ${esc(p.gov)} ${esc(p.name)} начинает свою историю`,p.flag,null,9000);hint(2);save(true)},60)}
 function snapshot(){const P=player();return {cfg,meta:{date:Date.now(),name:P.name,flag:P.flag,t:G.t,phase:G.phase,day:gameClock(),score:P.score,map:cfg.map.type},
   g:{t:G.t,phase:G.phase,over:G.over,wars:[...G.wars],ops:api?api.ops.slice():[],hint:hintStep,
     states:G.states.map(s=>({res:Object.fromEntries(Object.entries(s.res).map(([k,v])=>[k,v===Infinity?'inf':v])),earned:s.earned,cap:s.cap,grow:s.grow,allies:s.allies,trait:s.trait,dead:s.dead,lostCap:s.lostCap,planI:s.planI,warAfter:s.warAfter,armyN:s.armyN,
-      places:s.places.map(p=>({k:p.k,id:p.id,x:p.x,y:p.y,grow:p.grow,name:p.name})),builds:s.builds.map(q=>({k:q.k,x:q.x,y:q.y,t:q.t,time:q.time,done:q.done,id:q.id,off:q.off,dep:q.dep,failed:q.failed})),
+      places:s.places.map(p=>({k:p.k,id:p.id,x:p.x,y:p.y,grow:p.grow,name:p.name,t0:p.t0})),builds:s.builds.map(q=>({k:q.k,x:q.x,y:q.y,t:q.t,time:q.time,done:q.done,id:q.id,off:q.off,dep:q.dep,failed:q.failed})),
       armies:s.armies.map(a=>({n:a.n,id:a.id,x:a.x,y:a.y,tpl:a.tpl,units:a.units,tx:a.tx,ty:a.ty,home:s.builds.indexOf(a.home)}))})),
     dep:G.dep.map(d=>[d.k,M.round(d.x),M.round(d.y),d.amt===Infinity?-1:M.round(d.amt),d.max===Infinity?-1:M.round(d.max),d.known?1:0,d.used]),own:own?rle(own):null,expl:expl?rle(expl):null,cam:api?[api.cam.x,api.cam.y,api.cam.m]:null}}}
 function save(auto){if(!G||!cfg||cfg.tutorial&&auto)return false;const ok=Saves.put(cfg.slot||1,snapshot());if(!auto)toast(ok?`Сохранено в ячейку ${cfg.slot||1}`:'Не удалось сохранить: нет места в хранилище браузера');return ok}
@@ -591,15 +656,14 @@ function exit(){if(G&&!G.over)save(true);if(api){api.destroy();api=null}G=null;W
 
 // ---------- DOM wiring (once)
 function wire(u){ui=u;
-  for(const b of $('gspeed').children)b.onclick=()=>{if(G&&G.phase==='play')setSpeed(+b.dataset.s)};
   $('cfy').onclick=()=>{if(pend)found(pend.x,pend.y)};$('cfn').onclick=()=>closeConfirm();
   $('hintx').onclick=()=>hideHint();
-  $('bdip').onclick=()=>{if(!G||G.phase!=='play')return toast('Дипломатия станет доступна после основания столицы');$('dip').classList.toggle('show');updDip()};$('dipx').onclick=()=>$('dip').classList.remove('show');
+$('dipx').onclick=()=>$('dip').classList.remove('show');
   $('bmenu').onclick=()=>ui.pause(true);
-  $('bb-l').onclick=()=>$('bb-cat').scrollBy({left:-260,behavior:'smooth'});$('bb-r').onclick=()=>$('bb-cat').scrollBy({left:260,behavior:'smooth'});
-  for(const b of $('mapmodes').children)b.onclick=()=>{mapMode=b.dataset.m;updModes()};
+  $('bb-l').onclick=()=>$('bb-cat').scrollBy({left:-300,behavior:'smooth'});$('bb-r').onclick=()=>$('bb-cat').scrollBy({left:300,behavior:'smooth'});buildTabs();
+  $('bpause').onclick=()=>{if(G&&G.phase==='play')setSpeed(G.speed?0:(G._lastSp||1))};$('bspeed').onclick=()=>{if(G&&G.phase==='play'){const n={1:2,2:4,4:1}[G._lastSp||1];G._lastSp=n;setSpeed(n)}};
   $('overm').onclick=()=>{$('over').classList.remove('show');ui.toMenu()};$('overk').onclick=()=>$('over').classList.remove('show')}
 return {wire,newGame,load,save,exit,setSpeed:v=>G&&setSpeed(v),get G(){return G},get api(){return api},paused:()=>G?G.speed===0:true,
   pauseInfo:()=>G?`${esc(player().name)} · ${gameClock()} · ${fmt(player().score)} очков · ячейка ${cfg.slot||1}`:'',setIcon:(k,img)=>{ICONIMG[k]=img},
-  _prof:PRF,_dbg:DBG,_test:{run:sec=>{for(let t=0;t<sec;t+=0.1)sim(0.1)},validSite:(x,y)=>validSite(x,y),found,get own(){return own},chooseCaps,canBuild:(k,x,y)=>canBuild(player(),k,x,y),startBuild:(k,x,y)=>startBuild(player(),k,x,y),BLD,declareWar:(i)=>declareWar(player(),G.states[i]),launchDrone}};
+  _prof:PRF,_dbg:DBG,_test:{demolish:q=>demolish(player(),q),run:sec=>{for(let t=0;t<sec;t+=0.1)sim(0.1)},validSite:(x,y)=>validSite(x,y),found,get own(){return own},chooseCaps,canBuild:(k,x,y)=>canBuild(player(),k,x,y),startBuild:(k,x,y)=>startBuild(player(),k,x,y),BLD,declareWar:(i)=>declareWar(player(),G.states[i]),launchDrone}};
 })();

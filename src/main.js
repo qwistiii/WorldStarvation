@@ -79,11 +79,13 @@ function invalidate(bb,zmin,zmax){zmin=zmin||0;zmax=zmax==null?99:zmax;GV++;INV.
   for(const [k,v] of cache){const tz=tileZ0(k);if(tz<zmin||tz>zmax||!hitBB(tileBB(k),bb))continue;const o=stale.get(k);if(o&&o.b&&o.b.close&&o!==v)o.b.close();stale.set(k,v);cache.delete(k)}staleT=0;
   for(let L=1;L<=3;L++)for(const [k,v] of LCS[L])if(tileZ0(k)>=zmin&&tileZ0(k)<=zmax&&hitBB(tileBB(k),bb)){if(v.b&&v.b.close)v.b.close();LCS[L].delete(k)}}
 function setGrow(id,g){g=g>=1?1:g;const g0=GROWS.has(id)?GROWS.get(id):1;if(g0===g)return;const coarse=g>=1||M.floor(g*4)!==M.floor(g0*4);if(g>=1)GROWS.delete(id);else GROWS.set(id,g);W.setGrow(id,g);for(const w of workers)w.postMessage({t:'grow',id,g});
-  const c=W.cities.find(q=>q.id===id);if(c){let bb=c.bb.slice();for(const z of W.zones)if(z.city===c)bb=[M.min(bb[0],z.bb[0]),M.min(bb[1],z.bb[1]),M.max(bb[2],z.bb[2]),M.max(bb[3],z.bb[3])];invalidate([bb[0]-300,bb[1]-300,bb[2]+300,bb[3]+300],coarse?0:6)}}
+  const c=W.cities.find(q=>q.id===id);if(c){const rf=c.R+4700;let bb=[c.x-rf,c.y-rf,c.x+rf,c.y+rf];for(const z of W.zones)if(z.city===c)bb=[M.min(bb[0],z.bb[0]),M.min(bb[1],z.bb[1]),M.max(bb[2],z.bb[2]),M.max(bb[3],z.bb[3])];invalidate([bb[0]-300,bb[1]-300,bb[2]+300,bb[3]+300],coarse?0:6)}}
 const zoneOn=z=>z.dyn||!z.city||W.growOf(z.city.id)>=0.95;
 // a settlement or building placed during the game: same call here and in every worker, then the tiles over it are redrawn
 function op(f,q){const r0=W.roads.length,id=W[f](q);if(id<0)return id;const o={f,q};OPS.push(o);for(const w of workers)w.postMessage({t:'op',op:o});
-  const f0=f==='addPlace'?W.cities.find(c=>c.id===id):W.zones.find(z=>z.id===id);let bb=f0?f0.bb.slice():[q.x-500,q.y-500,q.x+500,q.y+500];
+  const f0=f==='addPlace'?W.cities.find(c=>c.id===id):f==='addZone'||f==='removeZone'?W.zones.find(z=>z.id===id):null;let bb=f0?f0.bb.slice():q&&q.x!=null?[q.x-500,q.y-500,q.x+500,q.y+500]:null;
+  // a town also changes the farmland around it (fields reach R + 4.5 km): redraw that ring too, or tiles meet with seams
+  if(f==='addPlace'&&f0){const r=f0.R+4700;bb=[f0.x-r,f0.y-r,f0.x+r,f0.y+r]}if(f==='addDeposits'){bb=[0,0,WORLD,WORLD]}if(!bb)return id;
   for(let i=r0;i<W.roads.length;i++){const r=W.roads[i];bb=[M.min(bb[0],r.bb[0]),M.min(bb[1],r.bb[1]),M.max(bb[2],r.bb[2]),M.max(bb[3],r.bb[3])]}
   // detailed levels at once; the coarse ones (a whole region per tile) are refreshed in batches every 12 s
   const b2=[bb[0]-200,bb[1]-200,bb[2]+200,bb[3]+200];invalidate(b2,4);LOWB=LOWB?[M.min(LOWB[0],b2[0]),M.min(LOWB[1],b2[1]),M.max(LOWB[2],b2[2]),M.max(LOWB[3],b2[3])]:b2;return id}
@@ -393,8 +395,8 @@ function drawPrecip(dt){const rain=wcur.rain,snow=wcur.snow,H=camH();const vis=s
     if(isSnow){const s=clamp(1.6/p.q,1.2,9);ctx.globalAlpha=vis*clamp(0.95-p.q*0.5,0.3,0.9)*br;ctx.drawImage(FLAKE,X-s/2,Y-s/2,s,s)}
     else{const qb=p.q*0.93;const X0=VW/2+(p.dx-wx*0.03*p.q)/(m*qb),Y0=VH/2+(p.dy-wy*0.03*p.q)/(m*qb);ctx.moveTo(X0,Y0);ctx.lineTo(X,Y)}}
   if(!isSnow)ctx.stroke();ctx.globalAlpha=1}
-const ZDYN={farm:'Колхоз',ind:'Завод товаров',pow:'ТЭЦ',saw:'Лесопилка',oil:'Нефтевышка',ref:'НПЗ',port:'Порт',mil:'Военная часть',sam:'ПВО'};
-const ZNAME={saw:'Лесопилка',oil:'Нефтевышка',sam:'ПВО',mil:'Военная база',air:'Аэропорт',ref:'НПЗ',pow:'ТЭЦ',port:'Порт',ind:'Промзона',solar:'Солнечная электростанция',agro:'Тепличный комбинат',farm:'Ферма',dacha:'СНТ',cem:'Кладбище',quarry:'Карьер',gas:'АЗС',stn:'Вокзал'};const ZLIM={mil:12,gas:2.5,farm:5,cem:5,dacha:6,stn:5};
+const ZDYN={ref2:'НПЗ',farm:'Колхоз',ind:'Завод товаров',pow:'ТЭЦ',saw:'Лесопилка',oil:'Нефтевышка',ref:'НПЗ',port:'Порт',mil:'Военная часть',sam:'ПВО'};
+const ZNAME={ref2:'НПЗ',saw:'Лесопилка',oil:'Нефтевышка',sam:'ПВО',mil:'Военная база',air:'Аэропорт',ref:'НПЗ',pow:'ТЭЦ',port:'Порт',ind:'Промзона',solar:'Солнечная электростанция',agro:'Тепличный комбинат',farm:'Ферма',dacha:'СНТ',cem:'Кладбище',quarry:'Карьер',gas:'АЗС',stn:'Вокзал'};const ZLIM={mil:12,gas:2.5,farm:5,cem:5,dacha:6,stn:5};
 function drawLabels(){ctx.setTransform(DPR,0,0,DPR,0,0);const m=cam.m;const boxes=[];ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineJoin='round';
   const lim=[9,32,95,380],fs=[11,12.5,15,19];const nl=LG.night;
   for(const c of W.cities){if(m>lim[c.type])continue;const X=sxw(c.x),Y=syw(c.y);if(X<-100||Y<-30||X>VW+100||Y>VH+30||(HK.seen&&!HK.seen(c.x,c.y)))continue;

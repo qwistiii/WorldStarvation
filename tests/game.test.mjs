@@ -94,7 +94,7 @@ const dyn = { places: [], zones: [] };
   const v = spot(c0.x, c0.y, 5000, 12000, 400); if (v) dyn.places.push(D.addPlace({ k: 'village', x: v[0], y: v[1], st: 0, name: 'Село' }));
   const t = spot(c0.x, c0.y, 9000, 20000, 2000); if (t) dyn.places.push(D.addPlace({ k: 'city', x: t[0], y: t[1], st: 0, name: 'Новгород', R: 1500 }));
   const vill = D.cities[dyn.places[0]];
-  for (const [zk, w, h, home] of [['farm', 300, 200, vill], ['ind', 640, 420, c0], ['pow', 760, 560, c0], ['saw', 360, 260, c0], ['oil', 240, 190, c0], ['ref', 900, 640, c0], ['mil', 720, 520, c0], ['sam', 260, 260, c0]]) {
+  for (const [zk, w, h, home] of [['farm', 300, 200, vill], ['ind', 640, 420, c0], ['pow', 760, 560, c0], ['saw', 360, 260, c0], ['oil', 130, 95, c0], ['ref2', 1000, 700, c0], ['mil', 720, 520, c0], ['sam', 150, 150, c0]]) {
     const q = spot(home.x, home.y, home.R * 1.3 + 600, home.R * 1.3 + 6000, Math.hypot(w, h) / 2); if (q) dyn.zones.push([zk, D.addZone({ zk, x: q[0], y: q[1], city: home.id, st: 0, W: w, H: h })]);
   }
 }

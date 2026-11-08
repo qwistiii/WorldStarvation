@@ -2,7 +2,7 @@
 (function(){
 'use strict';
 const $=id=>document.getElementById(id);
-const VERSION='5.5';
+const VERSION='5.6';
 let bg=null,C=null,prevWorker=null,prevId=0,prevT=0,setFrom=null,paused=null;
 
 // ---------------------------------------------------------------- settings
@@ -14,8 +14,8 @@ function applyS(){document.documentElement.style.setProperty('--ui',S.ui);const 
 
 // ---------------------------------------------------------------- procedural icons (Canvas 2D → CSS)
 function icon(name,draw,bld){const N=64,c=document.createElement('canvas');c.width=c.height=N;const x=c.getContext('2d');x.lineCap='round';x.lineJoin='round';
-  const g=x.createLinearGradient(0,6,0,58);g.addColorStop(0,'#ffe7a0');g.addColorStop(0.55,'#ffcf55');g.addColorStop(1,'#d98f2a');x.strokeStyle=g;x.fillStyle=g;x.lineWidth=4.2;
-  x.shadowColor='rgba(0,0,0,0.45)';x.shadowBlur=4;x.shadowOffsetY=1.5;draw(x,g);if(bld){Game.setIcon(name,c);return `.ic-b-${name}{background-image:url(${c.toDataURL()})}`}return `.ic-${name},.ri-${name}{background-image:url(${c.toDataURL()})}`}
+  const g='#d3d9df';x.strokeStyle=g;x.fillStyle=g;x.lineWidth=4.2;
+  x.shadowColor='rgba(0,0,0,0.5)';x.shadowBlur=2;x.shadowOffsetY=1;draw(x,g);if(bld){Game.setIcon(name,c);return `.ic-b-${name}{background-image:url(${c.toDataURL()})}`}return `.ic-${name},.ri-${name}{background-image:url(${c.toDataURL()})}`}
 const P2=Math.PI*2;
 function paintIcons(){const css=[];
   css.push(icon('new',x=>{x.beginPath();x.arc(30,32,19,0,P2);x.stroke();x.lineWidth=2.6;x.beginPath();x.ellipse(30,32,8,19,0,0,P2);x.moveTo(11,32);x.lineTo(49,32);x.moveTo(14,22);x.lineTo(46,22);x.moveTo(14,42);x.lineTo(46,42);x.stroke();
@@ -54,6 +54,12 @@ function paintIcons(){const css=[];
   css.push(icon('barracks',x=>{x.beginPath();x.moveTo(32,6);x.lineTo(54,14);x.lineTo(54,32);x.quadraticCurveTo(52,50,32,58);x.quadraticCurveTo(12,50,10,32);x.lineTo(10,14);x.closePath();x.fill();x.globalCompositeOperation='destination-out';
     x.beginPath();for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,r=i%2?5:12;x.lineTo(32+Math.cos(a)*r,32+Math.sin(a)*r)}x.closePath();x.fill()},1));
   css.push(icon('sam',x=>{x.fillRect(8,46,48,8);x.save();x.translate(30,44);x.rotate(-0.7);for(let i=0;i<2;i++)x.fillRect(-4,-8-i*9,34,7);x.restore();x.beginPath();x.arc(50,14,5,0,P2);x.fill();x.lineWidth=2.5;x.beginPath();x.arc(50,14,10,-2.4,-0.6);x.stroke()},1));
+  css.push(icon('pause',x=>{x.fillRect(18,14,10,36);x.fillRect(36,14,10,36)}));
+  css.push(icon('play',x=>{x.beginPath();x.moveTo(20,12);x.lineTo(50,32);x.lineTo(20,52);x.closePath();x.fill()}));
+  css.push(icon('demolish',x=>{x.lineWidth=5;x.beginPath();x.moveTo(14,50);x.lineTo(40,24);x.stroke();x.beginPath();x.moveTo(30,14);x.lineTo(50,34);x.lineTo(56,28);x.lineTo(36,8);x.closePath();x.fill();for(const [a,b] of [[10,30],[18,22],[46,50],[54,44]]){x.fillRect(a,b,5,5)}},1));
+  css.push(icon('drone',x=>{x.beginPath();x.moveTo(52,32);x.lineTo(14,14);x.lineTo(22,32);x.lineTo(14,50);x.closePath();x.fill();x.fillRect(6,30,12,4)},1));
+  css.push(icon('swarm',x=>{for(const [dx,dy,k] of [[0,-14,0.6],[-6,0,0.75],[0,14,0.6]]){x.save();x.translate(32+dx,32+dy);x.scale(k,k);x.beginPath();x.moveTo(26,0);x.lineTo(-20,-18);x.lineTo(-10,0);x.lineTo(-20,18);x.closePath();x.fill();x.restore()}},1));
+  css.push(icon('army',x=>{x.strokeRect(8,16,48,32);x.beginPath();x.moveTo(8,16);x.lineTo(56,48);x.moveTo(56,16);x.lineTo(8,48);x.stroke()},1));
   // logo: globe in a sight, with a wheat ear — «World Starvation»
   {const N=136,c=document.createElement('canvas');c.width=c.height=N;const x=c.getContext('2d');x.translate(N/2,N/2);
     const g=x.createRadialGradient(-12,-14,6,0,0,54);g.addColorStop(0,'#3a7ab8');g.addColorStop(1,'#0c2440');x.fillStyle=g;x.beginPath();x.arc(0,0,46,0,P2);x.fill();
@@ -144,7 +150,7 @@ onmessage=function(e){const q=e.data,n=q.n;const T=WorldGen(q.seed,Object.assign
 function buildRules(){const r=C.rules;
   const money=[[1000,'1 000'],[5000,'5 000'],[10000,'10 000'],[25000,'25 000'],[50000,'50 000']];
   seg($('rmoney'),money,r.money,v=>{r.money=v;summary()});
-  cards($('rvic'),[['points','По очкам','Первым набрать заданное число очков'],['time','По времени','Лидер по очкам к концу лимита'],['capitals','Захват столиц','Нужна армия — следующие этапы; пока считается лидер к концу лимита']],r.victory,v=>{r.victory=v;$('rtarget-f').style.display=v==='points'?'':'none';summary()});
+  cards($('rvic'),[['points','По очкам','Первым набрать заданное число очков'],['time','По времени','Лидер по очкам к концу лимита'],['capitals','Захват столиц','Победит тот, кто удержит последнюю столицу']],r.victory,v=>{r.victory=v;$('rtarget-f').style.display=v==='points'?'':'none';summary()});
   $('rtarget-f').style.display=r.victory==='points'?'':'none';
   seg($('rtarget'),[[5000,'5 000'],[10000,'10 000'],[20000,'20 000'],[50000,'50 000']],r.target,v=>{r.target=v;summary()});
   seg($('rtime'),[[0,'Нет'],[30,'30 мин'],[60,'1 ч'],[90,'1,5 ч'],[120,'2 ч'],[180,'3 ч']],r.timeLimit,v=>{r.timeLimit=v;summary()});
@@ -221,10 +227,10 @@ function pause(v){if(!Game.G)return;const p=$('pause');if(v){if(p.classList.cont
 // ---------------------------------------------------------------- loading overlay
 // the loading screen: procedural topographic map behind the logo (drawn once per size), a sweep bar that runs on the
 // compositor (keeps moving while the world is generated on the main thread), tips that change every few seconds
-const TIPS=['Столица растёт сама: сначала прокладываются улицы, потом стройплощадки, потом кварталы.','Территория быстрее расходится по равнинам и вдоль побережья, медленнее — в горах.',
-  'Месторождения внутри границ пополняют казну, пока не иссякнут. Геологоразведка находит новые.','Союзники делятся обзором: туман войны над их землями рассеивается.',
-  '«Ускорить расширение» особенно полезно в начале, пока соседи не заняли свободную землю.','Пробел — пауза, 1–3 — скорость, Esc — меню паузы и сохранение.',
-  'Боты-торговцы держатся побережья, милитаристы тянутся к чужим столицам, авантюристы расползаются «щупальцами».','Каждая столица получает правительственный квартал и военную базу.'];
+const TIPS=['Столица растёт сама: сначала прокладываются проспекты, потом стройплощадки, потом кварталы.','Колхоз ставится только в области села, нефтевышка — на месторождении нефти, лесопилка — у леса.',
+  'Завод товаров — главный доход, но без энергии ТЭЦ он стоит.','Порт строится только на берегу моря с выходом в океан: он продаёт излишки и привозит нехватку.',
+  'Сёла и города рядом сливают свои земли в одну область.','Пробел — пауза, F — скорость, 1–7 — вкладки нижней панели, Esc — меню паузы и сохранение.',
+  'Боты начинают войны не раньше 10–12 минуты. ПВО сбивает их дроны, армия из военной части защищает земли.','Ненужную постройку можно снести: вкладка «Города» → «Снести», вернётся 30 % цены.'];
 let tipI=(Math.random()*TIPS.length)|0,tipT=0,bgSize='';
 function tip(){const e=$('ldtip');e.style.opacity=0;setTimeout(()=>{tipI=(tipI+1)%TIPS.length;e.innerHTML='<b>Совет</b>'+TIPS[tipI];e.style.opacity=1},350)}
 function drawLdBg(){const c=$('ldbg');const w=Math.ceil(innerWidth*1.08/2),h=Math.ceil(innerHeight*1.08/2),key=w+'x'+h;if(key===bgSize)return;bgSize=key;c.width=w;c.height=h;const x=c.getContext('2d');
