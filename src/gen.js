@@ -341,11 +341,15 @@ for(const c of live){const R=rng(c.seed^0x5151);
 function addClover(Jx,Jy,tx,ty,nx,ny,half,RA,RB){const rl=46,D=17,E=RW[0]/2-2.5;
   // ramp ends sit on the real carriageway (the roads bend away from the crossing tangents)
   const fix=(pts)=>{for(const [i,rd] of [[0,RB],[pts.length-2,RA]]){if(!rd)continue;const q=projOn(rd,pts[i],pts[i+1]),dx=pts[i]-q[0],dy=pts[i+1]-q[1],L=M.hypot(dx,dy)||1;pts[i]=q[0]+dx/L*E;pts[i+1]=q[1]+dy/L*E}return pts};
-  for(const sa of [-1,1])for(const sb of (half?[1]:[-1,1])){const ax=tx*sa,ay=ty*sa,bx=nx*sb,by=ny*sb;const qx=Jx+(ax+bx)*(rl+D),qy=Jy+(ay+by)*(rl+D);
+  const RP=[];for(const sa of [-1,1])for(const sb of (half?[1]:[-1,1])){const ax=tx*sa,ay=ty*sa,bx=nx*sb,by=ny*sb;const qx=Jx+(ax+bx)*(rl+D),qy=Jy+(ay+by)*(rl+D);
     const pts=[Jx+ax*E+bx*(rl+D+150),Jy+ay*E+by*(rl+D+150),qx-ax*rl+bx*70,qy-ay*rl+by*70];for(let d=180;d>=-90;d-=10){const t=d*PI/180;pts.push(qx+rl*(M.cos(t)*ax+M.sin(t)*bx),qy+rl*(M.cos(t)*ay+M.sin(t)*by))}
-    pts.push(qx-bx*rl+ax*70,qy-by*rl+ay*70,Jx+bx*E+ax*(rl+D+150),Jy+by*E+ay*(rl+D+150));mkRoad(6,fix(pts));
+    pts.push(qx-bx*rl+ax*70,qy-by*rl+ay*70,Jx+bx*E+ax*(rl+D+150),Jy+by*E+ay*(rl+D+150));RP.push(fix(pts));
     const p1x=Jx+ax*(D+3)+bx*rl*3.3,p1y=Jy+ay*(D+3)+by*rl*3.3,p2x=Jx+bx*(D+3)+ax*rl*3.3,p2y=Jy+by*(D+3)+ay*rl*3.3,cx=Jx+(ax+bx)*rl*3.05,cy=Jy+(ay+by)*rl*3.05;
-    const op=[Jx+ax*E+bx*(rl*3.3-130),Jy+ay*E+by*(rl*3.3-130)];for(let q=0;q<=14;q++){const t=q/14,u=1-t;op.push(u*u*p1x+2*u*t*cx+t*t*p2x,u*u*p1y+2*u*t*cy+t*t*p2y)}op.push(Jx+bx*E+ax*(rl*3.3-130),Jy+by*E+ay*(rl*3.3-130));mkRoad(6,fix(op))}}
+    const op=[Jx+ax*E+bx*(rl*3.3-130),Jy+ay*E+by*(rl*3.3-130)];for(let q=0;q<=14;q++){const t=q/14,u=1-t;op.push(u*u*p1x+2*u*t*cx+t*t*p2x,u*u*p1y+2*u*t*cy+t*t*p2y)}op.push(Jx+bx*E+ax*(rl*3.3-130),Jy+by*E+ay*(rl*3.3-130));RP.push(fix(op))}
+  // no interchange where its ramps would cut across other roads (town streets beyond a ring road, a third highway)
+  for(const P of RP){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(let i=0;i<P.length;i+=2){x0=M.min(x0,P[i]);x1=M.max(x1,P[i]);y0=M.min(y0,P[i+1]);y1=M.max(y1,P[i+1])}
+    for(const o of queryRoads(x0,y0,x1,y1)){if(o===RA||o===RB||o.k===6||o.k===8)continue;for(let i=0;i<P.length-2;i+=2)if(roadHitsSeg(o,P[i],P[i+1],P[i+2],P[i+3]))return false}}
+  for(const P of RP)mkRoad(6,P);return true}
 function nearestS(r,x,y){let best=1e18,bs=0;for(let i=0;i<r.n-1;i++){const ax=r.pts[i*2],ay=r.pts[i*2+1],bx=r.pts[i*2+2],by=r.pts[i*2+3];const dx=bx-ax,dy=by-ay,l2=dx*dx+dy*dy||1;let t=((x-ax)*dx+(y-ay)*dy)/l2;t=clamp(t,0,1);const px=ax+dx*t,py=ay+dy*t;const d=(px-x)**2+(py-y)**2;if(d<best){best=d;bs=r.cum[i]+t*M.sqrt(l2)}}return [M.sqrt(best),bs]}
 for(const [c,jx,jy,hx,hy,hr0] of JUNC){if(landE(jx,jy,0)<0)continue;let ringR0=null;for(const r of c.rings||[]){const [d]=nearestS(r,jx,jy);if(d<120){ringR0=r;break}}const L=M.hypot(jx-c.x,jy-c.y);const nx=(jx-c.x)/L,ny=(jy-c.y)/L;
   // half cloverleaf only where the highway meets the ring almost radially and on dry land

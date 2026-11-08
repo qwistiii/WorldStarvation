@@ -376,3 +376,27 @@ export function hooks(W, deg = 75, win = 80) {
   }
   return out;
 }
+
+// съезды развязок (k=6) не пересекают другие дороги (кроме двух, которые соединяют, и других съездов той же развязки)
+export function rampCrossings(W) {
+  const out = [], RW = W._dbg.RW;
+  for (const r of W.roads) {
+    if (r.k !== 6) continue;
+    const ends = [[r.pts[0], r.pts[1]], [r.pts[r.n * 2 - 2], r.pts[r.n * 2 - 1]]];
+    for (const o of W.queryRoads(r.bb[0], r.bb[1], r.bb[2], r.bb[3])) {
+      if (o === r || o.k === 6 || o.k === 8) continue;
+      // дороги, к которым съезд примыкает концом, — его собственные
+      let own = false;
+      for (const [x, y] of ends) for (let i = 0; i < o.n - 1 && !own; i++) { const ax = o.pts[i * 2], ay = o.pts[i * 2 + 1], dx = o.pts[i * 2 + 2] - ax, dy = o.pts[i * 2 + 3] - ay, l2 = dx * dx + dy * dy || 1; const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / l2)); if (Math.hypot(ax + dx * t - x, ay + dy * t - y) < RW[o.k] / 2 + 4) own = true; }
+      if (own) continue;
+      let hit = null;
+      for (let i = 0; i < r.n - 1 && !hit; i++) for (let j = 0; j < o.n - 1; j++) {
+        const ax = r.pts[i * 2], ay = r.pts[i * 2 + 1], ex = r.pts[i * 2 + 2] - ax, ey = r.pts[i * 2 + 3] - ay, cx = o.pts[j * 2], cy = o.pts[j * 2 + 1], fx = o.pts[j * 2 + 2] - cx, fy = o.pts[j * 2 + 3] - cy, den = ex * fy - ey * fx;
+        if (Math.abs(den) < 1e-9) continue; const t = ((cx - ax) * fy - (cy - ay) * fx) / den, u = ((cx - ax) * ey - (cy - ay) * ex) / den;
+        if (t >= 0 && t <= 1 && u >= 0 && u <= 1) { hit = [ax + ex * t, ay + ey * t]; break; }
+      }
+      if (hit) out.push({ r, o, x: hit[0], y: hit[1] });
+    }
+  }
+  return out;
+}
