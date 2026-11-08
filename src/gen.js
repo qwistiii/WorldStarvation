@@ -880,7 +880,7 @@ function genBlock(c,bi,bj,t){
       const hw=7+Rl()*5,hd=6.5+Rl()*4;const front=4;let hx,hy;
       if(horiz){hx=lx+(lw3-hw)/2+(Rl()-0.5)*3;hy=r===0?ly+front:ly+lh3-front-hd}else{hy=ly+(lh3-hw)/2;hx=r===0?lx+front:lx+lw3-front-hd}
       const ww=horiz?hw:hd,hh2=horiz?hd:hw;if(horiz)P.push({k:'path',x:hx+ww*0.3,y:r===0?ly+0.4:hy+hh2,w:1.3,h:r===0?hy-ly-0.4:ly+lh3-hy-hh2-0.4});else P.push({k:'path',x:r===0?lx+0.4:hx+ww,y:hy+hh2*0.3,w:r===0?hx-lx-0.4:lx+lw3-hx-ww-0.4,h:1.3});
-      bld(hx,hy,ww,hh2,5+Rl()*4,ROOFH[Rl()*ROOFH.length|0],Rl()<0.55?'g':'h',{a:(Rl()-0.5)*0.12});
+      {const fe=horiz?(r===0?0:2):(r===0?3:1),fr=fe===0||fe===1?0.3:0.7;bld(hx,hy,ww,hh2,5+Rl()*4,ROOFH[Rl()*ROOFH.length|0],Rl()<0.55?'g':'h',{a:(Rl()-0.5)*0.12,gf:[-1,fe,-1],hs:fr})}
       if(Rl()<0.5){const sx=lx+lw3*0.15+Rl()*lw3*0.5,sy=ly+lh3*0.15+Rl()*lh3*0.6;if(!occ(O,sx+1.75,sy+1.5,3.4))bld(sx,sy,3.5,3,2.6,[[120,100,80],[100,100,100],[150,80,60]][Rl()*3|0],'f')}
       if(Rl()<0.3){const gx=lx+lw3*0.5,gy=ly+lh3*0.5;if(!occ(O,gx+2,gy+4,3))P.push({k:'gh',x:gx,y:gy,w:3.5,h:8})}
       const nt=Rl()*3|0;for(let q2=0;q2<nt;q2++){const tx=lx+2+Rl()*(lw3-4),ty=ly+2+Rl()*(lh3-4);if(!occ(O,tx,ty,3))TR(P,tx,ty,4+Rl()*4,[0,2,4,6][Rl()*4|0])}
@@ -975,6 +975,7 @@ function genBlock(c,bi,bj,t){
     break}
   }
   // towers and offices: lobby + entrance canopy on the facade nearest to the street
+  if(t===7||t===14){const p=P.find(q=>q.k==='b');if(p){const d=[p.y-Y0,X1-p.x-p.w,Y1-p.y-p.h,p.x-X0];let e=0;for(let q=1;q<4;q++)if(d[q]<d[e])e=q;p.gf=[-1,-1,e]}}
   if(t===1||t===19)for(const p of P)if(p.k==='b'&&!p.H0&&!p.nd){const d=[p.y-Y0,X1-p.x-p.w,Y1-p.y-p.h,p.x-X0];let e=0;for(let q=1;q<4;q++)if(d[q]<d[e])e=q;p.gf=[-1,-1,e]}
   return dropCrowns(fitGround(P));
 }
@@ -994,7 +995,7 @@ function genVillage(c,si){
     const gc=[[100,124,66],[112,128,72],[118,120,74],[92,118,62]][Rl()*4|0];G(P,a-lw/2,ly,lw,ld,gc);P.push({k:'fence',x:a-lw/2+0.3,y:ly+0.3,w:lw-0.6,h:ld-0.6});
     if(Rl()<0.75)P.push({k:'rows',x:a-lw/2+3,y:side>0?ly+ld*0.62:ly+3,w:(lw-6)*(0.4+Rl()*0.5),h:ld*0.3,o:Rl()<0.5?0:1});
     const hw=7.5+Rl()*4,hd=6.5+Rl()*3;const hy=side>0?ly+3:ly+ld-3-hd;P.push(side>0?{k:'path',x:a-0.6,y:ly+0.3,w:1.3,h:2.8}:{k:'path',x:a-0.6,y:ly+ld-3.1,w:1.3,h:2.8});
-    const ho=B(P,a-hw/2+(Rl()-0.5)*4,hy,hw,hd,4.5+Rl()*2.5,ROOFH[Rl()*ROOFH.length|0],Rl()<0.6?'g':'h',{a:(Rl()-0.5)*0.15});O.push(ho.x-0.6,hy-0.6,hw+1.2,hd+1.2);
+    const ho=B(P,a-hw/2+(Rl()-0.5)*4,hy,hw,hd,4.5+Rl()*2.5,ROOFH[Rl()*ROOFH.length|0],Rl()<0.6?'g':'h',{a:(Rl()-0.5)*0.15});{const fe=side>0?0:2,f=clamp((a-ho.x)/hw,0.2,0.8);ho.gf=[-1,fe,-1];ho.hs=fe===0?f:1-f}O.push(ho.x-0.6,hy-0.6,hw+1.2,hd+1.2);
     if(Rl()<0.7){const bx=a-lw/2+2+Rl()*(lw-7),by=side>0?ly+ld*0.3:ly+ld*0.6,sw=3.5+Rl()*2,sc=[[118,96,72],[98,98,100],[140,84,64]][Rl()*3|0];if(!occ(O,bx+sw/2,by+1.5,M.max(sw/2,1.5)+0.5)){B(P,bx,by,sw,3,2.5,sc,'f');O.push(bx,by,sw,3)}}
     if(Rl()<0.25)P.push({k:'gh',x:a+lw/2-6,y:side>0?ly+ld-12:ly+3,w:3.5,h:8});
     const nt=1+(Rl()*3|0);for(let q=0;q<nt;q++){const tx=a-lw/2+2+Rl()*(lw-4),ty=ly+2+Rl()*(ld-4);if(!occ(O,tx,ty,3))TR(P,tx,ty,4+Rl()*5,[0,2,4,6][Rl()*4|0])}}}
@@ -1168,13 +1169,14 @@ function gfUnits(p,e,el,s){const k=p.gf,U=[];const hs=hh(p.x*10|0,p.y*10|0,e+41)
   if(p.gate===e&&s>0.7){const n=el>70?2:1;for(let i=0;i<n;i++){const c=el*(n===1?0.5:0.3+0.4*i);U.push([5,c-2.6,c+2.6,hh(hs,i,6)])}}
   if(!k||s<=1.5)return U;
   if(e===k[0]){let u=0.6,i=0;while(u<el-3.5){let w=5+(hh(hs,i,1)%45)/10;if(el-0.6-u-w<4)w=el-0.6-u;U.push([1,u,u+w-0.5,hh(hs,i,2)]);u+=w;i++}}
+  else if(e===k[1]&&p.hs){const c=el*p.hs;U.push([2,c-0.9,c+0.9,hh(hs,0,3)|16])} // porch of a private house
   else if(e===k[1]){const n=M.max(1,M.round(el/(p.mr?24:19)));for(let i=0;i<n;i++){const v=p.mr?hh(hs,i,3)|16:hh(hs,i,3)&~16;if(!p.mr&&(v&3)===0)continue;const c=(i+0.5)*el/n;U.push([2,c-1.3,c+1.3,v])}}
   else if(e===k[2]){const w=M.min(el*0.45,6+(hs%5));const c=el*(0.35+((hs>>>8)&255)/255*0.3);U.push([3,c-w/2,c+w/2,hs])}
   return U}
 // canopy of a unit: [height of the wall edge, height of the outer edge, depth, colour] or null
 function gfCanopy(u){const v=u[3];
   if(u[0]===1)return (v&7)<5?[2.9,2.45,1.15+((v>>>3)&3)*0.18,AWNC[(v>>>5)%7]]:null;
-  if(u[0]===2)return [2.7,2.7,1.35,(v>>>4)&1?[164,162,156]:[96,62,52]];
+  if(u[0]===2)return u[2]-u[1]<2?[2.4,2.3,1.0,[[112,74,54],[150,148,142],[84,92,100]][(v>>>0)%3]]:[2.7,2.7,1.35,(v>>>4)&1?[164,162,156]:[96,62,52]];
   if(u[0]===4)return [4.6,4.6,0.7,[44,46,50]];
   if(u[0]===5)return null;
   return [4.3,4.3,3.2,[150,156,162]]}
