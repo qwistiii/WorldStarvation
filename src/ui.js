@@ -2,7 +2,7 @@
 (function(){
 'use strict';
 const $=id=>document.getElementById(id);
-const VERSION='5.0';
+const VERSION='5.1';
 let bg=null,C=null,prevWorker=null,prevId=0,prevT=0,setFrom=null,paused=null;
 
 // ---------------------------------------------------------------- settings
@@ -22,7 +22,6 @@ function paintIcons(){const css=[];
   css.push(icon('cont',x=>{x.beginPath();x.arc(32,32,20,0,P2);x.stroke();x.beginPath();x.moveTo(27,22);x.lineTo(42,32);x.lineTo(27,42);x.closePath();x.fill()}));
   css.push(icon('tut',x=>{x.beginPath();x.moveTo(8,24);x.lineTo(32,13);x.lineTo(56,24);x.lineTo(32,35);x.closePath();x.fill();x.beginPath();x.moveTo(18,30);x.lineTo(18,42);x.quadraticCurveTo(32,52,46,42);x.lineTo(46,30);x.stroke();x.beginPath();x.moveTo(54,25);x.lineTo(54,40);x.stroke()}));
   css.push(icon('set',x=>{x.beginPath();for(let i=0;i<16;i++){const a=i*P2/16,r=i%2?16:22;x.lineTo(32+Math.cos(a)*r,32+Math.sin(a)*r)}x.closePath();x.fill();x.globalCompositeOperation='destination-out';x.beginPath();x.arc(32,32,7,0,P2);x.fill()}));
-  css.push(icon('view',x=>{x.beginPath();x.moveTo(8,32);x.quadraticCurveTo(32,10,56,32);x.quadraticCurveTo(32,54,8,32);x.closePath();x.stroke();x.beginPath();x.arc(32,32,8,0,P2);x.fill()}));
   css.push(icon('capital',x=>{x.beginPath();x.arc(32,26,10,Math.PI,0);x.fill();x.fillRect(31,10,2,7);x.fillRect(14,28,36,4);for(let i=0;i<5;i++)x.fillRect(16+i*7.5,34,3.5,14);x.fillRect(10,48,44,5);x.beginPath();x.moveTo(33,10);x.lineTo(42,12);x.lineTo(33,14);x.fill()}));
   css.push(icon('boost',x=>{x.strokeRect(22,22,20,20);for(const [dx,dy] of [[0,-1],[1,0],[0,1],[-1,0]]){x.beginPath();x.moveTo(32+dx*14,32+dy*14);x.lineTo(32+dx*26,32+dy*26);x.stroke();x.beginPath();x.moveTo(32+dx*28-dy*6,32+dy*28+dx*6);x.lineTo(32+dx*28+dy*6,32+dy*28-dx*6);x.lineTo(32+dx*34,32+dy*34);x.closePath();x.fill()}}));
   css.push(icon('invest',x=>{x.fillRect(10,40,10,14);x.fillRect(24,30,10,24);x.fillRect(38,20,10,34);x.lineWidth=3.4;x.beginPath();x.moveTo(10,30);x.lineTo(24,20);x.lineTo(34,24);x.lineTo(50,9);x.stroke();x.beginPath();x.moveTo(52,7);x.lineTo(43,8);x.lineTo(51,16);x.closePath();x.fill()}));
@@ -54,10 +53,13 @@ function swatches(el,list,val,on,custom){el.innerHTML='';for(const c of list){co
 function rnd(){return Math.random()}
 
 // ---------------------------------------------------------------- main menu
-function showMenu(){document.body.className='m-menu';$('loading').classList.add('fade');
+function showMenu(){document.body.className='m-menu';
   const L=Saves.latest(),cb=$('mm-cont');cb.disabled=!L;cb.style.display=L?'':'none';$('mm-cont-s').textContent=L?`${L.s.meta.name} · ${L.s.meta.day} · ячейка ${L.i}`:'Сохранений пока нет';
   $('mm-ver').textContent='v'+VERSION;
-  if(S.menuBg&&!bg)setTimeout(()=>{if(document.body.classList.contains('m-menu')||document.body.classList.contains('m-setup')||document.body.classList.contains('m-settings'))if(!bg)bg=startWorld({mode:'bg',seed:20261107,tod:17.4,view:{labels:false,traffic:true,clouds:true}})},120)}
+  if(!S.menuBg||bg){loaded();return}
+  // the living background of the menu: the loading screen stays until its first tiles are drawn
+  loading('Загрузка мира','Рельеф, города, дороги, заводы и порты');setTimeout(()=>{if(bg||!/m-(menu|setup|settings)/.test(document.body.className)){loaded();return}
+    bg=startWorld({mode:'bg',seed:20261107,tod:17.4,view:{labels:false,traffic:true,clouds:true},onReady:()=>loaded()});$('ldt').textContent='Отрисовка карты'},80)}
 function stopBg(){if(bg){bg.destroy();bg=null}}
 function toMenu(){Game.exit();$('pause').classList.remove('show');$('over').classList.remove('show');showMenu()}
 function menuGo(k){
@@ -65,8 +67,7 @@ function menuGo(k){
   if(k==='continue'){const L=Saves.latest();if(L){stopBg();C=L.s.cfg;C.slot=L.i;Game.load(L.s)}return}
   if(k==='tutorial'){stopBg();const c=defaultConfig();c.seed=777;c.tutorial=true;c.country.name='Учебная Республика';c.country.gov='Республика';c.map={type:'normal',size:0,rivers:2,lakes:1};
     Object.assign(c.rules,{botCount:2,diff:0,ai:0,victory:'points',target:5000,timeLimit:0,botGrowth:0});c.slot=5;Game.newGame(c);return}
-  if(k==='settings'){openSettings('menu');return}
-  if(k==='viewer'){location.hash=String((Math.random()*1e9)|0);location.reload()}}
+  if(k==='settings'){openSettings('menu')}}
 
 // ---------------------------------------------------------------- new game setup
 const TABS=[];
@@ -196,8 +197,32 @@ function pause(v){if(!Game.G)return;const p=$('pause');if(v){if(p.classList.cont
   else{p.classList.remove('show');if(paused!==null&&Game.G&&Game.G.phase==='play'&&!Game.G.over)Game.setSpeed(paused||1);paused=null}}
 
 // ---------------------------------------------------------------- loading overlay
-function loading(t,s){const l=$('loading');$('ldt').textContent=t;$('lds').innerHTML=s||'';l.classList.remove('fade')}
-function loaded(){$('loading').classList.add('fade')}
+// the loading screen: procedural topographic map behind the logo (drawn once per size), a sweep bar that runs on the
+// compositor (keeps moving while the world is generated on the main thread), tips that change every few seconds
+const TIPS=['Столица растёт сама: сначала прокладываются улицы, потом стройплощадки, потом кварталы.','Территория быстрее расходится по равнинам и вдоль побережья, медленнее — в горах.',
+  'Месторождения внутри границ пополняют казну, пока не иссякнут. Геологоразведка находит новые.','Союзники делятся обзором: туман войны над их землями рассеивается.',
+  '«Ускорить расширение» особенно полезно в начале, пока соседи не заняли свободную землю.','Пробел — пауза, 1–3 — скорость, Esc — меню паузы и сохранение.',
+  'Боты-торговцы держатся побережья, милитаристы тянутся к чужим столицам, авантюристы расползаются «щупальцами».','Каждая столица получает правительственный квартал и военную базу.'];
+let tipI=(Math.random()*TIPS.length)|0,tipT=0,bgSize='';
+function tip(){const e=$('ldtip');e.style.opacity=0;setTimeout(()=>{tipI=(tipI+1)%TIPS.length;e.innerHTML='<b>Совет</b>'+TIPS[tipI];e.style.opacity=1},350)}
+function drawLdBg(){const c=$('ldbg');const w=Math.ceil(innerWidth*1.08/2),h=Math.ceil(innerHeight*1.08/2),key=w+'x'+h;if(key===bgSize)return;bgSize=key;c.width=w;c.height=h;const x=c.getContext('2d');
+  // value-noise height field on a coarse grid, contour lines by marching squares
+  const G=6,nx=Math.ceil(w/G)+1,ny=Math.ceil(h/G)+1,H=new Float32Array(nx*ny);const sd=Math.random()*1000;
+  const hsh=(i,j)=>{let q=Math.imul(i|0,374761393)+Math.imul(j|0,668265263)+(sd|0);q=Math.imul(q^(q>>>13),1274126177);return ((q^(q>>>16))>>>0)/4294967296};
+  const vn=(u,v)=>{const i=Math.floor(u),j=Math.floor(v),fu=u-i,fv=v-j,a=hsh(i,j),b=hsh(i+1,j),cc=hsh(i,j+1),d=hsh(i+1,j+1),su=fu*fu*(3-2*fu),sv=fv*fv*(3-2*fv);return a+(b-a)*su+(cc-a)*sv+(a-b-cc+d)*su*sv};
+  for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){let v=0,a=1,f=1/90,tot=0;for(let o=0;o<4;o++){v+=a*vn(i*G*f,j*G*f);tot+=a;a*=0.5;f*=2.1}H[j*nx+i]=v/tot}
+  x.fillStyle='#070e18';x.fillRect(0,0,w,h);
+  x.strokeStyle='rgba(120,160,200,0.06)';x.lineWidth=1;x.beginPath();for(let q=0;q<w;q+=48){x.moveTo(q+0.5,0);x.lineTo(q+0.5,h)}for(let q=0;q<h;q+=48){x.moveTo(0,q+0.5);x.lineTo(w,q+0.5)}x.stroke();
+  for(let L=0;L<14;L++){const T=0.3+L*0.03;x.strokeStyle=L%5===0?'rgba(255,210,90,0.15)':'rgba(150,190,220,0.09)';x.lineWidth=L%5===0?1.2:0.8;x.beginPath();
+    for(let j=0;j<ny-1;j++)for(let i=0;i<nx-1;i++){const a=H[j*nx+i],b=H[j*nx+i+1],cc=H[(j+1)*nx+i+1],d=H[(j+1)*nx+i];const m=(a>T?8:0)|(b>T?4:0)|(cc>T?2:0)|(d>T?1:0);if(!m||m===15)continue;
+      const t=(p,q)=>(T-p)/(q-p),X=i*G,Y=j*G;const P={t:[X+t(a,b)*G,Y],r:[X+G,Y+t(b,cc)*G],b:[X+t(d,cc)*G,Y+G],l:[X,Y+t(a,d)*G]};
+      const sg=(p,q)=>{x.moveTo(P[p][0],P[p][1]);x.lineTo(P[q][0],P[q][1])};
+      switch(m){case 1:case 14:sg('l','b');break;case 2:case 13:sg('b','r');break;case 3:case 12:sg('l','r');break;case 4:case 11:sg('t','r');break;case 6:case 9:sg('t','b');break;case 7:case 8:sg('l','t');break;case 5:sg('l','t');sg('b','r');break;case 10:sg('t','r');sg('l','b')}}
+    x.stroke()}
+  // a few "targets" over the map: rings with a cross, like a staff map
+  x.strokeStyle='rgba(255,210,90,0.28)';x.lineWidth=1;for(let q=0;q<5;q++){const px=w*(0.1+0.8*hsh(q,7)),py=h*(0.1+0.8*hsh(q,9)),r=6+hsh(q,3)*8;x.beginPath();x.arc(px,py,r,0,P2);x.moveTo(px-r-5,py);x.lineTo(px+r+5,py);x.moveTo(px,py-r-5);x.lineTo(px,py+r+5);x.stroke()}}
+function loading(t,s){const l=$('loading');drawLdBg();$('ldt').textContent=t;$('lds').innerHTML=s||'';if(l.classList.contains('fade')||!tipT){$('ldtip').innerHTML='<b>Совет</b>'+TIPS[tipI];clearInterval(tipT);tipT=setInterval(tip,5200)}l.classList.remove('fade')}
+function loaded(){$('loading').classList.add('fade');clearInterval(tipT);tipT=0}
 
 // ---------------------------------------------------------------- boot
 paintIcons();applyS();
@@ -208,10 +233,10 @@ for(const b of document.querySelectorAll('[data-back]'))b.onclick=()=>{if(docume
 $('screate').onclick=create;
 $('presume').onclick=()=>pause(false);$('psave').onclick=()=>{Game.save(false);$('pinfo').textContent=Game.pauseInfo()};$('pset').onclick=()=>openSettings('game');
 $('pexit').onclick=()=>{$('pause').classList.remove('show');paused=null;toMenu()};
-$('tomenu').onclick=()=>{location.href=location.pathname};
+addEventListener('resize',()=>{if(!$('loading').classList.contains('fade'))drawLdBg()});
 addEventListener('keydown',e=>{if(e.code!=='Escape')return;if(document.body.classList.contains('m-settings')){closeSettings();return}if(document.body.classList.contains('m-setup'))showMenu()});
 window.__ui={S,menuGo,openSetup,create,get C(){return C}};
 const HS=location.hash.slice(1);
-if(/^\d/.test(HS)||/^view/.test(HS)){document.body.className='m-view';startWorld({mode:'view'})}
+if(/^\d/.test(HS)||/^view/.test(HS)){document.body.className='m-view';loading('Загрузка мира','Режим просмотра · сид '+parseInt(HS));setTimeout(()=>startWorld({mode:'view',onReady:()=>loaded()}),60)}
 else showMenu();
 })();

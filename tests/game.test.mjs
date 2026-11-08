@@ -97,3 +97,14 @@ test('рост столицы: доля застройки задаётся и �
   W.setGrow(c.id, 0.3); assert.equal(W.growOf(c.id), 0.3);
   W.setGrow(c.id, 1); assert.equal(W.growOf(c.id), 1);
 });
+
+test('у файлов в index.html версия из package.json (сброс кэша GitHub Pages)', async () => {
+  const fs = await import('node:fs');
+  const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const v = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version.split('.').slice(0, 2).join('.');
+  const refs = [...html.matchAll(/(?:src|href)="src\/[^"?]+(\?v=[^"]*)?"/g)];
+  assert.ok(refs.length >= 6, 'подключены style.css и 5 скриптов');
+  for (const m of refs) assert.equal(m[1], '?v=' + v, m[0]);
+  const ui = fs.readFileSync(new URL('../src/ui.js', import.meta.url), 'utf8');
+  assert.ok(ui.includes(`const VERSION='${v}'`), 'версия в меню');
+});

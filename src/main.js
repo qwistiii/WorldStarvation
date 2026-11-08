@@ -62,7 +62,7 @@ function evict(){evictMap(cache,460,360);evictMap(LCS[1],320,240);evictMap(LCS[2
 function dropStale(){for(const v of stale.values())if(v.b&&v.b.close)v.b.close();stale=new Map()}
 function setSeason(s){s=clamp(s|0,0,2);if(s===season)return;season=s;W.setSeason(s);for(const w of workers)if(w.ready)w.postMessage({t:'season',s});
   dropStale();stale=new Map(cache);cache.clear();pending.clear();staleT=0;
-  for(const b of document.querySelectorAll('#seasons button'))b.classList.toggle('on',+b.dataset.s===s)}
+}
 
 // growth of capitals: tiles over a growing town are re-rendered; the old picture stays (stale) until the new one arrives.
 // Tiles that were in flight while the town changed are dropped on arrival (generation version GV).
@@ -187,8 +187,8 @@ function updLight(){const el=sunEl(tod);LG.el=el;const a=keyf(AMB,el);const dim=
   const late=tod<6?smooth(0.5,2.5,tod)*smooth(5.6,4,tod):0;LG.lights=LG.night*(1-0.28*late)*(1-0.35*wcur.fog);
   const c=keyf(CLC,el);const cd=wcur.cd;LG.cloud=[c[0]*cd,c[1]*cd,c[2]*cd]}
 let flash=0,nextBolt=4;
-function setTod(h){tod=((h%24)+24)%24;todEl.value=M.round(tod*60)%1440}
-function setSpeed(i){tSpeed=i;for(const [id,v] of [['tpause',0],['tplay',1],['tfast',2]])document.getElementById(id).classList.toggle('on',v===i)}
+function setTod(h){tod=((h%24)+24)%24}
+function setSpeed(i){tSpeed=i}
 
 // ------------------------------------------------------------ rendering helpers
 let T=0;
@@ -417,9 +417,8 @@ function drawSel(){if(!sel)return;ctx.setTransform(DPR,0,0,DPR,0,0);const o=sel.
 // ------------------------------------------------------------ main loop
 let last=performance.now(),fpsA=60,hudT=0,zNow=0,lowQ=false,qT=0,pfT=0;
 const PROF={};function pf(n){const t=performance.now();PROF[n]=(PROF[n]||0)*0.97+(t-pfT)*0.03;pfT=t}
-const hud={alt:document.getElementById('alt'),scale:document.getElementById('scalebar'),scaleT:document.getElementById('scalet'),pos:document.getElementById('pos'),fps:document.getElementById('fps'),load:document.getElementById('loading'),clock:document.getElementById('clock')};
+const hud={alt:document.getElementById('alt'),scale:document.getElementById('scalebar'),scaleT:document.getElementById('scalet'),pos:document.getElementById('pos'),fps:document.getElementById('fps'),load:document.getElementById('loading'),clock:null};
 const mini=document.getElementById('mini'),mctx=mini.getContext('2d');
-const todEl=document.getElementById('tod');
 function frame(now){if(!alive)return;const dt=M.min(0.06,(now-last)/1000);last=now;T+=dt;frameNo++;fpsA=fpsA*0.95+(1/M.max(dt,1e-3))*0.05;
   if(!todDrag&&DN)tod=(tod+(todRate!==null?todRate:SPEEDS[tSpeed])*dt)%24;if(HK.frame)hk('frame',dt);if(MODE==='bg')bgCam(dt);updWeather(dt);updLight();
   pfT=performance.now();updateCam(dt);
@@ -467,8 +466,7 @@ function fmtD(m){return m>=1000?(m/1000).toFixed(m>=10000?0:1).replace('.',',')+
 function updHUD(){const H=camH();hud.alt.textContent=fmtD(H);
   const target=110*cam.m;const p=M.pow(10,M.floor(M.log10(target)));let L=p;for(const f of [1,2,5,10])if(f*p<=target)L=f*p;hud.scale.style.width=(L/cam.m)+'px';hud.scaleT.textContent=fmtD(L);
   hud.pos.textContent=`${(cam.x/1000).toFixed(2)} : ${(cam.y/1000).toFixed(2)} км · LOD ${zNow}`;hud.fps.textContent=`${M.round(fpsA)} FPS · тайлов ${cache.size}+${lcache.size}${mainRender?' (CPU)':' · потоков '+workers.filter(w=>w.ready).length}${carCount?' · машин '+carCount:''}`;
-  const hm=M.floor(tod*60)%1440;hud.clock.textContent=String(M.floor(hm/60)).padStart(2,'0')+':'+String(hm%60).padStart(2,'0');if(!todDrag)todEl.value=hm;
-  const z0=cache.get(0)||stale.get(0);if(z0){if(!readyFired&&cache.size>4){readyFired=true;if(MODE==='view')hud.load.style.display='none';if(cfg.onReady)cfg.onReady(API)}
+  const z0=cache.get(0)||stale.get(0);if(z0){if(!readyFired&&cache.size>4){readyFired=true;if(cfg.onReady)cfg.onReady(API)}
     mctx.setTransform(1,0,0,1,0,0);mctx.drawImage(z0.b,0,0,mini.width,mini.height);
     const A=LG.amb;if(A[0]<0.99){mctx.globalCompositeOperation='multiply';mctx.fillStyle=`rgb(${A[0]*255|0},${A[1]*255|0},${A[2]*255|0})`;mctx.fillRect(0,0,mini.width,mini.height);mctx.globalCompositeOperation='source-over'}
     const l0=lcache.get(0);if(l0&&l0.b&&LG.lights>0.02){mctx.globalCompositeOperation='lighter';mctx.globalAlpha=LG.lights;mctx.drawImage(l0.b,0,0,mini.width,mini.height);mctx.globalAlpha=1;mctx.globalCompositeOperation='source-over'}
@@ -476,28 +474,8 @@ function updHUD(){const H=camH();hud.alt.textContent=fmtD(H);
     const w=M.max(3,(vx1-vx0)*s),h=M.max(3,(vy1-vy0)*s);mctx.strokeRect(cam.x*s-w/2,cam.y*s-h/2,w,h)}}
 mini.addEventListener('click',e=>{if(MODE==='bg')return;const r=mini.getBoundingClientRect();const x=(e.clientX-r.left)/r.width*WORLD,y=(e.clientY-r.top)/r.height*WORLD;flyTo(x,y,M.min(cam.m,40))},SIG);
 
-let todDrag=false;const wxEl=document.getElementById('wx');
-// ------------------------------------------------------------ UI (viewer mode)
-if(MODE==='view'){
-const list=document.getElementById('list'),q=document.getElementById('q');
-const sorted=W.cities.slice().sort((a,b)=>b.type-a.type||a.name.localeCompare(b.name,'ru'));
-function fill(){const f=q.value.trim().toLowerCase();list.innerHTML='';let n=0;
-  for(const c of sorted){if(f?c.name.toLowerCase().indexOf(f)<0:c.type<1)continue;if(++n>80)break;const d=document.createElement('div');d.className='it t'+c.type;d.innerHTML=`<b>${c.name}</b><span>${TN[c.type]}</span>`;
-    d.onclick=()=>{flyTo(c.x,c.y,c.type===3?2.2:c.type===2?1.4:c.type===1?0.9:0.45);sel={k:'city',o:c};showInsp()};list.appendChild(d)}}
-q.addEventListener('input',fill,SIG);fill();
-document.getElementById('st').textContent=`${W.cities.length} населённых пунктов · ${W.zones.length} пром. объектов · ${M.round(W.roads.reduce((a,r)=>a+r.L,0)/1000)} км дорог · ${(WORLD/1000).toFixed(0)}×${(WORLD/1000).toFixed(0)} км`;
-for(const id of ['clouds','labels','traffic']){const el=document.getElementById('o_'+id);el.checked=opt[id];el.onchange=()=>opt[id]=el.checked}
-document.getElementById('newworld').onclick=()=>{location.hash=String((M.random()*1e9)|0);location.reload()};
-document.getElementById('seed').textContent='seed '+SEED;
-document.getElementById('rnd').onclick=()=>{const c=W.cities[(M.random()*W.cities.length)|0];flyTo(c.x+(M.random()-0.5)*c.R,c.y+(M.random()-0.5)*c.R,0.35+M.random()*1.5)};
-document.getElementById('home').onclick=()=>flyTo(WORLD/2,WORLD/2,maxM()*0.95);
-document.getElementById('tg').onclick=()=>document.getElementById('side').classList.toggle('hid');
-todEl.value=M.round(tod*60);
-todEl.addEventListener('input',()=>{todDrag=true;tod=+todEl.value/60},SIG);todEl.addEventListener('change',()=>{todDrag=false},SIG);todEl.addEventListener('pointerup',()=>{todDrag=false},SIG);
-document.getElementById('tpause').onclick=()=>setSpeed(0);document.getElementById('tplay').onclick=()=>setSpeed(1);document.getElementById('tfast').onclick=()=>setSpeed(2);
-for(const b of document.querySelectorAll('#seasons button')){b.onclick=()=>setSeason(+b.dataset.s);b.classList.toggle('on',+b.dataset.s===season)}
-wxEl.innerHTML='';WX.forEach((w,i)=>{const o=document.createElement('option');o.value=i;o.textContent=w.n;wxEl.appendChild(o)});wxEl.value=wxi;wxEl.onchange=()=>{wxi=+wxEl.value;wxEl.blur()};
-}
+// stage 5: the viewer keeps no panels of its own (the old weather / search / time panel is gone); it is a dev mode for tools and tests
+const todDrag=false;
 let introOff=false,introT=0;
 // main-menu background: a slow flight over the largest town
 const bgC=W.cities.filter(c=>c.type===3).sort((a,b)=>b.R-a.R)[0]||W.cities[0];let bgA=hsh(SEED,1,1)*TAU;
@@ -509,7 +487,7 @@ const API={W,cam,flyTo,zoomAt,maxM,opt,LG,wcur,hover,setGrow,invalidate,setTod,s
   get VW(){return VW},get VH(){return VH},get DPR(){return DPR},get T(){return T},get tod(){return tod},get fps(){return fpsA},get ready(){return readyFired},
   sxw,syw,toWorld:(sx,sy)=>[cam.x+(sx-VW/2)*cam.m,cam.y+(sy-VH/2)*cam.m],setTodRate:r=>{todRate=r},isNight,
   showCity:c=>{sel={k:'city',o:c};showInsp()},
-  setWeather:i=>{wxi=i;wxEl.value=i;const w=WX[i];for(const k in wcur)wcur[k]=w[k]!==undefined?w[k]:(k==='dim'||k==='cd'?1:0)},
+  setWeather:i=>{wxi=i;const w=WX[i];for(const k in wcur)wcur[k]=w[k]!==undefined?w[k]:(k==='dim'||k==='cd'?1:0)},
   stats:()=>({fps:fpsA,cars:carCount,tiles:cache.size,lights:LCS[1].size+'/'+LCS[2].size+'/'+LCS[3].size,queue:queue.length,pending:pending.size+LPS[1].size+LPS[2].size+LPS[3].size,main:mainRender,lowQ}),
   stop:()=>{introOff=true;fly=null;zoomT=null}};
 window.__world=Object.assign({PROF,cache,lcache},API);

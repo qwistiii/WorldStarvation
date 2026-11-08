@@ -14,13 +14,13 @@ try {
   page.on('pageerror', (e) => errors.push(String(e)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   await page.goto(`http://127.0.0.1:${PORT}/index.html`);
-  await page.waitForTimeout(1200);
+  await page.waitForFunction(() => document.getElementById('loading').classList.contains('fade'), null, { timeout: 60000 });
   check(await page.evaluate(() => document.body.classList.contains('m-menu') && document.getElementById('mm-cont').style.display === 'none'), 'главное меню, «Продолжить» скрыто без сохранений');
 
   await page.click('[data-go="new"]');
   check(await page.evaluate(() => document.querySelectorAll('#stabs button').length === 5), 'экран новой игры: 5 вкладок');
   await page.click('#stabs button:nth-child(2)');
-  await page.waitForFunction(() => !document.getElementById('mp-wait').classList.contains('on'), null, { timeout: 20000 }).catch(() => {});
+  await page.waitForFunction(() => /Суша/.test(document.getElementById('mp-info').textContent), null, { timeout: 45000 }).catch(() => {});
   check(await page.evaluate(() => /Суша/.test(document.getElementById('mp-info').textContent)), 'предпросмотр карты построен');
   await page.evaluate(() => { const C = __ui.C; C.seed = 1337; C.rules.botCount = 2; C.slot = 2; });
 
@@ -28,6 +28,17 @@ try {
   await page.waitForFunction(() => Game.api && Game.api.ready, null, { timeout: 60000 });
   check(await page.evaluate(() => Game.G.phase === 'found' && document.getElementById('hint').classList.contains('show')), 'мир создан, подсказка «выберите место для столицы»');
 
+  // перетаскивание карты мышью срабатывает каждый раз
+  const moves = [];
+  for (let k = 0; k < 6; k++) {
+    const a = await page.evaluate(() => [Game.api.cam.x, Game.api.cam.y]); const d = k % 2 ? -1 : 1;
+    await page.mouse.move(700, 450); await page.mouse.down();
+    for (let q = 1; q <= 8; q++) { await page.mouse.move(700 + d * q * 12, 450 + d * q * 6); await page.waitForTimeout(16); }
+    await page.mouse.up(); await page.waitForTimeout(300);
+    const c = await page.evaluate(() => [Game.api.cam.x, Game.api.cam.y]); moves.push(Math.round(Math.hypot(c[0] - a[0], c[1] - a[1])));
+  }
+  check(moves.every((m) => m > 1000), 'карта перетаскивается мышью каждый раз', moves.join(' '));
+  check(await page.evaluate(() => Game.G.phase === 'found' && !document.getElementById('confirm').classList.contains('show')), 'перетаскивание не открывает вопрос об основании');
   // место для столицы: ближайшая к центру подходящая точка, клик по ней на экране
   const site = await page.evaluate(() => { const A = Game.api; A.stop(); A.cam.x = 65536; A.cam.y = 65536; A.cam.m = A.maxM() * 0.8;
     for (let r = 0; r < 60000; r += 2500) for (let a = 0; a < 6.28; a += 0.4) { const x = 65536 + Math.cos(a) * r, y = 65536 + Math.sin(a) * r;

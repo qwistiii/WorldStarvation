@@ -13,8 +13,10 @@ export function build() {
     if (!html.includes(tag)) throw new Error(`В index.html не найден тег: ${tag}`);
     html = html.replace(tag, () => inline);
   };
-  swap('<link rel="stylesheet" href="src/style.css">\n', `<style>\n${read('src/style.css')}</style>`);
-  for (const f of ['flag', 'gen', 'main', 'game', 'ui']) swap(`<script src="src/${f}.js"></script>`, `<script>\n${read(`src/${f}.js`)}</script>`);
+  // assets carry ?v=<version> (cache busting on GitHub Pages: max-age=600 would otherwise mix old and new files)
+  const v = JSON.parse(read('package.json')).version.split('.').slice(0, 2).join('.');
+  swap(`<link rel="stylesheet" href="src/style.css?v=${v}">\n`, `<style>\n${read('src/style.css')}</style>`);
+  for (const f of ['flag', 'gen', 'main', 'game', 'ui']) swap(`<script src="src/${f}.js?v=${v}"></script>`, `<script>\n${read(`src/${f}.js`)}</script>`);
   return html;
 }
 

@@ -317,17 +317,17 @@ const hooks={
 // ---------- boot / phases
 function boot(caps,onReady,stage){if(api){api.destroy();api=null}
   const vo=ui.viewOpts();api=startWorld({seed:cfg.seed,opt:mapOpt(caps),mode:'game',tod:cfg.rules.dayNight?9.5:12.5,dayNight:cfg.rules.dayNight,view:vo,hooks,onReady:A=>{onReady&&onReady(A)}});
-  W=api.W;api.setTodRate(G.speed*4/60);if(!cfg.rules.dayNight)api.setTodRate(0);document.getElementById('fps').classList.toggle('hid',!vo.fps)}
+  W=api.W;ui.loading('Отрисовка карты',api.W.cities.length+' населённых пунктов · '+api.W.zones.length+' промышленных объектов');api.setTodRate(G.speed*4/60);if(!cfg.rules.dayNight)api.setTodRate(0);document.getElementById('fps').classList.toggle('hid',!vo.fps)}
 function initState(c,save){cfg=c;tutorial=!!c.tutorial;hintsOff=!ui.settings().hints;placing=false;pend=null;mapMode='pol';hintStep=0;simAcc=0;polC=null;fogC=null;borders=null;panelSig='';
   G={t:0,speed:1,phase:'found',states:[],dep:[],offers:[],over:false,dec:0};
   G.states.push(mkState(0,Object.assign({},c.country,{money:c.rules.money,diff:1,trait:'random'}),true));
   botList().forEach((b,i)=>G.states.push(mkState(i+1,b,false)));
   const p=player();$('hname').textContent=p.name;$('hgov').textContent=p.gov+' · столица '+p.capital;flagCanvas(p.flag,42,28,$('hflag'));setSpeed(1);updModes();
   $('over').classList.remove('show');$('dip').classList.remove('show');$('toasts').innerHTML='';}
-function newGame(c){initState(c);ui.loading('Генерация мира…','Сид '+c.seed);setTimeout(()=>{boot(null,()=>{ui.loaded();analyse();G.dep=genDeposits();hint(0);updHUD()});document.body.className='m-game';updHUD()},60)}
+function newGame(c){initState(c);const MT={normal:'обычная карта',cont:'материки',arch:'архипелаг',islands:'острова'};ui.loading('Создание мира',`Сид ${c.seed} · ${MT[c.map.type]} · рельеф, реки, города, дороги`);setTimeout(()=>{boot(null,()=>{ui.loaded();analyse();G.dep=genDeposits();hint(0);updHUD()});document.body.className='m-game';updHUD()},60)}
 // founding: bots pick their sites, the world is rebuilt with the capitals, territory starts growing
 function found(x,y){closeConfirm();setPlacing(false);const picks=chooseCaps(x,y);const p=player();p.cap={x,y};for(const [b,s] of picks)b.cap={x:s.x,y:s.y};
-  G.phase='play';ui.loading('Основание государств…',G.states.filter(s=>s.cap).map(s=>esc(s.name)).join(' · '));
+  G.phase='play';ui.loading('Основание государств',G.states.filter(s=>s.cap).map(s=>esc(s.name)).join(' · '));
   setTimeout(()=>{const caps=G.states.filter(s=>s.cap).map(s=>({x:s.cap.x,y:s.cap.y,st:s.id,name:s.capital,fl:s.flag}));cfg.caps=caps;const keep=G.dep;
     boot(caps,()=>{ui.loaded();api.flyTo(x,y,3.2,4.5)},1);
     for(const s of G.states){const c=W.cities.find(q=>q.cap===s.id);s.cityId=c?c.id:-1;s.growQ=-1;syncGrow(s)}
@@ -341,7 +341,7 @@ function snapshot(){return {cfg,meta:{date:Date.now(),name:player().name,flag:pl
 function save(auto){if(!G||!cfg||cfg.tutorial&&auto)return false;const ok=Saves.put(cfg.slot||1,snapshot());if(!auto)toast(ok?`Сохранено в ячейку ${cfg.slot||1}`:'Не удалось сохранить: нет места в хранилище браузера');return ok}
 function load(sv){const c=sv.cfg;initState(c);const g=sv.g;G.t=g.t;G.phase=g.phase;G.over=g.over;
   g.states.forEach((q,i)=>{const s=G.states[i];if(!s)return;s.money=q.money==='inf'?Infinity:q.money;s.earned=q.earned;s.cap=q.cap;s.grow=q.grow;s.boostT=q.boostT;s.invest=q.invest;s.allies=q.allies||[];s.trait=q.trait||s.trait});
-  ui.loading('Загрузка сохранения…',esc(sv.meta.name)+' · '+sv.meta.day);
+  ui.loading('Загрузка сохранения',esc(sv.meta.name)+' · '+sv.meta.day);
   setTimeout(()=>{const caps=G.phase==='play'?c.caps:null;boot(caps,()=>{ui.loaded();if(g.cam){api.cam.x=g.cam[0];api.cam.y=g.cam[1];api.cam.m=g.cam[2]}});document.body.className='m-game';
     analyse();G.dep=g.dep.map(a=>({k:a[0],x:a[1],y:a[2],c:cellOf(a[1],a[2]),amt:a[3]<0?Infinity:a[3],max:a[4]<0?Infinity:a[4],known:!!a[5]}));
     if(G.phase==='play'){own=unrle(g.own,new Uint8Array(N*N));vis=new Uint8Array(N*N);expl=g.expl?unrle(g.expl,new Uint8Array(N*N)):new Uint8Array(N*N);
