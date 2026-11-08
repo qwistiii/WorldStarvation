@@ -1,45 +1,52 @@
-(function(){
+// The world engine: renders a WorldGen world with camera, traffic, light and weather.
+// startWorld(cfg) can be called again after api.destroy() (main menu → game → menu …).
+// cfg: {seed, opt (WorldGen options), mode:'view'|'bg'|'game', hash (url hash string for 'view'), hooks:{draw,click,key,frame}}
+function startWorld(cfg){
 'use strict';
+cfg=cfg||{};const MODE=cfg.mode||'view',HK=cfg.hooks||{};
 const M=Math,PI=M.PI,TAU=PI*2;
+const AC=new AbortController(),SIG={signal:AC.signal};let alive=true;
 const clamp=(x,a,b)=>x<a?a:x>b?b:x, smooth=(a,b,x)=>{let t=(x-a)/(b-a);t=t<0?0:t>1?1:t;return t*t*(3-2*t)}, lerp=(a,b,t)=>a+(b-a)*t;
 // hash: #seed[,tHH][,wN][,sN][cpu]   e.g. #20261107,t22.5,w3,s2
-const HS=location.hash.slice(1);
-let SEED=parseInt(HS.replace('cpu',''));if(!SEED||isNaN(SEED))SEED=20261107;
+const HS=MODE==='view'?(cfg.hash!=null?cfg.hash:location.hash.slice(1)):(cfg.cpu?'cpu':'');
+let SEED=cfg.seed||parseInt(HS.replace('cpu',''));if(!SEED||isNaN(SEED))SEED=20261107;
 const hv=(re,d)=>{const m=HS.match(re);return m?parseFloat(m[1]):d};
 const cv=document.getElementById('c'),ctx=cv.getContext('2d',{alpha:false});
 let DPR=M.min(window.devicePixelRatio||1,2),VW=0,VH=0,vign=null;
 function resize(){VW=innerWidth;VH=innerHeight;cv.width=M.round(VW*DPR);cv.height=M.round(VH*DPR);
   vign=ctx.createRadialGradient(VW/2,VH/2,M.min(VW,VH)*0.35,VW/2,VH/2,M.hypot(VW,VH)*0.62);vign.addColorStop(0,'rgba(0,0,0,0)');vign.addColorStop(1,'rgba(0,8,20,0.38)')}
-addEventListener('resize',resize);resize();
+addEventListener('resize',resize,SIG);resize();
 
 let season=clamp(hv(/,s(\d)/,0)|0,0,2);
-const W=WorldGen(SEED),WORLD=W.WORLD,S0=W.sprites();W.setSeason(season);
+const W=WorldGen(SEED,cfg.opt),WORLD=W.WORLD,S0=W.sprites();W.setSeason(season);
+const GROWS=new Map(cfg.grow||[]);for(const [id,g] of GROWS)W.setGrow(id,g);
 // main-thread copies of sprites as regular canvases (faster to draw than OffscreenCanvas sources in some browsers)
 const toC=c=>{const d=document.createElement('canvas');d.width=c.width;d.height=c.height;d.getContext('2d').drawImage(c,0,0);return d};
 const S={car:S0.car.map(toC),carLo:S0.carLo.map(toC),truck:S0.truck.map(toC),bus:toC(S0.bus),tree:S0.tree.map(toC)};
-const opt={clouds:true,labels:true,traffic:true};
+const opt=Object.assign({clouds:true,labels:true,traffic:true},cfg.view||{});
 
 // ------------------------------------------------------------ workers / tile caches
 // cache: day tiles of the current season; stale: previous season (fallback while re-rendering); lcache: night-light tiles
 const cache=new Map(),pending=new Set();const LCS=[null,new Map(),new Map(),new Map()],LPS=[null,new Set(),new Set(),new Set()],lcache=LCS[1];const LHB=[0,0,2,2];let stale=new Map(),staleT=0;let frameNo=0,queue=[];
 const workers=[];let mainRender=false;
 const NW=M.max(2,M.min(5,(navigator.hardwareConcurrency||4)-2));
-const wsrc=WorldGen.toString()+`
+const wsrc=(typeof FlagArt==='function'?FlagArt.toString():'')+WorldGen.toString()+`
 let G=null;
 onmessage=function(e){const m=e.data;
- if(m.t==='init'){try{const t=new OffscreenCanvas(2,2).getContext('2d');if(!t)throw new Error('no2d');G=WorldGen(m.seed);G.setSeason(m.season);postMessage({t:'ready',ok:true})}catch(err){postMessage({t:'ready',ok:false,err:String(err)})}}
+ if(m.t==='init'){try{const t=new OffscreenCanvas(2,2).getContext('2d');if(!t)throw new Error('no2d');G=WorldGen(m.seed,m.opt);G.setSeason(m.season);for(const q of m.grow||[])G.setGrow(q[0],q[1]);postMessage({t:'ready',ok:true})}catch(err){postMessage({t:'ready',ok:false,err:String(err)})}}
  else if(m.t==='season'){G.setSeason(m.s)}
- else if(m.t==='tile'){if(m.L){const c=G.renderLights(m.z,m.x,m.y,m.hb);if(!c){postMessage({t:'tile',key:m.key,L:m.L,b:null});return}const b=c.transferToImageBitmap();postMessage({t:'tile',key:m.key,L:m.L,b},[b]);return}
-   const c=G.renderTile(m.z,m.x,m.y);const b=c.transferToImageBitmap();postMessage({t:'tile',key:m.key,b,s:G.season()},[b])}};`;
-try{if(location.hash.indexOf('cpu')>=0)throw 0;const url=URL.createObjectURL(new Blob([wsrc],{type:'text/javascript'}));
+ else if(m.t==='grow'){G.setGrow(m.id,m.g)}
+ else if(m.t==='tile'){if(m.L){const c=G.renderLights(m.z,m.x,m.y,m.hb);if(!c){postMessage({t:'tile',key:m.key,L:m.L,b:null,gv:m.gv});return}const b=c.transferToImageBitmap();postMessage({t:'tile',key:m.key,L:m.L,b,gv:m.gv},[b]);return}
+   const c=G.renderTile(m.z,m.x,m.y);const b=c.transferToImageBitmap();postMessage({t:'tile',key:m.key,b,s:G.season(),gv:m.gv},[b])}};`;
+let wurl=null;try{if(HS.indexOf('cpu')>=0)throw 0;const url=URL.createObjectURL(new Blob([wsrc],{type:'text/javascript'}));
   for(let i=0;i<NW;i++){const w=new Worker(url);w.busy=0;w.ready=false;w.dead=false;
     w.onmessage=e=>{const m=e.data;if(m.t==='ready'){if(m.ok)w.ready=true;else{w.dead=true;if(workers.every(q=>q.dead))mainRender=true}return}
-      if(m.t==='tile'){w.busy--;
-        if(m.L){LPS[m.L].delete(m.key);LCS[m.L].set(m.key,{b:m.b,f:frameNo});return}
-        pending.delete(m.key);if(m.s!==season){if(m.b&&m.b.close)m.b.close();return}cache.set(m.key,{b:m.b,f:frameNo})}};
-    w.onerror=()=>{w.dead=true;if(workers.every(q=>q.dead))mainRender=true};w.postMessage({t:'init',seed:SEED,season});workers.push(w)}}
+      if(m.t==='tile'){w.busy--;if(!alive){if(m.b&&m.b.close)m.b.close();return}
+        if(m.L){LPS[m.L].delete(m.key);if(outdated(m.key,m.gv)){if(m.b&&m.b.close)m.b.close();return}LCS[m.L].set(m.key,{b:m.b,f:frameNo});return}
+        pending.delete(m.key);if(m.s!==season||outdated(m.key,m.gv)){if(m.b&&m.b.close)m.b.close();return}cache.set(m.key,{b:m.b,f:frameNo})}};
+    w.onerror=()=>{w.dead=true;if(workers.every(q=>q.dead))mainRender=true};w.postMessage({t:'init',seed:SEED,season,opt:cfg.opt,grow:[...GROWS]});workers.push(w)}wurl=url}
 catch(e){mainRender=true}
-setTimeout(()=>{if(!workers.some(w=>w.ready))mainRender=true},4000);
+setTimeout(()=>{if(alive&&!workers.some(w=>w.ready))mainRender=true},4000+(cfg.opt?3000:0));
 const tkey=(z,x,y)=>z*16777216+y*4096+x;
 function request(z,x,y,p){const k=tkey(z,x,y);if(cache.has(k)||pending.has(k))return;queue.push({k,z,x,y,p,L:0})}
 function requestL(z,x,y,p,L){const k=tkey(z,x,y);if(LCS[L].has(k)||LPS[L].has(k))return;queue.push({k,z,x,y,p,L})}
@@ -48,7 +55,7 @@ function dispatch(){queue.sort((a,b)=>a.p-b.p);let qi=0;
       if(q.L){if(LCS[q.L].has(q.k))continue;LCS[q.L].set(q.k,{b:W.renderLights(q.z,q.x,q.y,LHB[q.L]),f:frameNo})}else{if(cache.has(q.k))continue;cache.set(q.k,{b:W.renderTile(q.z,q.x,q.y),f:frameNo})}}return}
   for(const w of workers){if(!w.ready||w.dead)continue;while(w.busy<2&&qi<queue.length){const q=queue[qi++];
       if(q.L){if(LPS[q.L].has(q.k)||LCS[q.L].has(q.k))continue;LPS[q.L].add(q.k)}else{if(pending.has(q.k)||cache.has(q.k))continue;pending.add(q.k)}
-      w.busy++;w.postMessage({t:'tile',z:q.z,x:q.x,y:q.y,key:q.k,L:q.L,hb:LHB[q.L]})}}}
+      w.busy++;w.postMessage({t:'tile',z:q.z,x:q.x,y:q.y,key:q.k,L:q.L,hb:LHB[q.L],gv:GV})}}}
 function evictMap(mp,hi,lo){if(mp.size<hi)return;const arr=[];for(const [k,v] of mp){if(k>=4*16777216)arr.push([k,v.f])}arr.sort((a,b)=>a[1]-b[1]);
   for(let i=0;i<arr.length&&mp.size>lo;i++){if(arr[i][1]>=frameNo-2)break;const v=mp.get(arr[i][0]);if(v.b&&v.b.close)v.b.close();mp.delete(arr[i][0])}}
 function evict(){evictMap(cache,460,360);evictMap(LCS[1],320,240);evictMap(LCS[2],180,130);evictMap(LCS[3],120,90)}
@@ -57,6 +64,20 @@ function setSeason(s){s=clamp(s|0,0,2);if(s===season)return;season=s;W.setSeason
   dropStale();stale=new Map(cache);cache.clear();pending.clear();staleT=0;
   for(const b of document.querySelectorAll('#seasons button'))b.classList.toggle('on',+b.dataset.s===s)}
 
+// growth of capitals: tiles over a growing town are re-rendered; the old picture stays (stale) until the new one arrives.
+// Tiles that were in flight while the town changed are dropped on arrival (generation version GV).
+let GV=0;const INV=[];
+const tileBB=k=>{const z=M.floor(k/16777216),r=k-z*16777216,y=M.floor(r/4096),x=r-y*4096,ts=WORLD/(1<<z);return [x*ts,y*ts,(x+1)*ts,(y+1)*ts]};
+const hitBB=(a,b)=>a[0]<b[2]&&b[0]<a[2]&&a[1]<b[3]&&b[1]<a[3];
+function outdated(k,gv){if(gv===undefined||gv>=GV)return false;const bb=tileBB(k);for(const e of INV)if(e.gv>gv&&hitBB(bb,e.bb))return true;return false}
+function invalidate(bb){GV++;INV.push({gv:GV,bb});if(INV.length>64)INV.shift();
+  for(const [k,v] of cache){if(!hitBB(tileBB(k),bb))continue;const o=stale.get(k);if(o&&o.b&&o.b.close&&o!==v)o.b.close();stale.set(k,v);cache.delete(k)}staleT=0;
+  for(let L=1;L<=3;L++)for(const [k,v] of LCS[L])if(hitBB(tileBB(k),bb)){if(v.b&&v.b.close)v.b.close();LCS[L].delete(k)}}
+function setGrow(id,g){g=g>=1?1:g;if(GROWS.get(id)===g)return;if(g>=1)GROWS.delete(id);else GROWS.set(id,g);W.setGrow(id,g);for(const w of workers)w.postMessage({t:'grow',id,g});
+  const c=W.cities.find(q=>q.id===id);if(c){let bb=c.bb.slice();for(const z of W.zones)if(z.city===c)bb=[M.min(bb[0],z.bb[0]),M.min(bb[1],z.bb[1]),M.max(bb[2],z.bb[2]),M.max(bb[3],z.bb[3])];invalidate([bb[0]-300,bb[1]-300,bb[2]+300,bb[3]+300])}}
+const zoneOn=z=>!z.city||W.growOf(z.city.id)>=0.95;
+// game hooks must never stop the render loop: errors are reported once per hook
+const hkErr={};function hk(n,a,b){try{HK[n](a,b)}catch(e){if(!hkErr[n]){hkErr[n]=1;console.error('hook '+n+':',e)}ctx.setTransform(DPR,0,0,DPR,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}}
 // ------------------------------------------------------------ camera
 const cam={x:WORLD/2,y:WORLD/2,m:400};let zoomT=null,fly=null,vel={x:0,y:0};
 const MINM=0.045,maxM=()=>WORLD*1.25/M.min(VW,VH);cam.m=maxM();
@@ -74,26 +95,29 @@ function updateCam(dt){
   const mg=WORLD*0.15;cam.x=clamp(cam.x,-mg,WORLD+mg);cam.y=clamp(cam.y,-mg,WORLD+mg);cam.m=clamp(cam.m,MINM,maxM())}
 // input
 const ptr=new Map();let drag=false,lastMove=0,pinch=null,downAt=null;const keys={};
-cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});drag=true;fly=null;vel.x=vel.y=0;if(ptr.size===2)pinch=null;
-  downAt=ptr.size===1?{x:e.clientX,y:e.clientY,t:performance.now(),moved:0}:null});
-cv.addEventListener('pointermove',e=>{const p=ptr.get(e.pointerId);if(!p)return;
+const hover={x:-1,y:-1,on:false};
+cv.addEventListener('pointerleave',()=>{hover.on=false},SIG);
+cv.addEventListener('pointerdown',e=>{if(MODE==='bg')return;cv.setPointerCapture(e.pointerId);ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});drag=true;fly=null;vel.x=vel.y=0;if(ptr.size===2)pinch=null;
+  downAt=ptr.size===1?{x:e.clientX,y:e.clientY,t:performance.now(),moved:0}:null},SIG);
+cv.addEventListener('pointermove',e=>{hover.x=e.clientX;hover.y=e.clientY;hover.on=true;const p=ptr.get(e.pointerId);if(!p)return;
   if(ptr.size===1){const dx=e.clientX-p.x,dy=e.clientY-p.y;if(downAt)downAt.moved+=M.abs(dx)+M.abs(dy);cam.x-=dx*cam.m;cam.y-=dy*cam.m;const now=performance.now(),dtm=M.max(1,now-lastMove)/1000;lastMove=now;
     vel.x=-dx*cam.m/dtm*0.6+vel.x*0.4;vel.y=-dy*cam.m/dtm*0.6+vel.y*0.4;zoomT=null}
   p.x=e.clientX;p.y=e.clientY;
   if(ptr.size===2){downAt=null;const [a,b]=[...ptr.values()];const d=M.hypot(a.x-b.x,a.y-b.y),mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
     if(pinch){const f=pinch.d/d;const wx=cam.x+(pinch.mx-VW/2)*cam.m,wy=cam.y+(pinch.my-VH/2)*cam.m;cam.m=clamp(cam.m*f,MINM,maxM());cam.x=wx-(mx-VW/2)*cam.m;cam.y=wy-(my-VH/2)*cam.m}
-    pinch={d,mx,my};vel.x=vel.y=0}});
+    pinch={d,mx,my};vel.x=vel.y=0}},SIG);
 const up=e=>{ptr.delete(e.pointerId);if(ptr.size<2)pinch=null;
   if(ptr.size===0){drag=false;if(performance.now()-lastMove>90)vel.x=vel.y=0;
     if(downAt&&downAt.moved<6&&performance.now()-downAt.t<450&&e.type==='pointerup'){vel.x=vel.y=0;const sx=e.clientX,sy=e.clientY;clickT=setTimeout(()=>pick(sx,sy),230)}downAt=null}};
 let clickT=0;
-cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
-cv.addEventListener('wheel',e=>{e.preventDefault();let d=e.deltaY;if(e.deltaMode===1)d*=18;else if(e.deltaMode===2)d*=400;zoomAt(M.exp(clamp(d,-300,300)*0.0022),e.clientX,e.clientY)},{passive:false});
-cv.addEventListener('dblclick',e=>{clearTimeout(clickT);zoomAt(0.35,e.clientX,e.clientY)});
-addEventListener('keydown',e=>{if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;keys[e.code]=true;
-  if(e.code==='KeyN')setTod(isNight()?11:22.5);if(e.code==='KeyP')setSpeed(tSpeed?0:1);if(e.code==='Escape')closeInsp()});
-addEventListener('keyup',e=>{keys[e.code]=false});
-addEventListener('blur',()=>{for(const k in keys)keys[k]=false});
+cv.addEventListener('pointerup',up,SIG);cv.addEventListener('pointercancel',up,SIG);
+cv.addEventListener('wheel',e=>{e.preventDefault();if(MODE==='bg')return;let d=e.deltaY;if(e.deltaMode===1)d*=18;else if(e.deltaMode===2)d*=400;zoomAt(M.exp(clamp(d,-300,300)*0.0022),e.clientX,e.clientY)},{passive:false,signal:AC.signal});
+cv.addEventListener('dblclick',e=>{clearTimeout(clickT);if(HK.dblclick&&HK.dblclick())return;zoomAt(0.35,e.clientX,e.clientY)},SIG);
+addEventListener('keydown',e=>{if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.tagName==='TEXTAREA')return;if(MODE==='bg')return;keys[e.code]=true;
+  if(HK.key&&HK.key(e))return;
+  if(MODE==='view'){if(e.code==='KeyN')setTod(isNight()?11:22.5);if(e.code==='KeyP')setSpeed(tSpeed?0:1)}if(e.code==='Escape')closeInsp()},SIG);
+addEventListener('keyup',e=>{keys[e.code]=false},SIG);
+addEventListener('blur',()=>{for(const k in keys)keys[k]=false},SIG);
 
 // ------------------------------------------------------------ procedural assets (main thread)
 function mk(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;return c}
@@ -144,7 +168,7 @@ const FOG=(()=>{const N=256,c=mk(N,N),x=c.getContext('2d'),id=x.createImageData(
   x.putImageData(id,0,0);return ctx.createPattern(c,'repeat')})();
 
 // ------------------------------------------------------------ time of day & weather
-let tod=((hv(/,t(\d+(?:\.\d+)?)/,17.2))%24+24)%24,tSpeed=1;const SPEEDS=[0,4/60,40/60]; // game hours per real second (4 game min/s → day = 6 min)
+let tod=((hv(/,t(\d+(?:\.\d+)?)/,cfg.tod!=null?cfg.tod:17.2))%24+24)%24,tSpeed=1,todRate=null,readyFired=false;const DN=cfg.dayNight!==false;const SPEEDS=[0,4/60,40/60]; // game hours per real second (4 game min/s → day = 6 min)
 const AMB=[[-1,[0.12,0.15,0.27]],[-0.3,[0.13,0.16,0.28]],[-0.12,[0.24,0.24,0.4]],[-0.03,[0.5,0.4,0.5]],[0.04,[0.86,0.6,0.48]],[0.14,[1,0.84,0.7]],[0.3,[1,0.97,0.93]],[0.5,[1,1,1]],[1,[1,1,1]]];
 const CLC=[[-1,[48,56,80]],[-0.12,[86,82,112]],[-0.03,[214,142,140]],[0.06,[255,186,150]],[0.2,[255,240,228]],[0.4,[255,255,255]],[1,[255,255,255]]];
 function keyf(K,x){if(x<=K[0][0])return K[0][1].slice();for(let i=1;i<K.length;i++){if(x<=K[i][0]){const t=(x-K[i-1][0])/(K[i][0]-K[i-1][0]),a=K[i-1][1],b=K[i][1];return [lerp(a[0],b[0],t),lerp(a[1],b[1],t),lerp(a[2],b[2],t)]}}return K[K.length-1][1].slice()}
@@ -263,14 +287,14 @@ function drawShips(lp){const m=cam.m,k=1/m;if(m>(lp?120:30))return;if(lp)ctx.glo
     W.drawShip(ctx,L,sh.st,sh.c)}
   ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}
 function drawEmitters(){const m=cam.m;if(m>28)return;ctx.setTransform(DPR,0,0,DPR,0,0);const k=1/m;const px=-W.WDY,py=W.WDX;
-  for(const e of W.emitters){if(!inView(e.x,e.y,e.k==='steam'?1500:700))continue;
+  for(const e of W.emitters){if(!inView(e.x,e.y,e.k==='steam'?1500:700)||(e.city>=0&&W.growOf(e.city)<0.95))continue;
     const n=e.k==='steam'?16:e.k==='flare'?6:18,rate=e.k==='steam'?0.035:0.055,len=(e.k==='steam'?650:420)*e.s;
     for(let i=0;i<n;i++){const age=((T*rate+i/n+e.ph)%1);const wob=M.sin(age*5+e.ph*20+i)*age*40;
       const x=e.x+W.WDX*age*len+px*wob,y=e.y+W.WDY*age*len+py*wob;const X=sxw(x),Y=syw(y);
       let r,a,spr;if(e.k==='steam'){r=(30+age*150)*e.s;a=0.8*M.pow(1-age,1.2)*M.min(1,age*10+0.3);spr=PUFF_W}else if(e.k==='flare'){r=6+age*30;a=0.25*(1-age);spr=PUFF_D}else{r=(6+age*50)*e.s;a=0.6*(1-age)*M.min(1,age*12+0.2);spr=PUFF_G}
       const sz=r*2*k;if(sz<1||X+sz<0||Y+sz<0||X-sz>VW||Y-sz>VH)continue;ctx.globalAlpha=a;ctx.drawImage(spr,X-sz/2,Y-sz/2,sz,sz)}}ctx.globalAlpha=1}
 function drawFlares(nl){const m=cam.m;if(m>(nl>0.05?200:28))return;ctx.setTransform(DPR,0,0,DPR,0,0);const k=1/m;ctx.globalCompositeOperation='lighter';
-  for(const e of W.emitters){if(e.k!=='flare'||!inView(e.x,e.y,700))continue;const X=sxw(e.x),Y=syw(e.y);const f=1+0.25*M.sin(T*13+e.ph*50)+0.15*M.sin(T*31+e.ph*9);
+  for(const e of W.emitters){if(e.k!=='flare'||!inView(e.x,e.y,700)||(e.city>=0&&W.growOf(e.city)<0.95))continue;const X=sxw(e.x),Y=syw(e.y);const f=1+0.25*M.sin(T*13+e.ph*50)+0.15*M.sin(T*31+e.ph*9);
     if(nl>0.02){const g=M.max(6,520*f*k);ctx.globalAlpha=nl*0.42;ctx.drawImage(GL_S,X-g/2,Y-g/2,g,g)}
     if(m>28)continue;const sz=M.max(4,26*f*k);ctx.globalAlpha=0.85;ctx.drawImage(FLAME,X-sz/2+3*k,Y-sz/2-2*k,sz,sz);ctx.globalAlpha=0.9;const s2=sz*0.45;ctx.drawImage(FLAME2,X-s2/2,Y-s2/2,s2,s2)}
   ctx.globalCompositeOperation='source-over';ctx.globalAlpha=1}
@@ -311,14 +335,14 @@ function drawFlightLights(a){if(a<0.02||!FLB.length)return;ctx.globalCompositeOp
     if(strobe){const e=d*2.6;ctx.drawImage(GL_B,-sz*0.07-e/2,-sz*0.43-e/2,e,e);ctx.drawImage(GL_B,-sz*0.07-e/2,sz*0.43-e/2,e,e)}
     if((T*0.9+f.ph)%1<0.12){const e=d*1.6;ctx.drawImage(GL_R,-e/2,-e/2,e,e)}}
   ctx.setTransform(DPR,0,0,DPR,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}
-function drawClouds(shadowPass){const H=camH();ctx.setTransform(DPR,0,0,DPR,0,0);const span=WORLD*1.3;const cov=wcur.cover*clouds.length;
+function drawClouds(shadowPass){const H=camH();const cloudFar=MODE==='game'?1-smooth(18000,70000,H)*0.8:1;ctx.setTransform(DPR,0,0,DPR,0,0);const span=WORLD*1.3;const cov=wcur.cover*clouds.length;
   if(shadowPass&&LG.day<0.03)return;
   for(let ci=0;ci<clouds.length;ci++){const c=clouds[ci];const vis=clamp((wcur.cover-c.g)*14,0,1);if(vis<=0)continue;
     let x=((c.x+T*9+WORLD*0.15)%span+span)%span-WORLD*0.15,y=c.y;
     if(shadowPass){if(cam.m<0.12)continue;const sx=x+W.SUNX*c.alt,sy=y+W.SUNY*c.alt;if(!inView(sx,sy,c.s))continue;const sz=c.s/cam.m;ctx.globalAlpha=0.2*vis*LG.day*(1-0.45*smooth(0.6,1,wcur.cover));ctx.drawImage(CLS[c.v][1],sxw(sx)-sz/2,syw(sy)-sz/2,sz,sz);continue}
     if(H<c.alt*1.12)continue;const kk=H/(H-c.alt);const a=smooth(c.alt*1.12,c.alt*2.6,H);if(a<=0.01)continue;
     const X=VW/2+(x-cam.x)/cam.m*kk,Y=VH/2+(y-cam.y)/cam.m*kk,sz=c.s/cam.m*kk;if(X+sz/2<0||Y+sz/2<0||X-sz/2>VW||Y-sz/2>VH)continue;
-    ctx.globalAlpha=a*0.95*vis;ctx.drawImage(CLS[c.v][2],X-sz/2,Y-sz/2,sz,sz)}ctx.globalAlpha=1}
+    ctx.globalAlpha=a*0.95*vis*cloudFar;ctx.drawImage(CLS[c.v][2],X-sz/2,Y-sz/2,sz,sz)}ctx.globalAlpha=1}
 function drawFog(){const f=wcur.fog;if(f<0.01)return;ctx.setTransform(DPR,0,0,DPR,0,0);
   for(let l=0;l<2;l++){const P=l?1700:5200,sc=P/256/cam.m;const ox=VW/2-(cam.x-T*(l?9:5))/cam.m,oy=VH/2-(cam.y+T*(l?3:-2))/cam.m;
     FOG.setTransform(new DOMMatrix([sc,0,0,sc,ox+l*91,oy+l*57]));ctx.fillStyle=FOG;ctx.globalAlpha=f*(l?0.42:0.6);ctx.fillRect(0,0,VW,VH)}
@@ -338,20 +362,20 @@ function drawPrecip(dt){const rain=wcur.rain,snow=wcur.snow,H=camH();const vis=s
     if(isSnow){const s=clamp(1.6/p.q,1.2,9);ctx.globalAlpha=vis*clamp(0.95-p.q*0.5,0.3,0.9)*br;ctx.drawImage(FLAKE,X-s/2,Y-s/2,s,s)}
     else{const qb=p.q*0.93;const X0=VW/2+(p.dx-wx*0.03*p.q)/(m*qb),Y0=VH/2+(p.dy-wy*0.03*p.q)/(m*qb);ctx.moveTo(X0,Y0);ctx.lineTo(X,Y)}}
   if(!isSnow)ctx.stroke();ctx.globalAlpha=1}
-const ZNAME={air:'Аэропорт',ref:'НПЗ',pow:'ТЭЦ',port:'Порт',ind:'Промзона',solar:'Солнечная электростанция',agro:'Тепличный комбинат',farm:'Ферма',dacha:'СНТ',cem:'Кладбище',quarry:'Карьер',gas:'АЗС',stn:'Вокзал'};const ZLIM={gas:2.5,farm:5,cem:5,dacha:6,stn:5};
+const ZNAME={mil:'Военная база',air:'Аэропорт',ref:'НПЗ',pow:'ТЭЦ',port:'Порт',ind:'Промзона',solar:'Солнечная электростанция',agro:'Тепличный комбинат',farm:'Ферма',dacha:'СНТ',cem:'Кладбище',quarry:'Карьер',gas:'АЗС',stn:'Вокзал'};const ZLIM={mil:12,gas:2.5,farm:5,cem:5,dacha:6,stn:5};
 function drawLabels(){ctx.setTransform(DPR,0,0,DPR,0,0);const m=cam.m;const boxes=[];ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineJoin='round';
   const lim=[9,32,95,380],fs=[11,12.5,15,19];const nl=LG.night;
-  for(const c of W.cities){if(m>lim[c.type])continue;const X=sxw(c.x),Y=syw(c.y);if(X<-100||Y<-30||X>VW+100||Y>VH+30)continue;
+  for(const c of W.cities){if(m>lim[c.type])continue;const X=sxw(c.x),Y=syw(c.y);if(X<-100||Y<-30||X>VW+100||Y>VH+30||(HK.seen&&!HK.seen(c.x,c.y)))continue;
     const a=M.min(1,(lim[c.type]-m)/(lim[c.type]*0.3))*(m<0.6?0.55:1);ctx.font=`${c.type>=2?600:500} ${fs[c.type]}px system-ui,Segoe UI,Roboto,sans-serif`;const w=c._lw||(c._lw=ctx.measureText(c.name).width+8),h=fs[c.type]+4;
     let hit=false;for(const b of boxes){if(M.abs(b[0]-X)<(b[2]+w)/2&&M.abs(b[1]-Y)<(b[3]+h)/2){hit=true;break}}if(hit)continue;boxes.push([X,Y,w,h]);
     ctx.globalAlpha=a*(1-nl*0.15);ctx.strokeStyle='rgba(10,20,30,0.75)';ctx.lineWidth=3.5;ctx.strokeText(c.name,X,Y);ctx.fillStyle=c.type===3?'#fff6dc':'#ffffff';ctx.fillText(c.name,X,Y)}
-  if(m<9){ctx.font='500 11px system-ui,sans-serif';for(const z of W.zones){const lim=ZLIM[z.zk]||9;if(m>lim)continue;const X=sxw(z.x),Y=syw(z.y);if(X<-80||Y<-20||X>VW+80||Y>VH+20)continue;const t=ZNAME[z.zk];ctx.globalAlpha=M.min(1,(lim-m)/(lim/3))*0.9;
+  if(m<12){ctx.font='500 11px system-ui,sans-serif';for(const z of W.zones){const lim=ZLIM[z.zk]||9;if(m>lim||!zoneOn(z))continue;const X=sxw(z.x),Y=syw(z.y);if(X<-80||Y<-20||X>VW+80||Y>VH+20)continue;const t=ZNAME[z.zk];ctx.globalAlpha=M.min(1,(lim-m)/(lim/3))*0.9;
     ctx.strokeStyle='rgba(10,20,30,0.7)';ctx.lineWidth=3;ctx.strokeText(t,X,Y);ctx.fillStyle='#ffe9a8';ctx.fillText(t,X,Y)}}
   ctx.globalAlpha=1}
 
 // ------------------------------------------------------------ inspector
 let sel=null;
-const BPOP=[0,3200,950,1700,60,0,0,0,0,0,40,0,180,45,0,0,0,0,300,0];
+const BPOP=[0,3200,950,1700,60,0,0,0,0,0,40,0,180,45,0,0,0,0,300,0,0,200];
 function cityStats(c){if(c._st)return c._st;let pop=0,area=0;const cnt={};
   if(c.type===0){let L=0;for(const s of c.vst)L+=s.L;const houses=M.round(L/31*2*0.84);pop=houses*3;cnt.houses=houses;area=L*90}
   else{const BD=c.D-1;for(let j=0;j<BD;j++)for(let i=0;i<BD;i++){const t=c.blocks[j*BD+i];if(!t||t===20)continue;const a=(c.us[i+1]-c.us[i])*(c.vs[j+1]-c.vs[j]);area+=a;pop+=BPOP[t]*a/14000;cnt[t]=(cnt[t]||0)+1}}
@@ -359,7 +383,7 @@ function cityStats(c){if(c._st)return c._st;let pop=0,area=0;const cnt={};
   c._st={pop:pop<1000?M.round(pop/10)*10:pop<1e5?M.round(pop/100)*100:M.round(pop/1000)*1000,area,cnt,zs};return c._st}
 const fmtN=n=>String(M.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g,' ');
 const TN=['Деревня','Город','Крупный город','Мегаполис'];
-const BTN={1:'деловой центр',2:'периметральная застройка',3:'панельные микрорайоны',4:'частный сектор',5:'парки',6:'торговые центры',7:'школы',8:'гаражи',9:'стадион',10:'храмы',11:'стройки',12:'торговые улицы',13:'коттеджи',14:'больницы',15:'рынки',16:'спорткомплексы',17:'автобусные парки',18:'жилые кварталы',19:'офисы'};
+const BTN={21:'правительственный квартал',1:'деловой центр',2:'периметральная застройка',3:'панельные микрорайоны',4:'частный сектор',5:'парки',6:'торговые центры',7:'школы',8:'гаражи',9:'стадион',10:'храмы',11:'стройки',12:'торговые улицы',13:'коттеджи',14:'больницы',15:'рынки',16:'спорткомплексы',17:'автобусные парки',18:'жилые кварталы',19:'офисы'};
 function zoneInfo(z){const c={};for(const p of z.prims){const k=p.k==='cyl'?p.st:p.k;c[k]=(c[k]||0)+1}const rows=[];
   if(z.zk==='air'){const n=W.flights.filter(f=>!f.kind&&(M.hypot(f.pts[0]-z.x,f.pts[1]-z.y)<4000||M.hypot(f.pts[8]-z.x,f.pts[9]-z.y)<4000)).length;rows.push(['ВПП','3 300 × 60 м'],['Самолётов на перроне',c.plane||0],['Рейсов',n])}
   if(z.zk==='ref')rows.push(['Резервуаров',c.tank||0],['Ректификационных колонн',c.tower||0],['Газовых сфер',c.sphere||0],['Факелов',2]);
@@ -367,10 +391,11 @@ function zoneInfo(z){const c={};for(const p of z.prims){const k=p.k==='cyl'?p.st
   if(z.zk==='port')rows.push(['Причалов',(c.ship||0)/2],['Судов у причалов',c.ship||0],['Кранов',c.crane||0]);
   if(z.zk==='ind')rows.push(['Корпусов',c.b||0],['Дымовых труб',c.chim||0],['Резервуаров',c.tank||0]);
   if(z.zk==='solar')rows.push(['Площадь панелей',fmtN(z.W*z.H*0.5/1e4)+' га']);
+  if(z.zk==='mil'){const v=[0,0,0,0,0,0];for(const p of z.prims)if(p.k==='veh')v[p.v]++;rows.push(['Танков',v[0]],['БМП',v[1]],['БТР',v[2]],['Пусковых установок ПВО',v[3]],['Грузовиков',v[4]],['Вертолётов',v[5]])}
   if(!rows.length)rows.push(['Площадь',(z.W*z.H/1e4).toFixed(1).replace('.',',')+' га'],['Построек',c.b||0]);
   return rows}
-function pick(sx,sy){const x=cam.x+(sx-VW/2)*cam.m,y=cam.y+(sy-VH/2)*cam.m;let best=null,bd=1e18;
-  for(const z of W.zones){const dx=x-z.x,dy=y-z.y;const lx=dx*z.ca+dy*z.sa,ly=-dx*z.sa+dy*z.ca;if(M.abs(lx)<z.W/2+20&&M.abs(ly)<z.H/2+20){best={k:'zone',o:z};bd=0;break}}
+function pick(sx,sy){const x=cam.x+(sx-VW/2)*cam.m,y=cam.y+(sy-VH/2)*cam.m;let best=null,bd=1e18;if(HK.click&&HK.click(x,y,sx,sy))return;
+  for(const z of W.zones){if(!zoneOn(z))continue;const dx=x-z.x,dy=y-z.y;const lx=dx*z.ca+dy*z.sa,ly=-dx*z.sa+dy*z.ca;if(M.abs(lx)<z.W/2+20&&M.abs(ly)<z.H/2+20){best={k:'zone',o:z};bd=0;break}}
   if(!best)for(const c of W.cities){const d=M.hypot(x-c.x,y-c.y);const r=c.R*(c.type===0?1.2:1.05)+cam.m*8;if(d<r&&d/r<bd){bd=d/r;best={k:'city',o:c}}}
   if(!best){closeInsp();return}sel=best;showInsp()}
 function showInsp(){const el=document.getElementById('insp'),c=document.getElementById('inspc');let h='';
@@ -378,7 +403,7 @@ function showInsp(){const el=document.getElementById('insp'),c=document.getEleme
     h+=`<tr><td>Население</td><td>≈ ${fmtN(st.pop)} чел.</td></tr><tr><td>Площадь</td><td>${(st.area/1e6).toFixed(st.area<1e6?2:1).replace('.',',')} км²</td></tr>`;
     if(o.type===0)h+=`<tr><td>Дворов</td><td>${st.cnt.houses}</td></tr><tr><td>Улиц</td><td>${o.vst.length}</td></tr>`;
     else{h+=`<tr><td>Кварталов</td><td>${o.nblocks}</td></tr>`;const top=Object.entries(st.cnt).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([t,n])=>`${BTN[t]} — ${n}`).join('<br>');h+=`<tr><td>Застройка</td><td>${top}</td></tr>`}
-    if(st.zs.length)h+=`<tr><td>Объекты</td><td>${st.zs.map(z=>ZNAME[z.zk]).join(', ')}</td></tr>`;h+='</table>'}
+    if(st.zs.length)h+=`<tr><td>Объекты</td><td>${st.zs.map(z=>ZNAME[z.zk]).join(', ')}</td></tr>`;if(HK.inspect)h+=HK.inspect(o);h+='</table>'}
   else{const z=sel.o;h=`<h2>${ZNAME[z.zk]}</h2><div class="k">при г. ${z.city.name} · ${fmtN(z.W)} × ${fmtN(z.H)} м</div><table>`;for(const [a,b] of zoneInfo(z))h+=`<tr><td>${a}</td><td>${b}</td></tr>`;h+='</table>'}
   h+=`<div class="row"><button id="inspgo">🔎 Приблизить</button></div>`;c.innerHTML=h;el.style.display='block';
   document.getElementById('inspgo').onclick=()=>{const o=sel.o;if(sel.k==='city')flyTo(o.x,o.y,o.type===3?2.2:o.type===2?1.4:o.type===1?0.9:0.45);else flyTo(o.x,o.y,M.max(o.W,o.H)*1.3/M.min(VW,VH))}}
@@ -395,8 +420,8 @@ const PROF={};function pf(n){const t=performance.now();PROF[n]=(PROF[n]||0)*0.97
 const hud={alt:document.getElementById('alt'),scale:document.getElementById('scalebar'),scaleT:document.getElementById('scalet'),pos:document.getElementById('pos'),fps:document.getElementById('fps'),load:document.getElementById('loading'),clock:document.getElementById('clock')};
 const mini=document.getElementById('mini'),mctx=mini.getContext('2d');
 const todEl=document.getElementById('tod');
-function frame(now){const dt=M.min(0.06,(now-last)/1000);last=now;T+=dt;frameNo++;fpsA=fpsA*0.95+(1/M.max(dt,1e-3))*0.05;
-  if(!todDrag)tod=(tod+SPEEDS[tSpeed]*dt)%24;updWeather(dt);updLight();
+function frame(now){if(!alive)return;const dt=M.min(0.06,(now-last)/1000);last=now;T+=dt;frameNo++;fpsA=fpsA*0.95+(1/M.max(dt,1e-3))*0.05;
+  if(!todDrag&&DN)tod=(tod+(todRate!==null?todRate:SPEEDS[tSpeed])*dt)%24;if(HK.frame)hk('frame',dt);if(MODE==='bg')bgCam(dt);updWeather(dt);updLight();
   pfT=performance.now();updateCam(dt);
   vx0=cam.x-VW/2*cam.m;vy0=cam.y-VH/2*cam.m;vx1=cam.x+VW/2*cam.m;vy1=cam.y+VH/2*cam.m;
   const A=LG.amb,NL=LG.lights;
@@ -430,33 +455,36 @@ function frame(now){const dt=M.min(0.06,(now-last)/1000);last=now;T+=dt;frameNo+
   if(flash>0.01){const f=flash*(0.6+0.4*M.sin(T*60));ctx.globalCompositeOperation='lighter';ctx.fillStyle=`rgba(190,200,255,${0.3*f})`;ctx.fillRect(0,0,VW,VH);ctx.globalCompositeOperation='source-over';flash*=M.exp(-dt*7)}
   pf('clouds');ctx.fillStyle=vign;ctx.fillRect(0,0,VW,VH);
   if(opt.labels)drawLabels();pf('labels');
+  if(HK.draw){ctx.setTransform(DPR,0,0,DPR,0,0);hk('draw',ctx,API);ctx.setTransform(DPR,0,0,DPR,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}
   drawSel();
   if(frameNo%30===0)evict();
   if(stale.size){staleT+=dt;if((pending.size===0&&!queue.some(q=>!q.L))||staleT>25)dropStale()}
   // adaptive quality (hysteresis): drop the mid bloom layer when the frame rate is low
   if(LG.lights>0.05){if(!lowQ&&fpsA<22||lowQ&&fpsA>38)qT+=dt;else qT=0;if(qT>3){lowQ=!lowQ;qT=0}}
   hudT+=dt;if(hudT>0.12){hudT=0;updHUD()}
-  requestAnimationFrame(frame)}
+  if(alive)requestAnimationFrame(frame)}
 function fmtD(m){return m>=1000?(m/1000).toFixed(m>=10000?0:1).replace('.',',')+' км':M.round(m)+' м'}
 function updHUD(){const H=camH();hud.alt.textContent=fmtD(H);
   const target=110*cam.m;const p=M.pow(10,M.floor(M.log10(target)));let L=p;for(const f of [1,2,5,10])if(f*p<=target)L=f*p;hud.scale.style.width=(L/cam.m)+'px';hud.scaleT.textContent=fmtD(L);
   hud.pos.textContent=`${(cam.x/1000).toFixed(2)} : ${(cam.y/1000).toFixed(2)} км · LOD ${zNow}`;hud.fps.textContent=`${M.round(fpsA)} FPS · тайлов ${cache.size}+${lcache.size}${mainRender?' (CPU)':' · потоков '+workers.filter(w=>w.ready).length}${carCount?' · машин '+carCount:''}`;
   const hm=M.floor(tod*60)%1440;hud.clock.textContent=String(M.floor(hm/60)).padStart(2,'0')+':'+String(hm%60).padStart(2,'0');if(!todDrag)todEl.value=hm;
-  const z0=cache.get(0)||stale.get(0);if(z0){if(hud.load.style.display!=='none'&&cache.size>4)hud.load.style.display='none';
+  const z0=cache.get(0)||stale.get(0);if(z0){if(!readyFired&&cache.size>4){readyFired=true;if(MODE==='view')hud.load.style.display='none';if(cfg.onReady)cfg.onReady(API)}
     mctx.setTransform(1,0,0,1,0,0);mctx.drawImage(z0.b,0,0,mini.width,mini.height);
     const A=LG.amb;if(A[0]<0.99){mctx.globalCompositeOperation='multiply';mctx.fillStyle=`rgb(${A[0]*255|0},${A[1]*255|0},${A[2]*255|0})`;mctx.fillRect(0,0,mini.width,mini.height);mctx.globalCompositeOperation='source-over'}
     const l0=lcache.get(0);if(l0&&l0.b&&LG.lights>0.02){mctx.globalCompositeOperation='lighter';mctx.globalAlpha=LG.lights;mctx.drawImage(l0.b,0,0,mini.width,mini.height);mctx.globalAlpha=1;mctx.globalCompositeOperation='source-over'}
-    const s=mini.width/WORLD;mctx.strokeStyle='#ffd25a';mctx.lineWidth=1.5;
+    if(HK.mini)hk('mini',mctx,mini.width/WORLD);const s=mini.width/WORLD;mctx.strokeStyle='#ffd25a';mctx.lineWidth=1.5;
     const w=M.max(3,(vx1-vx0)*s),h=M.max(3,(vy1-vy0)*s);mctx.strokeRect(cam.x*s-w/2,cam.y*s-h/2,w,h)}}
-mini.addEventListener('click',e=>{const r=mini.getBoundingClientRect();const x=(e.clientX-r.left)/r.width*WORLD,y=(e.clientY-r.top)/r.height*WORLD;flyTo(x,y,M.min(cam.m,40))});
+mini.addEventListener('click',e=>{if(MODE==='bg')return;const r=mini.getBoundingClientRect();const x=(e.clientX-r.left)/r.width*WORLD,y=(e.clientY-r.top)/r.height*WORLD;flyTo(x,y,M.min(cam.m,40))},SIG);
 
-// ------------------------------------------------------------ UI
+let todDrag=false;const wxEl=document.getElementById('wx');
+// ------------------------------------------------------------ UI (viewer mode)
+if(MODE==='view'){
 const list=document.getElementById('list'),q=document.getElementById('q');
 const sorted=W.cities.slice().sort((a,b)=>b.type-a.type||a.name.localeCompare(b.name,'ru'));
 function fill(){const f=q.value.trim().toLowerCase();list.innerHTML='';let n=0;
   for(const c of sorted){if(f?c.name.toLowerCase().indexOf(f)<0:c.type<1)continue;if(++n>80)break;const d=document.createElement('div');d.className='it t'+c.type;d.innerHTML=`<b>${c.name}</b><span>${TN[c.type]}</span>`;
     d.onclick=()=>{flyTo(c.x,c.y,c.type===3?2.2:c.type===2?1.4:c.type===1?0.9:0.45);sel={k:'city',o:c};showInsp()};list.appendChild(d)}}
-q.addEventListener('input',fill);fill();
+q.addEventListener('input',fill,SIG);fill();
 document.getElementById('st').textContent=`${W.cities.length} населённых пунктов · ${W.zones.length} пром. объектов · ${M.round(W.roads.reduce((a,r)=>a+r.L,0)/1000)} км дорог · ${(WORLD/1000).toFixed(0)}×${(WORLD/1000).toFixed(0)} км`;
 for(const id of ['clouds','labels','traffic']){const el=document.getElementById('o_'+id);el.checked=opt[id];el.onchange=()=>opt[id]=el.checked}
 document.getElementById('newworld').onclick=()=>{location.hash=String((M.random()*1e9)|0);location.reload()};
@@ -464,16 +492,29 @@ document.getElementById('seed').textContent='seed '+SEED;
 document.getElementById('rnd').onclick=()=>{const c=W.cities[(M.random()*W.cities.length)|0];flyTo(c.x+(M.random()-0.5)*c.R,c.y+(M.random()-0.5)*c.R,0.35+M.random()*1.5)};
 document.getElementById('home').onclick=()=>flyTo(WORLD/2,WORLD/2,maxM()*0.95);
 document.getElementById('tg').onclick=()=>document.getElementById('side').classList.toggle('hid');
-let todDrag=false;todEl.value=M.round(tod*60);
-todEl.addEventListener('input',()=>{todDrag=true;tod=+todEl.value/60});todEl.addEventListener('change',()=>{todDrag=false});todEl.addEventListener('pointerup',()=>{todDrag=false});
+todEl.value=M.round(tod*60);
+todEl.addEventListener('input',()=>{todDrag=true;tod=+todEl.value/60},SIG);todEl.addEventListener('change',()=>{todDrag=false},SIG);todEl.addEventListener('pointerup',()=>{todDrag=false},SIG);
 document.getElementById('tpause').onclick=()=>setSpeed(0);document.getElementById('tplay').onclick=()=>setSpeed(1);document.getElementById('tfast').onclick=()=>setSpeed(2);
 for(const b of document.querySelectorAll('#seasons button')){b.onclick=()=>setSeason(+b.dataset.s);b.classList.toggle('on',+b.dataset.s===season)}
-const wxEl=document.getElementById('wx');WX.forEach((w,i)=>{const o=document.createElement('option');o.value=i;o.textContent=w.n;wxEl.appendChild(o)});wxEl.value=wxi;wxEl.onchange=()=>{wxi=+wxEl.value;wxEl.blur()};
-let introOff=false;
-window.__world={PROF,W,cam,flyTo,cache,lcache,opt,LG,wcur,stop:()=>{introOff=true;fly=null;zoomT=null},setTod,setSpeed,setSeason,setWeather:i=>{wxi=i;wxEl.value=i;const w=WX[i];for(const k in wcur)wcur[k]=w[k]!==undefined?w[k]:(k==='dim'||k==='cd'?1:0)},pick,
-  stats:()=>({fps:fpsA,cars:carCount,tiles:cache.size,lights:LCS[1].size+'/'+LCS[2].size+'/'+LCS[3].size,queue:queue.length,pending:pending.size+LPS[1].size+LPS[2].size+LPS[3].size,main:mainRender,lowQ})};
+wxEl.innerHTML='';WX.forEach((w,i)=>{const o=document.createElement('option');o.value=i;o.textContent=w.n;wxEl.appendChild(o)});wxEl.value=wxi;wxEl.onchange=()=>{wxi=+wxEl.value;wxEl.blur()};
+}
+let introOff=false,introT=0;
+// main-menu background: a slow flight over the largest town
+const bgC=W.cities.filter(c=>c.type===3).sort((a,b)=>b.R-a.R)[0]||W.cities[0];let bgA=hsh(SEED,1,1)*TAU;
+function bgCam(dt){bgA+=dt*0.02;const r=bgC.R*0.5;cam.x=bgC.x+M.cos(bgA)*r;cam.y=bgC.y+M.sin(bgA*0.8)*r*0.6;cam.m=2.6+1.6*M.sin(bgA*0.55);fly=null;zoomT=null}
+if(MODE==='bg')bgCam(0);
+function destroy(){if(!alive)return;alive=false;AC.abort();clearTimeout(introT);clearTimeout(clickT);for(const w of workers)w.terminate();if(wurl)URL.revokeObjectURL(wurl);
+  for(const mp of [cache,stale,LCS[1],LCS[2],LCS[3]])for(const v of mp.values())if(v.b&&v.b.close)v.b.close();closeInsp();if(window.__world&&window.__world.W===W)window.__world=null}
+const API={W,cam,flyTo,zoomAt,maxM,opt,LG,wcur,hover,setGrow,invalidate,setTod,setSpeed,setSeason,destroy,closeInsp,pick,
+  get VW(){return VW},get VH(){return VH},get DPR(){return DPR},get T(){return T},get tod(){return tod},get fps(){return fpsA},get ready(){return readyFired},
+  sxw,syw,toWorld:(sx,sy)=>[cam.x+(sx-VW/2)*cam.m,cam.y+(sy-VH/2)*cam.m],setTodRate:r=>{todRate=r},isNight,
+  showCity:c=>{sel={k:'city',o:c};showInsp()},
+  setWeather:i=>{wxi=i;wxEl.value=i;const w=WX[i];for(const k in wcur)wcur[k]=w[k]!==undefined?w[k]:(k==='dim'||k==='cd'?1:0)},
+  stats:()=>({fps:fpsA,cars:carCount,tiles:cache.size,lights:LCS[1].size+'/'+LCS[2].size+'/'+LCS[3].size,queue:queue.length,pending:pending.size+LPS[1].size+LPS[2].size+LPS[3].size,main:mainRender,lowQ}),
+  stop:()=>{introOff=true;fly=null;zoomT=null}};
+window.__world=Object.assign({PROF,cache,lcache},API);
 requestAnimationFrame(frame);
-// cinematic intro: dive from orbit to the largest city
-const big=W.cities.find(c=>c.type===3)||W.cities[0];
-setTimeout(()=>{if(!drag&&!zoomT&&!introOff)flyTo(big.x+big.R*0.12,big.y+big.R*0.08,2.4,7)},1600);
-})();
+// cinematic intro (viewer): dive from orbit to the largest city
+if(MODE==='view'){const big=W.cities.find(c=>c.type===3)||W.cities[0];introT=setTimeout(()=>{if(!drag&&!zoomT&&!introOff)flyTo(big.x+big.R*0.12,big.y+big.R*0.08,2.4,7)},1600)}
+return API;
+}

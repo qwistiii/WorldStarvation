@@ -1,23 +1,162 @@
 <!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Живой мир — этап 4</title>
+<title>World Starvation — стратегия</title>
 <link rel="stylesheet" href="src/style.css">
 </head>
-<body>
+<body class="m-menu">
 <canvas id="c"></canvas>
-<div id="loading"><div class="sp"></div><div>Генерация мира…</div></div>
-<div class="pn" id="top"><h1>Живой мир <i>· этап 4</i></h1><div id="st"></div>
- <div class="row"><button id="home">🌍 Весь мир</button><button id="rnd">🎲 Случайное место</button><button id="newworld">✨ Новый мир</button></div>
+<div id="loading"><div class="ld-box"><div class="sp"></div><div id="ldt">Генерация мира…</div><div id="lds"></div></div></div>
+
+<!-- ======================================================= viewer (stages 1-4, opened with #seed in the address) -->
+<div class="pn vw" id="top"><h1>Живой мир <i>· просмотр</i></h1><div id="st"></div>
+ <div class="row"><button id="tomenu">⟵ Меню</button><button id="home">🌍 Весь мир</button><button id="rnd">🎲 Случайное место</button><button id="newworld">✨ Новый мир</button></div>
  <div class="row"><label><input type="checkbox" id="o_clouds">Облака</label><label><input type="checkbox" id="o_traffic">Транспорт</label><label><input type="checkbox" id="o_labels">Подписи</label><span id="seed"></span></div>
  <div class="row"><span id="clock">17:00</span><input type="range" id="tod" min="0" max="1439" step="1"><div class="seg"><button id="tpause" title="Пауза (P)">⏸</button><button id="tplay" class="on" title="Обычная скорость">▶</button><button id="tfast" title="Быстро">⏩</button></div></div>
  <div class="row"><div class="seg" id="seasons"><button data-s="0" class="on">☀️ Лето</button><button data-s="1">🍂 Осень</button><button data-s="2">❄️ Зима</button></div><select id="wx" title="Погода"></select></div></div>
 <div class="pn" id="insp"><button class="x" id="inspx">✕</button><div id="inspc"></div></div>
-<div class="pn" id="side"><input id="q" placeholder="Поиск города…" autocomplete="off"><div id="list"></div></div>
-<button id="tg">☰</button>
+<div class="pn vw" id="side"><input id="q" placeholder="Поиск города…" autocomplete="off"><div id="list"></div></div>
+<button id="tg" class="vw">☰</button>
 <div class="pn" id="bl"><div id="alt">—</div><div id="scalewrap"><div id="scalebar"></div><span id="scalet"></span></div><div id="pos"></div><div id="fps"></div></div>
 <canvas id="mini" width="256" height="256"></canvas>
-<div class="pn" id="help">Колесо / щипок — масштаб · Перетаскивание — движение · Клик — инспектор · Двойной клик — приблизить · WASD, +/− · N — день/ночь · P — пауза</div>
+<div class="pn vw" id="help">Колесо / щипок — масштаб · Перетаскивание — движение · Клик — инспектор · Двойной клик — приблизить · WASD, +/− · N — день/ночь · P — пауза</div>
+
+<!-- ======================================================= main menu -->
+<div id="menu" class="screen">
+ <div class="mm-side">
+  <div class="logo"><div class="logo-mark"></div><div><div class="logo-t">WORLD<br>STARVATION</div><div class="logo-s">Глобальная стратегия · наше время</div></div></div>
+  <nav class="mm-nav">
+   <button class="mm-b" data-go="new"><span class="ic ic-new"></span><b>Новая игра</b><small>Своя страна, свой мир, свои правила</small></button>
+   <button class="mm-b" data-go="continue" id="mm-cont"><span class="ic ic-cont"></span><b>Продолжить</b><small id="mm-cont-s">—</small></button>
+   <button class="mm-b" data-go="tutorial"><span class="ic ic-tut"></span><b>Обучение</b><small>Пошаговые подсказки на небольшой карте</small></button>
+   <button class="mm-b" data-go="settings"><span class="ic ic-set"></span><b>Настройки</b><small>Графика, интерфейс, сохранения</small></button>
+   <button class="mm-b mm-small" data-go="viewer"><span class="ic ic-view"></span><b>Просмотр мира</b><small>Свободная камера без игры</small></button>
+  </nav>
+  <div class="mm-foot">Этап 5 · <span id="mm-ver"></span></div>
+ </div>
+</div>
+
+<!-- ======================================================= new game setup -->
+<div id="setup" class="screen">
+ <div class="win setup-win">
+  <div class="win-h"><button class="btn ghost" data-back>← Меню</button><h2>Новая игра</h2><div class="tabs" id="stabs"></div></div>
+  <div class="win-b" id="spages">
+   <!-- country -->
+   <section data-tab="country" data-name="Ваша страна">
+    <div class="cols">
+     <div class="col">
+      <div class="flag-big"><canvas id="cflag" width="360" height="240"></canvas><button class="btn sm" id="cflag-rnd">🎲 Случайный флаг</button></div>
+      <div class="field"><label>Название страны</label><div class="inrow"><input id="cname" maxlength="32"><button class="btn sq" id="cname-rnd" title="Случайное">🎲</button></div></div>
+      <div class="field"><label>Столица</label><div class="inrow"><input id="ccap" maxlength="28"><button class="btn sq" id="ccap-rnd" title="Случайное">🎲</button></div></div>
+      <div class="field"><label>Форма правления</label><select id="cgov"></select></div>
+      <div class="field"><label>Цвет территории на карте</label><div class="swatches" id="cland"></div></div>
+     </div>
+     <div class="col">
+      <div class="field"><label>Цвета флага</label><div class="fcols" id="fcols"></div></div>
+      <div class="field"><label>Узор</label><div class="tiles" id="fpat"></div></div>
+      <div class="field"><label>Эмблема</label><div class="tiles" id="femb"></div></div>
+      <div class="field"><label>Цвет и место эмблемы</label><div class="inrow"><div class="swatches" id="fec"></div><div class="seg" id="fep"><button data-v="0">Центр</button><button data-v="1">У древка</button></div></div></div>
+     </div>
+    </div>
+   </section>
+   <!-- map -->
+   <section data-tab="map" data-name="Карта мира">
+    <div class="cols">
+     <div class="col map-prev-col">
+      <div class="map-prev"><canvas id="mprev" width="300" height="300"></canvas><div class="mp-wait" id="mp-wait">Строим карту…</div></div>
+      <div class="inrow"><span class="lbl">Сид</span><input id="mseed" inputmode="numeric"><button class="btn sq dice" id="mdice" title="Случайный мир">🎲</button></div>
+      <div class="mp-info" id="mp-info"></div>
+     </div>
+     <div class="col">
+      <div class="field"><label>Тип карты</label><div class="cards" id="mtype"></div></div>
+      <div class="field"><label>Размер суши</label><div class="seg wide" id="msize"></div></div>
+      <div class="field"><label>Реки</label><div class="seg wide" id="mriv"></div></div>
+      <div class="field"><label>Озёра</label><div class="seg wide" id="mlak"></div></div>
+     </div>
+    </div>
+   </section>
+   <!-- rules -->
+   <section data-tab="rules" data-name="Правила">
+    <div class="cols">
+     <div class="col">
+      <div class="field"><label>Ваш стартовый капитал</label><div class="seg wide" id="rmoney"></div></div>
+      <div class="field"><label>Победа</label><div class="cards c3" id="rvic"></div></div>
+      <div class="field" id="rtarget-f"><label>Очки для победы</label><div class="seg wide" id="rtarget"></div></div>
+      <div class="field"><label>Лимит времени</label><div class="seg wide" id="rtime"></div></div>
+      <div class="field"><label>Режим</label><div class="cards c2" id="rmode"></div></div>
+     </div>
+     <div class="col">
+      <div class="field tog-f"><label>Кастомные боты</label><div class="tog" id="rcustom"></div><p class="note">Вручную задать каждого соперника: флаг, название, сложность, характер, капитал, цвет</p></div>
+      <div id="rauto">
+       <div class="field"><label>Боты (количество)</label><div class="seg wide" id="rbots"></div></div>
+       <div class="field"><label>Сложность</label><div class="seg wide" id="rdiff"></div><p class="note" id="rdiff-n"></p></div>
+      </div>
+      <div id="rlist" class="botlist"></div>
+     </div>
+    </div>
+   </section>
+   <!-- more rules -->
+   <section data-tab="more" data-name="Ещё правила">
+    <div class="cols">
+     <div class="col">
+      <div class="field"><label>Поведение ИИ</label><div class="seg wide" id="xai"></div></div>
+      <div class="field"><label>Рост ботов</label><div class="seg wide" id="xgrow"></div></div>
+      <div class="field"><label>Окопы ботов</label><div class="seg wide" id="xtr"></div><p class="note">Оборонительные линии на границах — вступят в силу вместе с армией (следующие этапы)</p></div>
+      <div class="field tog-f"><label>День и ночь</label><div class="tog" id="xdn"></div></div>
+      <div class="field tog-f"><label>Туман войны</label><div class="tog" id="xfog"></div></div>
+      <div class="field tog-f"><label>Альянсы</label><div class="tog" id="xally"></div></div>
+     </div>
+     <div class="col">
+      <div class="field"><label>Месторождения</label><div class="seg wide" id="xore"></div></div>
+      <div id="xore-c" class="ore-custom"></div>
+      <div class="field"><label>Запасы месторождений</label><div class="seg wide" id="xres"></div></div>
+     </div>
+    </div>
+   </section>
+   <!-- save slots -->
+   <section data-tab="save" data-name="Сохранение">
+    <p class="note big">Игра сохраняется в выбранную ячейку автоматически раз в минуту игрового времени, при выходе в меню и по кнопке «Сохранить» в меню паузы (Esc).</p>
+    <div class="slots" id="slots"></div>
+   </section>
+  </div>
+  <div class="win-f"><div class="sum" id="ssum"></div><button class="btn primary big" id="screate">Создать мир ▶</button></div>
+ </div>
+</div>
+
+<!-- ======================================================= settings -->
+<div id="settings" class="screen">
+ <div class="win set-win">
+  <div class="win-h"><button class="btn ghost" data-back>← Назад</button><h2>Настройки</h2></div>
+  <div class="win-b" id="setb"></div>
+ </div>
+</div>
+
+<!-- ======================================================= game HUD -->
+<div id="hud" class="gm">
+ <div class="hb-l"><canvas id="hflag" width="72" height="48"></canvas><div class="hb-n"><b id="hname">—</b><small id="hgov">—</small></div></div>
+ <div class="hb-res">
+  <div class="res" title="Казна и доход в секунду"><span class="ri ri-money"></span><b id="rmoney-v">0</b><small id="rinc-v">+0/с</small></div>
+  <div class="res" title="Территория"><span class="ri ri-land"></span><b id="rland-v">0</b><small>км²</small></div>
+  <div class="res" title="Население"><span class="ri ri-pop"></span><b id="rpop-v">0</b><small>чел.</small></div>
+  <div class="res" title="Месторождения"><span class="ri ri-ore"></span><b id="rore-v">0</b><small>шт.</small></div>
+  <div class="res" title="Очки"><span class="ri ri-star"></span><b id="rscore-v">0</b><small id="rgoal-v"></small></div>
+ </div>
+ <div class="hb-time"><div class="clk"><b id="gclock">День 1 · 08:00</b><small id="glimit"></small></div><div class="seg" id="gspeed"><button data-s="0" title="Пауза (пробел)">⏸</button><button data-s="1" title="×1">▶</button><button data-s="2" title="×2">⏩</button><button data-s="4" title="×4">⏭</button></div></div>
+ <div class="hb-r"><button class="btn hbtn" id="bdip"><span class="ri ri-dip"></span>Дипломатия</button><button class="btn hbtn" id="bmenu" title="Меню (Esc)">☰</button></div>
+</div>
+<div id="hint" class="gm"><div class="hint-n" id="hintn">1</div><div class="hint-t" id="hintt"></div><button class="x" id="hintx">✕</button></div>
+<div id="gpanel" class="gm pn2"></div>
+<div id="mapmodes" class="gm"><button data-m="pol" class="on" title="Политическая карта">Государства</button><button data-m="res" title="Месторождения">Ресурсы</button><button data-m="off" title="Только местность">Местность</button></div>
+<div id="toasts" class="gm"></div>
+<div id="confirm" class="gm"><div class="cf-t" id="cft">Основать столицу здесь?</div><div class="cf-s" id="cfs"></div><div class="cf-b"><button class="btn primary" id="cfy">Да</button><button class="btn sq" id="cfn">✕</button></div></div>
+<div id="dip" class="gm win side-win"><div class="win-h"><h3>Дипломатия</h3><button class="x" id="dipx">✕</button></div><div class="win-b" id="dipb"></div></div>
+<div id="pause" class="screen dim"><div class="win pause-win"><h2>Пауза</h2><div class="pv" id="pinfo"></div>
+ <button class="btn big" id="presume">Продолжить</button><button class="btn big" id="psave">Сохранить</button><button class="btn big" id="pset">Настройки</button><button class="btn big danger" id="pexit">Выйти в главное меню</button></div></div>
+<div id="over" class="screen dim"><div class="win over-win"><div id="overc"></div><button class="btn primary big" id="overm">В главное меню</button><button class="btn big" id="overk">Продолжить смотреть</button></div></div>
+
+<script src="src/flag.js"></script>
 <script src="src/gen.js"></script>
 <script src="src/main.js"></script>
+<script src="src/game.js"></script>
+<script src="src/ui.js"></script>
 </body></html>

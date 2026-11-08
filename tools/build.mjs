@@ -14,8 +14,7 @@ export function build() {
     html = html.replace(tag, () => inline);
   };
   swap('<link rel="stylesheet" href="src/style.css">\n', `<style>\n${read('src/style.css')}</style>`);
-  swap('<script src="src/gen.js"></script>', `<script>\n${read('src/gen.js')}</script>`);
-  swap('<script src="src/main.js"></script>', `<script>\n${read('src/main.js')}</script>`);
+  for (const f of ['flag', 'gen', 'main', 'game', 'ui']) swap(`<script src="src/${f}.js"></script>`, `<script>\n${read(`src/${f}.js`)}</script>`);
   return html;
 }
 

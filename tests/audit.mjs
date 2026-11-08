@@ -7,9 +7,9 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 let WG = null;
-export function world(seed) {
+export function world(seed, opt) {
   if (!WG) { const ctx = vm.createContext({ console }); vm.runInContext(fs.readFileSync(path.join(root, 'src/gen.js'), 'utf8'), ctx); WG = ctx.WorldGen; }
-  return WG(seed);
+  return WG(seed, opt);
 }
 
 // отрезок (в мировых координатах) пересекает прямоугольник с центром c, углом и полуразмерами hx, hy
