@@ -246,7 +246,7 @@ function connect(A,B,k){const key=A.id<B.id?A.id+'_'+B.id+'_'+k:B.id+'_'+A.id+'_
   for(let a=0;a<=4;a++){let pts;if(a<4){const ph=hr(A.id,B.id,k*13+a)*100;
       if(k===5){const d=(a%2?-1:1)*(0.32+0.1*(a>>1)),th=M.atan2(uy,ux);ax=A.x+M.cos(th+d)*ra;ay=A.y+M.sin(th+d)*ra;bx=B.x-M.cos(th-d)*rb;by=B.y-M.sin(th-d)*rb} // rails approach towns off the highway bearing
       pts=routePts(ax,ay,bx,by,cfg[0]*(a%2?-1:1),cfg[1],ph,cfg[2]);if(!waterRunOK(pts,cfg[3],cfg[4]))continue;
-      if(k!==5){pts=trimAlong(pts,k,ring(A),ring(B));if(!pts)continue}
+      if(k!==5){pts=trimAlong(pts,k,ring(A),ring(B));if(!pts)continue}else if(plCum(pts).pop()<3000)return; // no room for stations at both ends
       const sr=sideRun(pts,k);if(sr>40){if(sr<fbr){fb=pts;fbr=sr}continue}}else{if(!fb||fbr>100&&k!==5)return;pts=fb} // a road that would ride on top of another for >100 m duplicates it: skip
     // a highway does not run into a town's street grid: from the town edge on it continues as an avenue to the node
     if(k===0){const c=plCum(pts),L=c[c.length-1];const inn=(C,e)=>{if(C.type<1||(C.type===3&&!(e?wB:wA)))return 0;let d=0;while(d<L*0.45){const q=plAt(pts,c,e?L-d:d);if(cityF(C,q[0],q[1])>1.08)break;d+=10}return d>30?d:0};
@@ -363,7 +363,7 @@ for(const [c,jx,jy,hx,hy,hr0] of JUNC){if(landE(jx,jy,0)<0)continue;let ringR0=n
       const wet=landE(X,Y,0)<0; // over water the upper road still passes above the lower one (no interchange there)
       let up,lo,su;if(ka===5){up=rb;lo=ra;su=sB}else if(kb===5){up=ra;lo=rb;su=sA}else if(ka===0&&kb===0){if(ra.id>rb.id){up=ra;lo=rb;su=sA}else{up=rb;lo=ra;su=sB}}
       else if(ka===0){up=ra;lo=rb;su=sA}else{up=rb;lo=ra;su=sB}
-      const hw=RW[lo.k]/2+24;(up.ov=up.ov||[]).push([su-hw,su+hw]);
+      const hw=RW[lo.k]/2+24;(up.ov=up.ov||[]).push([su-hw,su+hw,lo.id]);
       if(!wet&&ka===0&&kb===0&&!ra.ring&&!rb.ring&&M.min(sA,ra.L-sA,sB,rb.L-sB)>420){const l1=M.hypot(r1x,r1y),l2=M.hypot(r2x,r2y);const cosA=M.abs((r1x*r2x+r1y*r2y)/(l1*l2));let dry=cosA<0.3;for(const c of live)if(M.hypot(c.x-X,c.y-Y)<c.R*1.35+300){dry=false;break}for(let q=0;q<16&&dry;q++){const a=q/16*TAU,rr=q&1?140:260;if(landE(X+M.cos(a)*rr,Y+M.sin(a)*rr,0.002)<0)dry=false}if(dry){addClover(X,Y,r1x/l1,r1y/l1,r2x/l2,r2y/l2,false,ra,rb)}}}}}}
 // gas stations along highways / trunk roads ---------------------------------
 var GASOFF=40,GASHW=false;
@@ -373,12 +373,28 @@ var GASOFF=40,GASHW=false;
     for(const c of live)if(M.hypot(c.x-x,c.y-y)<c.R*1.15+120){bad=true;break}if(!bad)for(const z of zones)if(M.hypot(z.x-x,z.y-y)<z.rad+60){bad=true;break}if(bad)continue;
     if(roadHits(x,y,M.atan2(dy,dx),84,54,3,r)||wetArea(x,y,dx,dy,-42,-27,42,27,20,0.002))continue;GASOFF=off;GASHW=r.k===0;mkZoneRaw(null,'gas',x,y,M.atan2(dy,dx),84,54)}}}
 // railway stations at line ends --------------------------------------------
-for(const r of roads.slice()){if(r.k!==5)continue;for(const end of [0,1]){
-  for(let d=300;d<3200;d+=120){const s=end?r.L-d:d;if(s<300||s>r.L-300)break;const p=posAt(r,s);const ux=p[2],uy=p[3],cx=p[0],cy=p[1];
-    if(landE(cx,cy,0.003)<0||landE(cx+ux*240,cy+uy*240,0.003)<0||landE(cx-ux*240,cy-uy*240,0.003)<0)continue;let bad=false;
-    for(const z of zones)if(M.hypot(z.x-cx,z.y-cy)<z.rad+260){bad=true;break}if(bad)continue;
-    for(const c of live)if(M.hypot(c.x-cx,c.y-cy)<c.R*1.6+300&&(cityF(c,cx,cy)<1.08||cityF(c,cx+ux*250,cy+uy*250)<1.08||cityF(c,cx-ux*250,cy-uy*250)<1.08)){bad=true;break}
-    if(bad||roadHits(cx,cy,M.atan2(uy,ux),500,96,4,r)||wetArea(cx,cy,ux,uy,-250,-48,250,48,30,0.002))continue;mkZoneRaw(null,'stn',cx,cy,M.atan2(uy,ux),500,96);break}}}
+// cut a road to [a,b] in place (grid cells keep their references, which is harmless)
+function trimRoad(r,a,b){const P=[];const pa=posAt(r,a);P.push(pa[0],pa[1]);for(let i=0;i<r.n;i++)if(r.cum[i]>a+0.5&&r.cum[i]<b-0.5)P.push(r.pts[i*2],r.pts[i*2+1]);const pb=posAt(r,b);P.push(pb[0],pb[1]);
+  const n=P.length/2,cum=new Float64Array(n);let L=0,x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(let i=0;i<n;i++){if(i)L+=M.hypot(P[i*2]-P[i*2-2],P[i*2+1]-P[i*2-1]);cum[i]=L;x0=M.min(x0,P[i*2]);x1=M.max(x1,P[i*2]);y0=M.min(y0,P[i*2+1]);y1=M.max(y1,P[i*2+1])}
+  r.pts=new Float64Array(P);r.cum=cum;r.L=L;r.n=n;r.bb=[x0,y0,x1,y1];if(r.ov){r.ov=r.ov.map(o=>[o[0]-a,o[1]-a,o[2]]).filter(o=>o[1]>0&&o[0]<L);if(!r.ov.length)r.ov=null}bridgesOf(r)}
+// the line ends at the far end of its station (no track running on into the fields)
+// a station is reached by a road from its car park side to the nearest ordinary road (not a highway)
+function stnAccess(z){const lx=0,ly=z.H/2+2,sx=z.x+lx*z.ca-ly*z.sa,sy=z.y+lx*z.sa+ly*z.ca;let best=null,bd=1600;
+  for(const o of queryRoads(sx-1600,sy-1600,sx+1600,sy+1600)){if(o.k===0||o.k===5||o.k===6||o.k===8)continue;const q=projOn(o,sx,sy),d=M.hypot(q[0]-sx,q[1]-sy);if(d>=bd)continue;
+    const ax=q[0]-z.x,ay=q[1]-z.y;if(segBox(lx,ly+0.5,ax*z.ca+ay*z.sa,-ax*z.sa+ay*z.ca,z.W/2+4,z.H/2+1))continue; /* never across the station */bd=d;best=q}
+  if(!best||bd<15)return;const pts=[sx,sy,best[0],best[1]];if(!waterRunOK(pts,150,0.2))return;const r=mkRoad(4,pts);if(r){z.acc=r;bridgesOf(r)}}
+function stnSpot(r,s,strict){const p=posAt(r,s);const ux=p[2],uy=p[3],cx=p[0],cy=p[1];
+  if(landE(cx,cy,0.003)<0||landE(cx+ux*240,cy+uy*240,0.003)<0||landE(cx-ux*240,cy-uy*240,0.003)<0)return null;
+  for(const z of zones)if(M.hypot(z.x-cx,z.y-cy)<z.rad+(strict?260:70))return null;
+  const lim=strict?1.08:1.0;for(const c of live)if(M.hypot(c.x-cx,c.y-cy)<c.R*1.6+300&&(cityF(c,cx,cy)<lim||cityF(c,cx+ux*250,cy+uy*250)<lim||cityF(c,cx-ux*250,cy-uy*250)<lim))return null;
+  if(roadHits(cx,cy,M.atan2(uy,ux),500,96,4,r)||wetArea(cx,cy,ux,uy,-250,-48,250,48,30,0.002))return null;return [cx,cy,M.atan2(uy,ux)]}
+for(const r of roads.slice()){if(r.k!==5)continue;let t0=0,t1=r.L,got=[false,false];
+  for(const strict of [true,false])for(const end of [0,1]){if(got[end])continue;
+    for(let d=300;d<(strict?3200:4600);d+=120){const s=end?r.L-d:d;if(s<300||s>r.L-300)break;if(end?s<t0+560:s>t1-560)break;const q=stnSpot(r,s,strict);if(!q)continue;
+      stnAccess(mkZoneRaw(null,'stn',q[0],q[1],q[2],500,96));got[end]=true;if(end)t1=s+236;else t0=s-236;break}}
+  if(t0>0||t1<r.L)trimRoad(r,t0,t1)}
+// an overpass whose lower road was cut back no longer crosses anything: drop it
+for(const r of roads){if(!r.ov)continue;r.ov=r.ov.filter(o=>{if(o[2]===undefined)return true;const lo=roads[o[2]],p=posAt(r,(o[0]+o[1])/2);const [d]=nearestS(lo,p[0],p[1]);return d<RW[lo.k]/2+30});if(!r.ov.length)r.ov=null}
 // power lines --------------------------------------------------------------
 for(const z of zones.slice()){if(z.zk!=='pow')continue;const targets=[z.city].concat(nearest(z.city,live.filter(c=>c.type>=1),2,26000));
   for(const c of targets){const dx=c.x-z.x,dy=c.y-z.y,L=M.hypot(dx,dy);const ex=c.x-dx/L*c.R*0.92,ey=c.y-dy/L*c.R*0.92;const sx=z.x+dx/L*z.rad*0.6,sy=z.y+dy/L*z.rad*0.6;const LL=M.hypot(ex-sx,ey-sy);if(LL<400)continue;

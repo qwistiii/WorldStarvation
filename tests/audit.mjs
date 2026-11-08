@@ -316,3 +316,18 @@ export function levelCrossings(W) {
   }
   return out;
 }
+
+// каждый конец железной дороги — на вокзале (или на другой линии), без путей, уходящих в поле
+export function railEnds(W) {
+  const out = [];
+  for (const r of W.roads) {
+    if (r.k !== 5) continue;
+    for (const e of [0, 1]) {
+      const x = e ? r.pts[r.n * 2 - 2] : r.pts[0], y = e ? r.pts[r.n * 2 - 1] : r.pts[1];
+      const st = W.zones.some((z) => z.zk === 'stn' && Math.hypot(z.x - x, z.y - y) < 270);
+      const other = W.queryRoads(x - 10, y - 10, x + 10, y + 10).some((o) => o !== r && o.k === 5);
+      if (!st && !other) out.push({ r, x, y });
+    }
+  }
+  return out;
+}
