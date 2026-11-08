@@ -15,7 +15,10 @@ export function build() {
   };
   // assets carry ?v=<version> (cache busting on GitHub Pages: max-age=600 would otherwise mix old and new files)
   const v = JSON.parse(read('package.json')).version.split('.').slice(0, 2).join('.');
-  swap(`<link rel="stylesheet" href="src/style.css?v=${v}">\n`, `<style>\n${read('src/style.css')}</style>`);
+  // the font (Rubik, OFL — src/fonts/OFL.txt) goes into the file as a data: URL
+  const font = fs.readFileSync(path.join(root, 'src/fonts/rubik.woff2')).toString('base64');
+  const css = read('src/style.css').replace('url(fonts/rubik.woff2)', () => `url(data:font/woff2;base64,${font})`);
+  swap(`<link rel="stylesheet" href="src/style.css?v=${v}">\n`, `<style>\n${css}</style>`);
   for (const f of ['flag', 'gen', 'main', 'game', 'ui']) swap(`<script src="src/${f}.js?v=${v}"></script>`, `<script>\n${read(`src/${f}.js`)}</script>`);
   return html;
 }

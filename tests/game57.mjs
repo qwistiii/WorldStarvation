@@ -29,16 +29,16 @@ try {
   await page.waitForFunction(() => Game.api && Game.api.ready && Game.G.phase === 'play' && Game.G.states[0].places.length, null, { timeout: 60000 });
   await page.evaluate(() => { Game.setSpeed(0); Game._test.run(45); });
 
-  // ---- панели: время сверху, внизу вкладки во всю ширину и лоток карточек над ними
-  const ui = await page.evaluate(() => { const r = (id) => document.getElementById(id).getBoundingClientRect(), tabs = document.getElementById('bb-tabs').getBoundingClientRect(), tray = document.getElementById('bb-tray').getBoundingClientRect();
-    return { pauseTop: r('bpause').top < 50, tabsFull: tabs.left <= 1 && tabs.right >= innerWidth - 1 && tabs.bottom >= innerHeight - 1, trayAbove: tray.bottom <= tabs.top + 1,
+  // ---- панели (с этапа 5.8 — как в DroneFlames): вкладки во всю ширину над панелью, пауза и скорость на панели слева
+  const ui = await page.evaluate(() => { const r = (id) => document.getElementById(id).getBoundingClientRect(), tabs = r('bb-tabs'), tray = r('bb-tray'), pause = r('bpause');
+    return { pauseLeft: pause.left < 120 && pause.top >= tray.top, tabsFull: tabs.left <= 4 && tabs.right >= innerWidth - 4, trayBelow: tray.top >= tabs.bottom - 1 && tray.bottom >= innerHeight - 1,
       tabs: document.querySelectorAll('#bb-tabs button').length, cards: document.querySelectorAll('#bb-cat .bcat').length, metal: !!document.getElementById('rmetal-v') }; });
-  check(ui.pauseTop && ui.tabsFull && ui.trayAbove && ui.tabs === 7 && ui.cards === 15 && ui.metal, 'панели: пауза и скорость сверху, вкладки внизу во всю ширину, лоток карточек над ними, металл в ресурсах', JSON.stringify(ui));
+  check(ui.pauseLeft && ui.tabsFull && ui.trayBelow && ui.tabs === 7 && ui.cards === 15 && ui.metal, 'панели: вкладки во всю ширину, под ними панель с паузой и скоростью слева, металл в ресурсах', JSON.stringify(ui));
   await page.click('#bb-tabs [data-t="cities"]');
   const off = await page.evaluate(() => document.body.classList.contains('tray-off'));
   await page.click('#bb-tabs [data-t="strike"]');
-  const strike = await page.evaluate(() => ({ on: !document.body.classList.contains('tray-off'), n: document.querySelectorAll('#bb-cat .bcat').length, title: document.getElementById('bb-title').textContent }));
-  check(off && strike.on && strike.n === 8 && /Удар/.test(strike.title), 'повторный клик по вкладке сворачивает лоток; вкладка «Удар»: дронопорт, 3 модуля, цех и 3 дрона', JSON.stringify(strike));
+  const strike = await page.evaluate(() => ({ on: !document.body.classList.contains('tray-off'), n: document.querySelectorAll('#bb-cat .bcat').length, title: document.querySelector('#bb-tabs .on').textContent }));
+  check(off && strike.on && strike.n === 8 && /Удар/.test(strike.title), 'повторный клик по вкладке сворачивает панель; вкладка «Удар»: дронопорт, 3 модуля, цех и 3 дрона', JSON.stringify(strike));
 
   // ---- туман войны: карта не затемняется, постройка бота вдали скрыта
   const fog = await page.evaluate(() => { const T = Game._test, G = Game.G, W = Game.api.W, b = G.states[1], c = b.places[0];
