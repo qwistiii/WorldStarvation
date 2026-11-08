@@ -104,6 +104,9 @@ body.m-menu #menu,body.m-setup #setup,body.m-settings #settings{display:flex}
 .set-h{font-size:11px;text-transform:uppercase;letter-spacing:1.4px;color:var(--acc);margin:18px 0 4px}.set-h:first-child{margin-top:0}
 
 /* ---------------------------------------------------------------- game HUD */
+/* no backdrop blur over the live map: it is re-blurred every frame and costs a lot of GPU time */
+body.m-game .pn,body.m-game .pn2,body.m-game .side-win,body.m-game #hud,body.m-game .toast{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(12,18,27,0.92)}
+body.m-game #hud{background:linear-gradient(180deg,rgba(10,15,23,0.97),rgba(10,15,23,0.9))}
 .gm{display:none}
 body.m-game #hud{display:flex}body.m-game #gpanel,body.m-game #mapmodes,body.m-game #toasts{display:flex}
 #hud{position:fixed;left:0;right:0;top:0;height:58px;align-items:center;gap:14px;padding:0 14px;z-index:5;

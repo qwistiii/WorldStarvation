@@ -28,7 +28,7 @@ const ORES=[{k:'oil',n:'Нефть',v:6,w:18,c:'#2a2a2e'},{k:'gas',n:'Газ',v:
   {k:'copper',n:'Медь',v:4.5,w:12,c:'#d08a4a'},{k:'gold',n:'Золото',v:9,w:6,c:'#f2c230'},{k:'uran',n:'Уран',v:10,w:5,c:'#86d14b'},{k:'lith',n:'Литий',v:7,w:8,c:'#c8d4e6'}];
 function defaultConfig(){const R=M.random;const fl=FL.random(R);return {v:1,seed:(R()*1e9)|0,
   country:{name:NAMES.country(R),capital:NAMES.capital(R),gov:NAMES.gov(R),color:LANDC[(R()*6)|0],flag:fl},
-  map:{type:'normal',size:1,rivers:2,lakes:2},
+  map:{type:'normal',size:1,rivers:2,lakes:2,mountains:1},
   rules:{money:5000,customBots:false,bots:[],botCount:3,diff:1,victory:'points',target:10000,timeLimit:60,mode:'normal',
     ai:1,botGrowth:1,trenches:2,ores:'balance',oreCustom:{oil:8,gas:6,coal:8,iron:7,copper:5,gold:3,uran:2,lith:4},reserves:0,dayNight:true,fog:true,alliances:true},
   slot:1}}
@@ -52,14 +52,16 @@ let api=null,W=null,cfg=null,G=null,ui=null;
 let land=null,elev=null,coast=null,jit=null,own=null,vis=null,expl=null,heaps=[],seen=[];
 let polC=null,fogC=null,borders=null,dirtyPol=true,dirtyFog=true,polT=0,fogT=0,simAcc=0;
 let placing=false,pend=null,mapMode='pol',hintStep=0,hintsOff=false,tutorial=false;
-const ICONS={};
+const ICONS={},DBG={};const PRF={};const prf=(n,f)=>{const t=performance.now();f();const d=performance.now()-t;const q=PRF[n]||(PRF[n]={n:0,sum:0,max:0});q.n++;q.sum+=d;q.max=M.max(q.max,d)};
 
 // ---------- helpers
 const cellOf=(x,y)=>{const i=M.floor(x/CSZ),j=M.floor(y/CSZ);return i<0||j<0||i>=N||j>=N?-1:j*N+i};
 const cx=c=>(c%N+0.5)*CSZ,cy=c=>(M.floor(c/N)+0.5)*CSZ;
 const hsh=(a,b)=>{let h=M.imul(a|0,0x27d4eb2d)^M.imul(b|0,0x165667b1)^(cfg?cfg.seed:0);h=M.imul(h^(h>>>15),0x85ebca6b);h^=h>>>13;return (h>>>0)/4294967296};
 function rngS(s){let a=s>>>0;return ()=>{a=(a+0x6D2B79F5)|0;let t=M.imul(a^(a>>>15),1|a);t=(t+M.imul(t^(t>>>7),61|t))^t;return ((t^(t>>>14))>>>0)/4294967296}}
-function mapOpt(caps){const m=cfg.map;return {map:m.type,size:m.size,rivers:m.rivers,lakes:m.lakes,caps:caps||undefined}}
+// game worlds start empty (no towns, roads or zones; only the capitals once founded) and with gentler relief
+const MNTV=[0.25,0.42,0.7];
+function mapOpt(caps){const m=cfg.map;return {map:m.type,size:m.size,rivers:m.rivers,lakes:m.lakes,mountains:MNTV[m.mountains==null?1:m.mountains],empty:true,caps:caps||undefined}}
 const player=()=>G.states[0];
 const creative=()=>cfg.rules.mode==='creative';
 
@@ -119,7 +121,7 @@ function genDeposits(){const r=cfg.rules,R=rngS(cfg.seed^0x0e5);const dep=[];let
   const mul=creative()?Infinity:[1,3,Infinity][r.reserves];
   for(const o of want){for(let t=0;t<60;t++){const x=6000+R()*(W.WORLD-12000),y=6000+R()*(W.WORLD-12000);const c=cellOf(x,y);if(!land[c]||W.landE(x,y,0)<0)continue;
       let bad=false;for(const k of W.cities)if(M.hypot(k.x-x,k.y-y)<k.R*1.3+300){bad=true;break}if(bad)continue;if(dep.some(d=>M.hypot(d.x-x,d.y-y)<2500))continue;
-      const amt=o.v*(700+R()*700)*mul;dep.push({k:ORES.indexOf(o),x,y,c,amt,max:amt,known:!r.fog});break}}
+      const amt=o.v*(700+R()*700)*mul;dep.push({k:ORES.indexOf(o),x,y,c,amt,max:amt,known:!r.fog||R()<0.6});break}}
   return dep}
 
 // ---------- economy and score
@@ -150,7 +152,7 @@ function botThink(s){const ai=cfg.rules.ai,R=()=>hsh(s.id*7919+(G.t|0),G.dec++);
   const greed={trader:0.5,militarist:1.2,cautious:0.4,adventurer:1}[s.trait]*(0.6+ai*0.4);
   if(s.boostT<=0&&s.money>ACT.boost.cost(s)*(2.6-greed)&&R()<[0.3,0.55,0.85][s.diff])doAct(s,'boost');
   else if(s.grow<1&&s.money>ACT.invest.cost(s)*(s.trait==='trader'?1.2:1.8)&&R()<0.6)doAct(s,'invest');
-  if(cfg.rules.alliances&&R()<0.04*(1.5-ai*0.5)*(s.trait==='cautious'?1.8:1)){const others=G.states.filter(o=>o!==s&&o.cap&&!s.allies.includes(o.id));if(others.length){const o=others[(R()*others.length)|0];
+  if(cfg.rules.alliances&&G.t-(s.offT||-1e9)>150&&R()<0.012*(1.5-ai*0.5)*(s.trait==='cautious'?1.8:1)){s.offT=G.t;const others=G.states.filter(o=>o!==s&&o.cap&&!s.allies.includes(o.id));if(others.length){const o=others[(R()*others.length)|0];
       if(o.isP)offerAlly(s);else if(R()<0.5)ally(s,o)}}}
 function ally(a,b){if(a.allies.includes(b.id))return;a.allies.push(b.id);b.allies.push(a.id);dirtyFog=true;toast(`<b>${esc(a.name)}</b> и <b>${esc(b.name)}</b> заключили альянс`,a.flag)}
 function offerAlly(s){if(G.offers.includes(s.id))return;G.offers.push(s.id);
@@ -200,19 +202,27 @@ const fogOn=()=>cfg.rules.fog&&G.phase==='play';
 const seenAt=(x,y)=>{if(!fogOn())return true;const c=cellOf(x,y);return c>=0&&expl[c]};
 function drawOverlay(ctx,A){if(!G||(G.phase==='play'&&!own))return;const m=A.cam.m,VW=A.VW,VH=A.VH;const X0=A.sxw(0),Y0=A.syw(0),S=W.WORLD/m;
   if(G.phase==='play'){
-    if(mapMode!=='off'){if(dirtyPol&&performance.now()-polT>500){polT=performance.now();rebuildPol()}
-      if(polC){const fa=mapMode==='res'?0.18:M.min(0.42,0.1+0.32*smoothst(2,40,m));ctx.save();ctx.globalAlpha=fa;ctx.imageSmoothingEnabled=true;ctx.drawImage(polC,X0,Y0,S,S);ctx.restore()}
-      if(borders){ctx.save();ctx.setTransform(A.DPR/m,0,0,A.DPR/m,A.DPR*(VW/2-A.cam.x/m),A.DPR*(VH/2-A.cam.y/m));ctx.lineCap='round';ctx.lineJoin='round';
-        for(const [s,P] of borders){ctx.strokeStyle='rgba(6,10,16,0.55)';ctx.lineWidth=M.max(3.2,4.5)*m;ctx.stroke(P);ctx.strokeStyle=`rgb(${s.rgb.map(v=>M.min(255,v*1.15+20)|0).join(',')})`;ctx.lineWidth=2*m;ctx.stroke(P)}ctx.restore()}}
-    if(fogOn()){if(dirtyFog&&performance.now()-fogT>500){fogT=performance.now();rebuildFog()}if(fogC){ctx.save();ctx.imageSmoothingEnabled=true;ctx.drawImage(fogC,X0,Y0,S,S);ctx.fillStyle='rgba(7,12,20,0.83)';ctx.beginPath();ctx.rect(-10,-10,VW+20,VH+20);ctx.rect(X0+0.5,Y0+0.5,S-1,S-1);ctx.fill('evenodd');ctx.restore()}}
-    drawDeposits(ctx,A);drawCaps(ctx,A);if(mapMode!=='off')drawNames(ctx,A)}
-  if(G.phase==='found')drawPlacement(ctx,A)}
+    if(mapMode!=='off'){if(dirtyPol&&performance.now()-polT>500){polT=performance.now();prf('pol',rebuildPol)}
+      if(polC){const fa=(mapMode==='res'?0.18:0.42)*smoothst(3.5,26,m); // the fill dissolves as the camera comes down to a town
+        if(fa>0.01&&!DBG.fill){ctx.save();ctx.globalAlpha=fa;ctx.imageSmoothingEnabled=true;ctx.drawImage(polC,X0,Y0,S,S);ctx.restore()}}
+      if(borders&&!DBG.border){ctx.save();ctx.setTransform(A.DPR/m,0,0,A.DPR/m,A.DPR*(VW/2-A.cam.x/m),A.DPR*(VH/2-A.cam.y/m));ctx.lineCap='round';ctx.lineJoin='round';
+        const near=m<45,bw=m<5?1.3:2;ctx.globalAlpha=m<5?0.75:1;for(const [s,P] of borders){if(near){ctx.strokeStyle='rgba(6,10,16,0.5)';ctx.lineWidth=(bw+2.2)*m;ctx.stroke(P)}ctx.strokeStyle=s._bc||(s._bc=`rgb(${s.rgb.map(v=>M.min(255,v*1.15+20)|0).join(',')})`);ctx.lineWidth=bw*m;ctx.stroke(P)}ctx.restore()}}
+    if(fogOn()&&!DBG.fog){if(dirtyFog&&performance.now()-fogT>500){fogT=performance.now();prf('fog',rebuildFog)}if(fogC){ctx.save();ctx.imageSmoothingEnabled=true;ctx.drawImage(fogC,X0,Y0,S,S);ctx.fillStyle='rgba(7,12,20,0.83)';ctx.beginPath();ctx.rect(-10,-10,VW+20,VH+20);ctx.rect(X0+0.5,Y0+0.5,S-1,S-1);ctx.fill('evenodd');ctx.restore()}}
+    drawDeposits(ctx,A);drawCaps(ctx,A);if(mapMode!=='off'&&!DBG.names)drawNames(ctx,A)}
+  if(G.phase==='found'){drawDeposits(ctx,A);drawPlacement(ctx,A)}}
 function smoothst(a,b,x){let t=(x-a)/(b-a);t=t<0?0:t>1?1:t;return t*t*(3-2*t)}
-function drawNames(ctx,A){const m=A.cam.m;ctx.textAlign='center';ctx.textBaseline='middle';
-  for(const [s] of borders||[]){if(!s.cells||!seenAt(s.lx,s.ly))continue;const sz=M.sqrt(s.cells)*CSZ*0.2/m;if(sz<11||sz>140)continue;const a=M.min(1,(sz-11)/8)*M.min(1,(140-sz)/40)*0.9;
-    const X=A.sxw(s.lx);let Y=A.syw(s.ly);if(s.cap&&M.abs(A.sxw(s.cap.x)-X)<sz*4&&M.abs(A.syw(s.cap.y)-Y)<sz*1.4+14)Y=A.syw(s.cap.y)+sz*1.1+16;const t=s.name.toUpperCase();ctx.font=`700 ${sz|0}px system-ui,Segoe UI,sans-serif`;const sp=sz*0.18;let w=0;const ws=[];for(const ch of t){const cw=ctx.measureText(ch).width;ws.push(cw);w+=cw+sp}w-=sp;
-    ctx.globalAlpha=a;ctx.lineJoin='round';ctx.lineWidth=M.max(2,sz*0.12);ctx.strokeStyle='rgba(6,10,16,0.6)';ctx.fillStyle=`rgba(${s.rgb.map(v=>M.min(255,v*0.5+128)|0).join(',')},1)`;
-    let x=X-w/2;for(let i=0;i<t.length;i++){ctx.strokeText(t[i],x+ws[i]/2,Y);ctx.fillText(t[i],x+ws[i]/2,Y);x+=ws[i]+sp}}ctx.globalAlpha=1}
+// state names: each label is rendered once into its own canvas (per size step) and then just blitted
+const NAMEC=new Map();
+function nameCanvas(s,sz){const key=s.id+'|'+s.name+'|'+sz;let c=NAMEC.get(key);if(c)return c;if(NAMEC.size>80)NAMEC.clear();
+  const t=s.name.toUpperCase(),d=M_DPR(),x0=document.createElement('canvas').getContext('2d');x0.font=`700 ${sz}px system-ui,Segoe UI,sans-serif`;const sp=sz*0.18;const ws=[...t].map(ch=>x0.measureText(ch).width);
+  const w=ws.reduce((a,b)=>a+b,0)+sp*(t.length-1),pad=M.ceil(sz*0.2)+2;c=document.createElement('canvas');c.width=M.ceil((w+pad*2)*d);c.height=M.ceil((sz*1.4+pad*2)*d);c.lw=w+pad*2;c.lh=sz*1.4+pad*2;
+  const x=c.getContext('2d');x.scale(d,d);x.font=x0.font;x.textBaseline='middle';x.textAlign='center';x.lineJoin='round';x.lineWidth=M.max(2,sz*0.12);x.strokeStyle='rgba(6,10,16,0.6)';
+  x.fillStyle=`rgb(${s.rgb.map(v=>M.min(255,v*0.5+128)|0).join(',')})`;let px=pad;for(let i=0;i<t.length;i++){x.strokeText(t[i],px+ws[i]/2,c.lh/2);x.fillText(t[i],px+ws[i]/2,c.lh/2);px+=ws[i]+sp}
+  NAMEC.set(key,c);return c}
+function drawNames(ctx,A){const m=A.cam.m;
+  for(const [s] of borders||[]){if(!s.cells||!seenAt(s.lx,s.ly))continue;const raw=M.sqrt(s.cells)*CSZ*0.2/m;if(raw<11||raw>140)continue;const sz=M.round(raw/3)*3,a=M.min(1,(raw-11)/8)*M.min(1,(140-raw)/40)*0.9;
+    const X=A.sxw(s.lx);let Y=A.syw(s.ly);if(s.cap&&M.abs(A.sxw(s.cap.x)-X)<sz*4&&M.abs(A.syw(s.cap.y)-Y)<sz*1.4+14)Y=A.syw(s.cap.y)+sz*1.1+16;
+    const c=nameCanvas(s,sz);ctx.globalAlpha=a;ctx.drawImage(c,X-c.lw/2,Y-c.lh/2,c.lw,c.lh)}ctx.globalAlpha=1}
 function drawCaps(ctx,A){const m=A.cam.m;if(m<3)return;for(const s of G.states){if(!s.cap||!seenAt(s.cap.x,s.cap.y))continue;const X=A.sxw(s.cap.x),Y=A.syw(s.cap.y)-(m>9?26:38);
     if(X<-40||Y<-40||X>A.VW+40||Y>A.VH+40)continue;const f=s._fc||(s._fc=flagCanvas(s.flag,30,20));
     ctx.fillStyle='rgba(6,10,16,0.55)';ctx.fillRect(X-17,Y-12,34,24);ctx.drawImage(f,X-15,Y-10,30,20);ctx.strokeStyle=s.isP?'#ffd25a':'rgba(255,255,255,0.55)';ctx.lineWidth=s.isP?2:1;ctx.strokeRect(X-15.5,Y-10.5,31,21);
@@ -228,11 +238,11 @@ function oreIcon(k){if(ICONS['o'+k])return ICONS['o'+k];const S=28,d=M_DPR(),c=d
     case 'lith':x.strokeRect(C-4,C-6,8,13);x.fillRect(C-2,C-8,4,2);x.fillRect(C-2.5,C,5,5);break;
     default:x.beginPath();x.moveTo(C-8,C+4);x.lineTo(C-5,C-3);x.lineTo(C+8,C-3);x.lineTo(C+5,C+4);x.closePath();x.fill();x.fillStyle='rgba(255,255,255,0.35)';x.fillRect(C-4,C-2,10,1.6)}
   return ICONS['o'+k]=c}
-function drawDeposits(ctx,A){const m=A.cam.m;if(mapMode==='off'||(mapMode==='pol'&&m>40))return;const z=mapMode==='res'?1:smoothst(40,18,m);if(z<=0.02)return;ctx.globalAlpha=z;
+function drawDeposits(ctx,A){const m=A.cam.m,fd=G.phase==='found';if(!fd&&(mapMode==='off'||(mapMode==='pol'&&m>40)))return;const z=mapMode==='res'||fd?1:smoothst(40,18,m);if(z<=0.02)return;ctx.globalAlpha=z;
   for(const d of G.dep){if(!d.known)continue;const X=A.sxw(d.x),Y=A.syw(d.y);if(X<-20||Y<-20||X>A.VW+20||Y>A.VH+20)continue;
     const sz=mapMode==='res'?24:20;const ic=oreIcon(d.k);ctx.globalAlpha=z*(d.amt<=0?0.35:1);ctx.drawImage(ic,X-sz/2,Y-sz/2,sz,sz);
     if(d.max!==Infinity&&mapMode==='res'){ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(X-10,Y+sz/2+1,20,3);ctx.fillStyle=ORES[d.k].c;ctx.fillRect(X-10,Y+sz/2+1,20*d.amt/d.max,3)}
-    const o=own[d.c];if(o&&mapMode==='res'){ctx.fillStyle=G.states[o-1].color;ctx.beginPath();ctx.arc(X+sz/2-3,Y-sz/2+3,3.5,0,7);ctx.fill()}}ctx.globalAlpha=1}
+    const o=own?own[d.c]:0;if(o&&mapMode==='res'){ctx.fillStyle=G.states[o-1].color;ctx.beginPath();ctx.arc(X+sz/2-3,Y-sz/2+3,3.5,0,7);ctx.fill()}}ctx.globalAlpha=1}
 function drawPlacement(ctx,A){if(pend){const X=A.sxw(pend.x),Y=A.syw(pend.y),r=M.max(12,2900/A.cam.m),q=(A.T*1.2)%1;ctx.save();ctx.strokeStyle='rgba(255,210,90,0.95)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(X,Y,r,0,M.PI*2);ctx.stroke();
     ctx.globalAlpha=1-q;ctx.beginPath();ctx.arc(X,Y,r*(1+q*0.8),0,M.PI*2);ctx.stroke();ctx.globalAlpha=1;ctx.fillStyle='#ffd25a';star(ctx,X,Y,7);ctx.restore();return}
   if(!placing||!A.hover.on)return;const [x,y]=A.toWorld(A.hover.x,A.hover.y);const bad=validSite(x,y);const r=2900/A.cam.m;const X=A.hover.x,Y=A.hover.y;
@@ -301,8 +311,8 @@ function updModes(){for(const b of $('mapmodes').children)b.classList.toggle('on
 
 // ---------- engine hooks
 const hooks={
-  frame(dt){if(!G||G.over&&G.speed===0){return}const sp=G.phase==='play'&&own&&api&&api.ready?G.speed:0;if(sp>0){simAcc+=dt*sp;while(simAcc>0.1){sim(0.1);simAcc-=0.1}}
-    G._hud=(G._hud||0)+dt;if(G._hud>0.25){G._hud=0;updHUD();updDip()}},
+  frame(dt){if(!G||G.over&&G.speed===0){return}const sp=G.phase==='play'&&own&&api&&api.ready?G.speed:0;if(sp>0){simAcc+=dt*sp;prf('sim',()=>{while(simAcc>0.1){sim(0.1);simAcc-=0.1}})}
+    G._hud=(G._hud||0)+dt;if(G._hud>0.25){G._hud=0;prf('hud',()=>{updHUD();updDip()})}},
   draw:(ctx,A)=>drawOverlay(ctx,A),
   seen:(x,y)=>!G||!own||seenAt(x,y),
   mini:(mx,s)=>drawMini(mx,s),
@@ -362,5 +372,5 @@ function wire(u){ui=u;
   $('overm').onclick=()=>{$('over').classList.remove('show');ui.toMenu()};$('overk').onclick=()=>$('over').classList.remove('show')}
 return {wire,newGame,load,save,exit,setSpeed:v=>G&&setSpeed(v),get G(){return G},get api(){return api},paused:()=>G?G.speed===0:true,
   pauseInfo:()=>G?`${esc(player().name)} · ${gameClock()} · ${fmt(player().score)} очков · ячейка ${cfg.slot||1}`:'',
-  _test:{validSite:(x,y)=>validSite(x,y),found,get own(){return own},chooseCaps}};
+  _prof:PRF,_dbg:DBG,_test:{validSite:(x,y)=>validSite(x,y),found,get own(){return own},chooseCaps}};
 })();

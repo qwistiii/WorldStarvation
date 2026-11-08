@@ -39,10 +39,29 @@ function sites(T, n) {
   }
   return out;
 }
-const OPT = { map: 'normal', size: 1, rivers: 2, lakes: 2 };
+const OPT = { map: 'normal', size: 1, rivers: 2, lakes: 2, mountains: 0.42, empty: true }; // как в игре
 const caps = sites(terrain(1337, OPT), 4);
 const W = world(1337, Object.assign({ caps }, OPT));
 const capC = W.cities.filter((c) => c.cap !== undefined);
+
+test('игровой мир изначально пустой: ни городов, ни дорог, ни зон, ни судов и самолётов', () => {
+  const E = world(1337, OPT);
+  assert.deepEqual([E.cities.length, E.roads.length, E.zones.length, E.ships.length, E.flights.length, E.farms.length], [0, 0, 0, 0, 0, 0]);
+});
+
+test('в игровом мире гор меньше, суша та же', () => {
+  const share = (T) => { let land = 0, mt = 0; for (let y = 1500; y < T.WORLD; y += 1500) for (let x = 1500; x < T.WORLD; x += 1500) { const e = T.baseH(x, y, 6); if (e < 0.004) continue; land++; if (e > 0.34) mt++; } return [land, mt / land]; };
+  for (const seed of [1337, 20261107, 4242]) {
+    const [l0, m0] = share(world(seed, { terrainOnly: true })), [l1, m1] = share(terrain(seed, Object.assign({}, OPT, { lakes: 0 })));
+    assert.equal(l1, l0, seed + ': доля суши не меняется');
+    assert.ok(m1 < 0.17 && m1 < m0 * 0.7, `${seed}: горы ${(m0 * 100).toFixed(0)}% → ${(m1 * 100).toFixed(0)}%`);
+  }
+});
+
+test('суда и самолёты появляются только у портов и аэропортов столиц', () => {
+  for (const sh of W.ships) assert.ok(capC.some((c) => c.id === sh.city), 'судно без порта');
+  for (const f of W.flights) assert.ok(capC.some((c) => c.id === f.city), 'рейс без аэропорта');
+});
 
 test('столицы стоят ровно там, где основаны, с именами и правительственным кварталом', () => {
   assert.equal(caps.length, 4);

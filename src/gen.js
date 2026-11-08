@@ -4,7 +4,7 @@ const M=Math,PI=M.PI,TAU=PI*2,WORLD=131072,TS=256;
 // stage 5 (game): world options. No options = the classic world of stages 1-4 (bit-for-bit, the tests rely on it)
 OPT=OPT||{};
 const MAPT=OPT.map||'normal',LSZ=OPT.size==null?1:clamp(OPT.size|0,0,2),RIVK=[0,0.55,1,1.6][OPT.rivers==null?2:clamp(OPT.rivers|0,0,3)],LAKK=clamp(OPT.lakes|0,0,3);
-const CAPS=OPT.caps||[];const RWMAX=0.0137*M.max(1,RIVK);
+const CAPS=OPT.caps||[];const MNT=OPT.mountains==null?1:clamp(+OPT.mountains,0,1),EMPTY=!!OPT.empty;const RWMAX=0.0137*M.max(1,RIVK);
 const FLAG=typeof FlagArt==='function'?FlagArt():null;
 const SUNX=0.62,SUNY=0.48;
 const LEANX=-0.05,LEANY=-0.17;        // oblique camera: roof offset per metre of height            // shadow offset per metre of height
@@ -56,7 +56,9 @@ function baseH(x,y,oct){
     let nx=1.6*fx+1.2*fy;fy=-1.2*fx+1.6*fy;fx=nx;nx=1.6*ux+1.2*uy;uy=-1.2*ux+1.6*uy;ux=nx;a*=o<3?0.5:0.45}
   const dx=x/WORLD-0.5,dy=y/WORLD-0.5,d=M.sqrt(dx*dx+dy*dy)*2;
   if(MAPT==='normal')e+=(LSZ===1?0.22:SZO[LSZ])-M.max(0,d-SZR[LSZ])*2.6;else e=mapShape(x,y,e,d,qx,qy);
-  const mm=smooth(0.2,0.5,e)*smooth(0.0,0.4,noise(x/42000+91.3,y/42000+12.1));
+  // game worlds (MNT < 1): gentler hills and fewer, narrower mountain ranges — more room for plains
+  if(MNT<1&&e>0.05)e=0.05+(e-0.05)*(0.42+0.58*MNT);
+  const mm=MNT<1?smooth(0.2+0.14*(1-MNT),0.5+0.1*(1-MNT),e)*smooth(0.3*(1-MNT),0.4+0.3*(1-MNT),noise(x/42000+91.3,y/42000+12.1))*(0.55+0.45*MNT):smooth(0.2,0.5,e)*smooth(0.0,0.4,noise(x/42000+91.3,y/42000+12.1));
   if(mm>0){let fx=x/9000+40.5,fy=y/9000-20.2,amp=0.5,sum=0,prev=1;const no=M.min(oct+1,10);
     for(let o=0;o<no;o++){let r=1-M.abs(noise(fx,fy));r=r*M.sqrt(r);sum+=r*amp*prev;prev=clamp(r*1.5,0,1);const nx=1.62*fx+1.18*fy+3.7;fy=-1.18*fx+1.62*fy+1.9;fx=nx;amp*=0.48}
     e+=mm*sum*0.55}
@@ -156,7 +158,7 @@ const cities=[];
 function cityF(c,x,y){const dx=x-c.x,dy=y-c.y;return M.sqrt(dx*dx+dy*dy)/c.R+0.26*noise(x/(c.R*0.9)+c.id*7.13,y/(c.R*0.9)-c.id*3.7)}
 {
   const CELL=2700,NC=M.floor(WORLD/CELL);const cand=[];
-  for(let cy=0;cy<NC;cy++)for(let cx=0;cx<NC;cx++){const R=rng(hh(cx,cy,11));if(R()<0.12)continue;
+  if(!EMPTY)for(let cy=0;cy<NC;cy++)for(let cx=0;cx<NC;cx++){const R=rng(hh(cx,cy,11));if(R()<0.12)continue;
     const x=(cx+0.15+0.7*R())*CELL,y=(cy+0.15+0.7*R())*CELL;const e=landE(x,y,0.006);if(e<0.022||e>0.34)continue;
     const t=R();let type,Rr;
     if(t<0.022){type=3;Rr=2500+R()*1200}else if(t<0.08){type=2;Rr=1150+R()*700}else if(t<0.24){type=1;Rr=520+R()*380}else{type=0;Rr=170+R()*190}
@@ -500,7 +502,7 @@ for(const z of zones){const P=z.prims;if(!P||z.zk==='air')continue;const keep=[]
     keep.push(p)}
   if(cut)z.prims=keep}
 // wind farms
-{const CELL=7000,NC=M.floor(WORLD/CELL);for(let cy=0;cy<NC;cy++)for(let cx=0;cx<NC;cx++){const R=rng(hh(cx,cy,313));if(R()>0.3)continue;
+if(!EMPTY){const CELL=7000,NC=M.floor(WORLD/CELL);for(let cy=0;cy<NC;cy++)for(let cx=0;cx<NC;cx++){const R=rng(hh(cx,cy,313));if(R()>0.3)continue;
   const x=(cx+0.2+0.6*R())*CELL,y=(cy+0.2+0.6*R())*CELL;const e=landE(x,y,0.01);if(e<0.03||e>0.3)continue;
   let bad=false;for(const c of live){if(M.hypot(c.x-x,c.y-y)<c.R+700){bad=true;break}}for(const z of zones){if(M.hypot(z.x-x,z.y-y)<z.rad+700){bad=true;break}}if(bad)continue;const a=R()*PI,ca=M.cos(a),sa=M.sin(a);const rows=2+(R()*2|0),per=4+(R()*4|0);const tb=[];
   for(let r=0;r<rows;r++)for(let k=0;k<per;k++){const u=(k-(per-1)/2)*380,v=(r-(rows-1)/2)*620+(k%2)*60;const px=x+u*ca-v*sa,py=y+u*sa+v*ca;
@@ -689,24 +691,24 @@ function dedupeZone(z){if(z.zk==='air')return;const P=z.prims,K=mkBins(),out=[];
 
 // ---------------------------------------------------------------- ships & flights
 const ships=[];
-{for(let tries=0;ships.length<110&&tries<6000;tries++){const R=rng(hh(tries,7,99));const x=R()*WORLD,y=R()*WORLD;if(baseH(x,y,5)>-0.05)continue;
+{for(let tries=0;!EMPTY&&ships.length<110&&tries<6000;tries++){const R=rng(hh(tries,7,99));const x=R()*WORLD,y=R()*WORLD;if(baseH(x,y,5)>-0.05)continue;
   const a=R()*TAU,L=6000+R()*22000;const bx=x+M.cos(a)*L,by=y+M.sin(a)*L;if(bx<0||by<0||bx>WORLD||by>WORLD)continue;let ok=true;
   for(let s=0;s<=L&&ok;s+=300){if(baseH(x+(bx-x)*s/L,y+(by-y)*s/L,5)>-0.025)ok=false}if(!ok)continue;
   ships.push({ax:x,ay:y,bx,by,L,v:5+R()*6,len:[70,110,160,220,280][R()*5|0],st:R()*3|0,c:R()*6|0,ph:R()*L*2})}
  for(const z of zones){if(z.zk!=='port')continue;const R=rng(z.seed^5);for(let q=0;q<3;q++){const x=z.x+z.ca*500,y=z.y+z.sa*500;const a=z.ang+(R()-0.5)*1.4;const L=8000+R()*12000;const bx=x+M.cos(a)*L,by=y+M.sin(a)*L;let ok=true;
-   for(let s=0;s<=L&&ok;s+=300){if(baseH(x+(bx-x)*s/L,y+(by-y)*s/L,5)>-0.01)ok=false}if(ok)ships.push({ax:x,ay:y,bx,by,L,v:4+R()*4,len:[120,180,240][R()*3|0],st:R()*3|0,c:R()*6|0,ph:R()*L*2})}}}
+   for(let s=0;s<=L&&ok;s+=300){if(baseH(x+(bx-x)*s/L,y+(by-y)*s/L,5)>-0.01)ok=false}if(ok)ships.push({city:z.city.id,ax:x,ay:y,bx,by,L,v:4+R()*4,len:[120,180,240][R()*3|0],st:R()*3|0,c:R()*6|0,ph:R()*L*2})}}}
 for(const z of zones)if(z.zk==='air'){const ax=z.x-z.ca*1650,ay=z.y-z.sa*1650,bx=z.x+z.ca*1650,by=z.y+z.sa*1650;airports.push({z,ax,ay,bx,by,ux:z.ca,uy:z.sa,name:z.city.name})}
 const flights=[];
 {const R=rng(SS^0xf1);
  for(const A of airports){const others=airports.filter(o=>o!==A).sort((p,q)=>M.hypot(p.ax-A.ax,p.ay-A.ay)-M.hypot(q.ax-A.ax,q.ay-A.ay)).slice(0,3);
    for(const B of others){for(let k=0;k<2;k++){const pts=[A.ax,A.ay,A.bx,A.by];const app=B.ax-B.ux*16000,apy=B.ay-B.uy*16000;pts.push(A.bx+A.ux*8000,A.by+A.uy*8000,app,apy,B.ax,B.ay,B.ax+B.ux*2400,B.ay+B.uy*2400);
-     const f={pts,v:78,ph:R()*5000,alt:3500+R()*3000,kind:0,c:R()*5|0};prepPath(f);flights.push(f)}}}
- for(let q=0;q<28;q++){const a=R()*TAU;const cx=WORLD*(0.2+0.6*R()),cy=WORLD*(0.2+0.6*R());const L=WORLD*1.4;
+     const f={pts,v:78,ph:R()*5000,alt:3500+R()*3000,kind:0,c:R()*5|0,city:A.z.city.id,city2:B.z.city.id};prepPath(f);flights.push(f)}}}
+ for(let q=0;q<(EMPTY?0:28);q++){const a=R()*TAU;const cx=WORLD*(0.2+0.6*R()),cy=WORLD*(0.2+0.6*R());const L=WORLD*1.4;
    const f={pts:[cx-M.cos(a)*L/2,cy-M.sin(a)*L/2,cx+M.cos(a)*L/2,cy+M.sin(a)*L/2],v:220+R()*30,ph:R()*1000,alt:9000+R()*2500,kind:1,c:R()*5|0};prepPath(f);flights.push(f)}
  // stage 2: a lone airport gets circuit flights (take-off, loop, landing on the same runway)
  if(airports.length===1)for(const A of airports)for(let k=0;k<3;k++){const nx=-A.uy,ny=A.ux,sd=k%2?1:-1;
    const pts=[A.ax,A.ay,A.bx,A.by,A.bx+A.ux*9000+nx*sd*(5000+k*1500),A.by+A.uy*9000+ny*sd*(5000+k*1500),A.ax-A.ux*16000,A.ay-A.uy*16000,A.ax,A.ay,A.ax+A.ux*2400,A.ay+A.uy*2400];
-   const f={pts,v:78,ph:R()*5000,alt:2600+R()*1400,kind:0,c:R()*5|0};prepPath(f);flights.push(f)}}
+   const f={pts,v:78,ph:R()*5000,alt:2600+R()*1400,kind:0,c:R()*5|0,city:A.z.city.id};prepPath(f);flights.push(f)}}
 function prepPath(f){const n=f.pts.length/2,cum=[0];let L=0;for(let i=1;i<n;i++){L+=M.hypot(f.pts[i*2]-f.pts[i*2-2],f.pts[i*2+1]-f.pts[i*2-1]);cum.push(L)}f.cum=cum;f.L=L;f.n=n}
 
 // ================================================================= RENDERING
@@ -907,11 +909,11 @@ function raster(ctx,x0,y0,mpp,near){const WIN=SEASON===2;
   for(let gj=0;gj<GN;gj++){const wy=y0+(gj-1.5)*st;for(let gi=0;gi<GN;gi++,k++){const wx=x0+(gi-1.5)*st;
     const e=baseH(wx,wy,oct);gH[k]=e;const rv=riverV(wx,wy);gR[k]=rv;const w=riverW(wx,wy,e);gW[k]=w;
     gM[k]=moist(wx,wy);gF[k]=noise(wx/1900+3.3,wy/1900-7.1)*0.6+noise(wx/520+1.7,wy/520+9.9)*0.4;
-    let fa=smooth(0.0,0.3,noise(wx/15000+61.1,wy/15000-12.3)),u=0;
+    let fa=EMPTY?0:smooth(0.0,0.3,noise(wx/15000+61.1,wy/15000-12.3)),u=0;
     for(let q=0;q<near.length;q++){const c=near[q];if(c.kind==='zone'){const dx=wx-c.x,dy=wy-c.y;const lx=dx*c.ca+dy*c.sa,ly=-dx*c.sa+dy*c.ca;
         const v=smooth(1.08,0.98,M.max(M.abs(lx)/(c.W/2),M.abs(ly)/(c.H/2)));if(TINTZ[c.zk]&&v>u)u=v*0.8;continue}
       const dx=wx-c.x,dy=wy-c.y,d2=dx*dx+dy*dy,R2=c.R+4500;if(d2>R2*R2)continue;const d=M.sqrt(d2);
-      const fv=smooth(c.R+4500,c.R+600,d)*(c.type===0?0.85:1);if(fv>fa)fa=fv;
+      const fv=smooth(c.R+4500,c.R+600,d)*(c.type===0?0.85:1)*(GROW.size?growFields(c):1);if(fv>fa)fa=fv;
       if(d<c.R*1.6){const f=cityF(c,wx,wy)*(c.type===0?0.8:1)+(GROW.size?growShift(c):0);const v=smooth(1.1,0.92,f)*(c.type===0?0.12:1);if(v>u)u=v}}
     gA[k]=fa;gU[k]=u;
     const r=M.abs(rv);gHS[k]=e}}
@@ -1981,6 +1983,7 @@ const GROW=new Map();
 function setGrow(id,g){if(g>=1)GROW.delete(id);else GROW.set(id,M.max(0.05,g))}
 function blkF(f,bi,bj){const BD=f.D-1;let a=f._bf;if(!a){a=f._bf=new Float32Array(BD*BD);for(let j=0;j<BD;j++)for(let i=0;i<BD;i++){const u=(f.us[i]+f.us[i+1])/2,v=(f.vs[j]+f.vs[j+1])/2;a[j*BD+i]=cityF(f,f.x+u*f.ca-v*f.sa,f.y+u*f.sa+v*f.ca)}}return a[bj*BD+bi]}
 function growT(f,bi,bj,t){if(!t||!GROW.size||t===21)return t;const g=GROW.get(f.id);if(g===undefined)return t;const d=blkF(f,bi,bj);return d>g+0.1?0:d>g?11:t}
+function growFields(c){const g=GROW.get(c.id);return g===undefined?1:M.min(1,g*1.4)}
 function growShift(c){const g=GROW.get(c.id);return g===undefined?0:1-M.min(1,g+0.1)}
 function featOn(f){if(f.kind!=='zone'||!f.city)return true;const g=GROW.get(f.city.id);return g===undefined||g>=0.95}
 // visible intervals of a town street: sampled every 25 m (cached per growth value)

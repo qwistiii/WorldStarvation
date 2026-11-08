@@ -12,7 +12,7 @@ const HS=MODE==='view'?(cfg.hash!=null?cfg.hash:location.hash.slice(1)):(cfg.cpu
 let SEED=cfg.seed||parseInt(HS.replace('cpu',''));if(!SEED||isNaN(SEED))SEED=20261107;
 const hv=(re,d)=>{const m=HS.match(re);return m?parseFloat(m[1]):d};
 const cv=document.getElementById('c'),ctx=cv.getContext('2d',{alpha:false});
-let DPR=M.min(window.devicePixelRatio||1,2),VW=0,VH=0,vign=null;
+const VQ=cfg.view||{};let DPR=M.min(window.devicePixelRatio||1,VQ.dpr||2),VW=0,VH=0,vign=null;const LITE=!!VQ.lite;
 function resize(){VW=innerWidth;VH=innerHeight;cv.width=M.round(VW*DPR);cv.height=M.round(VH*DPR);
   vign=ctx.createRadialGradient(VW/2,VH/2,M.min(VW,VH)*0.35,VW/2,VH/2,M.hypot(VW,VH)*0.62);vign.addColorStop(0,'rgba(0,0,0,0)');vign.addColorStop(1,'rgba(0,8,20,0.38)')}
 addEventListener('resize',resize,SIG);resize();
@@ -275,7 +275,7 @@ function drawTrains(roads,lp){const m=cam.m,k=1/m;if(lp)ctx.globalCompositeOpera
   ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}
 function shipPos(sh){const span=sh.L;const u=(T*sh.v+sh.ph)%(2*span);const fw=u<span,s=fw?u:2*span-u;const dx=(sh.bx-sh.ax)/span,dy=(sh.by-sh.ay)/span;return [sh.ax+dx*s,sh.ay+dy*s,fw?dx:-dx,fw?dy:-dy]}
 function drawShips(lp){const m=cam.m,k=1/m;if(m>(lp?120:30))return;if(lp)ctx.globalCompositeOperation='lighter';
-  for(const sh of W.ships){const [x,y,hx,hy]=shipPos(sh);if(!inView(x,y,sh.len*3))continue;const X=sxw(x),Y=syw(y);const L=sh.len;
+  for(const sh of W.ships){if(sh.city!==undefined&&W.growOf(sh.city)<0.95)continue;const [x,y,hx,hy]=shipPos(sh);if(!inView(x,y,sh.len*3))continue;const X=sxw(x),Y=syw(y);const L=sh.len;
     if(lp){ctx.setTransform(DPR,0,0,DPR,0,0);const px=L*k;ctx.globalAlpha=lp;
       if(px<6){const s=M.max(2.5,px*0.8);ctx.drawImage(GL_W,X-s,Y-s,s*2,s*2);continue}
       setRot(X,Y,hx,hy,k);ctx.globalAlpha=lp*0.5;ctx.drawImage(GL_W,-L*0.5,-L*0.16,L,L*0.32);ctx.globalAlpha=lp;const d=M.max(3,4*m);
@@ -314,7 +314,7 @@ function drawTurbines(lp){const m=cam.m;if(m>(lp?60:12))return;const k=1/m;ctx.s
 function camH(){return cam.m*VH*0.9}
 const FLB=[];
 function drawFlights(){const H=camH();ctx.setTransform(DPR,0,0,DPR,0,0);FLB.length=0;
-  for(const f of W.flights){const tot=f.L+(f.kind?0:900*f.v/78);const s=(T*f.v+f.ph)%tot;if(s>f.L)continue;
+  for(const f of W.flights){if(f.city!==undefined&&(W.growOf(f.city)<0.95||(f.city2!==undefined&&W.growOf(f.city2)<0.95)))continue;const tot=f.L+(f.kind?0:900*f.v/78);const s=(T*f.v+f.ph)%tot;if(s>f.L)continue;
     let i=1;while(i<f.n-1&&f.cum[i]<s)i++;const t=(s-f.cum[i-1])/(f.cum[i]-f.cum[i-1]||1);const ax=f.pts[i*2-2],ay=f.pts[i*2-1],bx=f.pts[i*2],by=f.pts[i*2+1];
     const x=ax+(bx-ax)*t,y=ay+(by-ay)*t;let hx=bx-ax,hy=by-ay;const hl=M.hypot(hx,hy)||1;hx/=hl;hy/=hl;
     let alt=f.alt;if(!f.kind){const td=f.cum[4]+300;alt=clamp(M.min((s-1900)*0.11,(td-s)*0.055),0,f.alt)}
@@ -339,10 +339,11 @@ function drawClouds(shadowPass){const H=camH();const cloudFar=MODE==='game'?1-sm
   if(shadowPass&&LG.day<0.03)return;
   for(let ci=0;ci<clouds.length;ci++){const c=clouds[ci];const vis=clamp((wcur.cover-c.g)*14,0,1);if(vis<=0)continue;
     let x=((c.x+T*9+WORLD*0.15)%span+span)%span-WORLD*0.15,y=c.y;
-    if(shadowPass){if(cam.m<0.12)continue;const sx=x+W.SUNX*c.alt,sy=y+W.SUNY*c.alt;if(!inView(sx,sy,c.s))continue;const sz=c.s/cam.m;ctx.globalAlpha=0.2*vis*LG.day*(1-0.45*smooth(0.6,1,wcur.cover));ctx.drawImage(CLS[c.v][1],sxw(sx)-sz/2,syw(sy)-sz/2,sz,sz);continue}
+    if(LITE&&ci%2)continue;
+    if(shadowPass){if(cam.m<0.12)continue;const sx=x+W.SUNX*c.alt,sy=y+W.SUNY*c.alt;if(!inView(sx,sy,c.s))continue;const sz=c.s/cam.m;const sa=0.2*vis*LG.day*(1-0.45*smooth(0.6,1,wcur.cover))*cloudFar;if(sa<0.02)continue;ctx.globalAlpha=sa;ctx.drawImage(CLS[c.v][1],sxw(sx)-sz/2,syw(sy)-sz/2,sz,sz);continue}
     if(H<c.alt*1.12)continue;const kk=H/(H-c.alt);const a=smooth(c.alt*1.12,c.alt*2.6,H);if(a<=0.01)continue;
     const X=VW/2+(x-cam.x)/cam.m*kk,Y=VH/2+(y-cam.y)/cam.m*kk,sz=c.s/cam.m*kk;if(X+sz/2<0||Y+sz/2<0||X-sz/2>VW||Y-sz/2>VH)continue;
-    ctx.globalAlpha=a*0.95*vis*cloudFar;ctx.drawImage(CLS[c.v][2],X-sz/2,Y-sz/2,sz,sz)}ctx.globalAlpha=1}
+    const ca=a*0.95*vis*cloudFar;if(ca<0.02)continue;ctx.globalAlpha=ca;ctx.drawImage(CLS[c.v][2],X-sz/2,Y-sz/2,sz,sz)}ctx.globalAlpha=1}
 function drawFog(){const f=wcur.fog;if(f<0.01)return;ctx.setTransform(DPR,0,0,DPR,0,0);
   for(let l=0;l<2;l++){const P=l?1700:5200,sc=P/256/cam.m;const ox=VW/2-(cam.x-T*(l?9:5))/cam.m,oy=VH/2-(cam.y+T*(l?3:-2))/cam.m;
     FOG.setTransform(new DOMMatrix([sc,0,0,sc,ox+l*91,oy+l*57]));ctx.fillStyle=FOG;ctx.globalAlpha=f*(l?0.42:0.6);ctx.fillRect(0,0,VW,VH)}
@@ -429,7 +430,7 @@ function frame(now){if(!alive)return;const dt=M.min(0.06,(now-last)/1000);last=n
   // world-anchored octaves: texel size 0.08*2^k m; the two octaves around the current zoom cross-fade,
   // so ripples stay glued to the water and never look like a stretched picture
   {const ga=(0.2+0.8*LG.day)*(1-wcur.cover*0.35)*(1-smooth(6,90,cam.m)*0.8);const lv=M.log2(M.max(cam.m,0.01)/0.08)+0.6,k0=M.floor(lv),fr=lv-k0;
-    for(let o=0;o<2;o++){const wgt=o?fr:1-fr;if(wgt<0.03)continue;const tm=0.08*M.pow(2,k0+o),sp=M.sqrt(tm/0.08);
+    for(let o=0;o<2;o++){const wgt=o?fr:1-fr;if(wgt<0.03||ga*wgt<0.03||(LITE&&o!==(fr>0.5?1:0)))continue;const tm=0.08*M.pow(2,k0+o),sp=M.sqrt(tm/0.08);
       for(let l=0;l<2;l++){const sc=tm*(l?1.41:1)/cam.m,ang=l?0.35:0,ca=M.cos(ang)*sc,sa=M.sin(ang)*sc;const dx=W.WDX*T*(l?2.2:3.4)*sp+l*61*tm,dy=W.WDY*T*(l?2.2:3.4)*sp+l*29*tm;
         wavePat.setTransform(new DOMMatrix([ca,sa,-sa,ca,(dx-cam.x)/cam.m+VW/2,(dy-cam.y)/cam.m+VH/2]));ctx.fillStyle=wavePat;ctx.globalAlpha=(l?0.45:0.65)*wgt*ga;ctx.fillRect(0,0,VW,VH)}}ctx.globalAlpha=1}
   pf('water');zNow=drawTiles();pf('tiles');
@@ -455,7 +456,7 @@ function frame(now){if(!alive)return;const dt=M.min(0.06,(now-last)/1000);last=n
   pf('clouds');ctx.fillStyle=vign;ctx.fillRect(0,0,VW,VH);
   if(opt.labels)drawLabels();pf('labels');
   if(HK.draw){ctx.setTransform(DPR,0,0,DPR,0,0);hk('draw',ctx,API);ctx.setTransform(DPR,0,0,DPR,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}
-  drawSel();
+  pf('hook');drawSel();
   if(frameNo%30===0)evict();
   if(stale.size){staleT+=dt;if((pending.size===0&&!queue.some(q=>!q.L))||staleT>25)dropStale()}
   // adaptive quality (hysteresis): drop the mid bloom layer when the frame rate is low

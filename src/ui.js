@@ -2,11 +2,12 @@
 (function(){
 'use strict';
 const $=id=>document.getElementById(id);
-const VERSION='5.1';
+const VERSION='5.2';
 let bg=null,C=null,prevWorker=null,prevId=0,prevT=0,setFrom=null,paused=null;
 
 // ---------------------------------------------------------------- settings
-const SDEF={clouds:true,traffic:true,labels:true,fps:false,ui:1,menuBg:true,hints:true};
+const SDEF={clouds:true,traffic:true,labels:true,fps:false,ui:1,menuBg:true,hints:true,quality:'balance'};
+const QV={high:{dpr:2},balance:{dpr:1.25},fast:{dpr:1,lite:true}};
 let S=Object.assign({},SDEF);try{Object.assign(S,JSON.parse(localStorage.getItem('ws.settings')||'{}'))}catch(e){}
 function saveS(){try{localStorage.setItem('ws.settings',JSON.stringify(S))}catch(e){}applyS()}
 function applyS(){document.documentElement.style.setProperty('--ui',S.ui);const a=Game.api;if(a){a.opt.clouds=S.clouds;a.opt.traffic=S.traffic;a.opt.labels=S.labels}$('fps').classList.toggle('hid',!S.fps)}
@@ -59,13 +60,13 @@ function showMenu(){document.body.className='m-menu';
   if(!S.menuBg||bg){loaded();return}
   // the living background of the menu: the loading screen stays until its first tiles are drawn
   loading('Загрузка мира','Рельеф, города, дороги, заводы и порты');setTimeout(()=>{if(bg||!/m-(menu|setup|settings)/.test(document.body.className)){loaded();return}
-    bg=startWorld({mode:'bg',seed:20261107,tod:17.4,view:{labels:false,traffic:true,clouds:true},onReady:()=>loaded()});$('ldt').textContent='Отрисовка карты'},80)}
+    bg=startWorld({mode:'bg',seed:20261107,tod:17.4,view:Object.assign({labels:false,traffic:true,clouds:true},QV[S.quality]||QV.balance),onReady:()=>loaded()});$('ldt').textContent='Отрисовка карты'},80)}
 function stopBg(){if(bg){bg.destroy();bg=null}}
 function toMenu(){Game.exit();$('pause').classList.remove('show');$('over').classList.remove('show');showMenu()}
 function menuGo(k){
   if(k==='new'){openSetup();return}
   if(k==='continue'){const L=Saves.latest();if(L){stopBg();C=L.s.cfg;C.slot=L.i;Game.load(L.s)}return}
-  if(k==='tutorial'){stopBg();const c=defaultConfig();c.seed=777;c.tutorial=true;c.country.name='Учебная Республика';c.country.gov='Республика';c.map={type:'normal',size:0,rivers:2,lakes:1};
+  if(k==='tutorial'){stopBg();const c=defaultConfig();c.seed=777;c.tutorial=true;c.country.name='Учебная Республика';c.country.gov='Республика';c.map={type:'normal',size:0,rivers:2,lakes:1,mountains:1};
     Object.assign(c.rules,{botCount:2,diff:0,ai:0,victory:'points',target:5000,timeLimit:0,botGrowth:0});c.slot=5;Game.newGame(c);return}
   if(k==='settings'){openSettings('menu')}}
 
@@ -96,7 +97,7 @@ function buildCountry(){const c=C.country;
 function buildMap(){const m=C.map;
   cards($('mtype'),[['normal','Обычная','Большой материк с заливами, реками и горами'],['cont','Материки','Два–четыре континента, разделённые проливами'],['arch','Архипелаг','Множество островов разного размера'],['islands','Острова','Несколько крупных островов в океане']],m.type,v=>{m.type=v;preview()});
   seg($('msize'),[[0,'Малый'],[1,'Средний'],[2,'Большой']],m.size,v=>{m.size=v;preview()});
-  const lv=[[0,'Нет'],[1,'Мало'],[2,'Норм'],[3,'Много']];seg($('mriv'),lv,m.rivers,v=>{m.rivers=v;preview()});seg($('mlak'),lv,m.lakes,v=>{m.lakes=v;preview()});
+  const lv=[[0,'Нет'],[1,'Мало'],[2,'Норм'],[3,'Много']];seg($('mriv'),lv,m.rivers,v=>{m.rivers=v;preview()});seg($('mlak'),lv,m.lakes,v=>{m.lakes=v;preview()});if(m.mountains==null)m.mountains=1;seg($('mmnt'),[[0,'Мало'],[1,'Норм'],[2,'Много']],m.mountains,v=>{m.mountains=v;preview()});
   $('mseed').value=C.seed;$('mseed').onchange=()=>{const v=parseInt($('mseed').value);if(v>0){C.seed=v;preview()}else $('mseed').value=C.seed};
   $('mdice').onclick=()=>{C.seed=(Math.random()*1e9)|0;$('mseed').value=C.seed;const d=$('mdice');d.classList.remove('roll');void d.offsetWidth;d.classList.add('roll');preview()}}
 function preview(){summary();if(!$('setup')||!document.body.classList.contains('m-setup'))return;clearTimeout(prevT);prevT=setTimeout(()=>{
@@ -104,8 +105,8 @@ function preview(){summary();if(!$('setup')||!document.body.classList.contains('
     prevWorker.onmessage=e=>{const m=e.data;if(m.id!==prevId)return;const c=$('mprev'),x=c.getContext('2d');const im=new ImageData(new Uint8ClampedArray(m.buf),m.n,m.n);
       const t=document.createElement('canvas');t.width=t.height=m.n;t.getContext('2d').putImageData(im,0,0);x.imageSmoothingEnabled=true;x.drawImage(t,0,0,c.width,c.height);
       x.strokeStyle='rgba(255,255,255,0.07)';x.lineWidth=1;x.beginPath();for(let i=1;i<6;i++){const p=i*c.width/6;x.moveTo(p,0);x.lineTo(p,c.height);x.moveTo(0,p);x.lineTo(c.width,p)}x.stroke();
-      $('mp-wait').classList.remove('on');$('mp-info').innerHTML=`Суша ≈ ${Math.round(m.land*100)} % · ${Math.round(m.land*131*131)} км² · мир 131 × 131 км<br>Сид ${C.seed}. Сам мир (города, дороги) строится после «Создать мир».`}}
-  $('mp-wait').classList.add('on');prevId++;prevWorker.postMessage({id:prevId,seed:C.seed,opt:{map:C.map.type,size:C.map.size,rivers:C.map.rivers,lakes:C.map.lakes},n:200})},120)}
+      $('mp-wait').classList.remove('on');$('mp-info').innerHTML=`Суша ≈ ${Math.round(m.land*100)} % · ${Math.round(m.land*131*131)} км² · мир 131 × 131 км<br>Сид ${C.seed}. Мир пустой: города и дороги появятся с государствами.`}}
+  $('mp-wait').classList.add('on');prevId++;prevWorker.postMessage({id:prevId,seed:C.seed,opt:{map:C.map.type,size:C.map.size,rivers:C.map.rivers,lakes:C.map.lakes,mountains:[0.25,0.42,0.7][C.map.mountains==null?1:C.map.mountains]},n:200})},120)}
 // terrain preview worker: hypsometric tints + hillshade + rivers and lakes (terrain-only WorldGen, no towns)
 const PREVIEW_SRC=`
 onmessage=function(e){const q=e.data,n=q.n;const T=WorldGen(q.seed,Object.assign({},q.opt,{terrainOnly:true}));const S=T.WORLD/n;const H=new Float32Array((n+2)*(n+2));
@@ -185,7 +186,7 @@ function buildSettings(){const b=$('setb');b.innerHTML='';
   const row=(t,d,ctl)=>{const r=document.createElement('div');r.className='set-row';r.innerHTML=`<span>${t}${d?`<small>${d}</small>`:''}</span>`;r.appendChild(ctl);b.appendChild(r)};
   const head=t=>{const h=document.createElement('div');h.className='set-h';h.textContent=t;b.appendChild(h)};
   const T=(k,t,d)=>{const e=document.createElement('div');e.className='tog';tog(e,S[k],v=>{S[k]=v;saveS();if(k==='menuBg'&&!v)stopBg()});row(t,d,e)};
-  head('Графика');T('clouds','Облака','Облака и их тени над картой');T('traffic','Транспорт','Машины, поезда, суда и самолёты');T('labels','Подписи городов');T('menuBg','Живой фон главного меню','Отключите на слабом компьютере');
+  head('Графика');{const e=document.createElement('div');e.className='seg';seg(e,[['high','Высокое'],['balance','Баланс'],['fast','Скорость']],S.quality,v=>{S.quality=v;saveS()});row('Качество','Чёткость кадра и плотность облаков. Применится при следующем запуске мира',e)}T('clouds','Облака','Облака и их тени над картой');T('traffic','Транспорт','Машины, поезда, суда и самолёты');T('labels','Подписи городов');T('menuBg','Живой фон главного меню','Отключите на слабом компьютере');
   head('Интерфейс');{const e=document.createElement('div');e.className='seg';seg(e,[[0.9,'90 %'],[1,'100 %'],[1.15,'115 %'],[1.3,'130 %']],S.ui,v=>{S.ui=v;saveS()});row('Масштаб интерфейса','',e)}
   T('hints','Подсказки','Пошаговые подсказки в начале игры');T('fps','Показывать FPS');
   head('Сохранения');Saves.list().forEach((s,k)=>{const e=document.createElement('button');e.className='btn sm danger';e.textContent='Удалить';e.disabled=!s;e.onclick=()=>{if(confirm('Удалить сохранение в ячейке '+(k+1)+'?')){Saves.del(k+1);buildSettings()}};
@@ -226,7 +227,7 @@ function loaded(){$('loading').classList.add('fade');clearInterval(tipT);tipT=0}
 
 // ---------------------------------------------------------------- boot
 paintIcons();applyS();
-const U={viewOpts:()=>({clouds:S.clouds,traffic:S.traffic,labels:S.labels,fps:S.fps}),settings:()=>S,pause,toMenu,loading,loaded};
+const U={viewOpts:()=>Object.assign({clouds:S.clouds,traffic:S.traffic,labels:S.labels,fps:S.fps},QV[S.quality]||QV.balance),settings:()=>S,pause,toMenu,loading,loaded};
 Game.wire(U);
 for(const b of document.querySelectorAll('.mm-b'))b.onclick=()=>menuGo(b.dataset.go);
 for(const b of document.querySelectorAll('[data-back]'))b.onclick=()=>{if(document.body.classList.contains('m-settings'))closeSettings();else showMenu()};
