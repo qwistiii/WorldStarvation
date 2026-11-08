@@ -201,17 +201,41 @@ function snapNode(C,x,y){const N=C.N,D=C.D,BD=D-1,bl=C.blocks;const dx=x-C.x,dy=
   for(let j=bj-2;j<=bj+3;j++)for(let i=bi-2;i<=bi+3;i++){if(i<0||j<0||i>=D||j>=D)continue;let adj=false;
     for(const [a,b] of [[i-1,j-1],[i,j-1],[i-1,j],[i,j]])if(a>=0&&b>=0&&a<BD&&b<BD&&bl[b*BD+a]>0)adj=true;if(!adj)continue;
     const d=((C.us[i]-u)**2+(C.vs[j]-v)**2)*((lineKind(i-N)!==3||lineKind(j-N)!==3)?0.3:1);if(d<bd){bd=d;best=[i,j]}}
+  if(!best)for(let j=0;j<D;j++)for(let i=0;i<D;i++){let adj=false; // no streets here (hills, water): nearest node that has a block
+    for(const [a,b] of [[i-1,j-1],[i,j-1],[i-1,j],[i,j]])if(a>=0&&b>=0&&a<BD&&b<BD&&bl[b*BD+a]>0)adj=true;if(!adj)continue;const d=(C.us[i]-u)**2+(C.vs[j]-v)**2;if(d<bd){bd=d;best=[i,j]}}
   return best?cpt(C,best[0]-N,best[1]-N):[x,y]}
 const pairs=new Set();
+// a new route must not run on top of an existing road: ends that ride along a street / road are trimmed back to
+// where they leave it (a T-junction there), railways are rerouted away from long side-by-side runs
+function plCum(pts){const n=pts.length/2,c=[0];for(let i=1;i<n;i++)c.push(c[i-1]+M.hypot(pts[i*2]-pts[i*2-2],pts[i*2+1]-pts[i*2-1]));return c}
+function plAt(pts,c,s){let i=0;while(i<c.length-2&&c[i+1]<s)i++;const l=c[i+1]-c[i]||1,t=clamp((s-c[i])/l,0,1),dx=(pts[i*2+2]-pts[i*2])/l,dy=(pts[i*2+3]-pts[i*2+1])/l;return [pts[i*2]+(pts[i*2+2]-pts[i*2])*t,pts[i*2+1]+(pts[i*2+3]-pts[i*2+1])*t,dx,dy,i]}
+function ridesOn(x,y,dx,dy,k,only){for(const r of queryRoads(x-40,y-40,x+40,y+40)){if(r.k===8||(only&&!only(r)))continue;const lim=(RW[k]+RW[r.k])/2+3;
+    for(let i=0;i<r.n-1;i++){const ax=r.pts[i*2],ay=r.pts[i*2+1],ex=r.pts[i*2+2]-ax,ey=r.pts[i*2+3]-ay,l2=ex*ex+ey*ey||1;const t=clamp(((x-ax)*ex+(y-ay)*ey)/l2,0,1);
+      if(M.hypot(ax+ex*t-x,ay+ey*t-y)<lim&&M.abs(ex*dx+ey*dy)/M.sqrt(l2)>0.85)return r}}return null}
+function projOn(r,x,y){let best=1e18,bx=x,by=y;for(let i=0;i<r.n-1;i++){const ax=r.pts[i*2],ay=r.pts[i*2+1],ex=r.pts[i*2+2]-ax,ey=r.pts[i*2+3]-ay,l2=ex*ex+ey*ey||1;const t=clamp(((x-ax)*ex+(y-ay)*ey)/l2,0,1);const d=(ax+ex*t-x)**2+(ay+ey*t-y)**2;if(d<best){best=d;bx=ax+ex*t;by=ay+ey*t}}return [bx,by]}
+function trimAlong(pts,k,keepA,keepB){const c=plCum(pts),L=c[c.length-1];let s0=0,s1=L,rA=null,rB=null;
+  if(!keepA)while(s0<L){const p=plAt(pts,c,s0);const r=ridesOn(p[0],p[1],p[2],p[3],k);if(!r)break;rA=r;s0+=8}
+  if(!keepB)while(s1>s0){const p=plAt(pts,c,s1);const r=ridesOn(p[0],p[1],p[2],p[3],k);if(!r)break;rB=r;s1-=8}
+  if(s0===0&&s1===L)return pts;if(s1-s0<80)return null;
+  // the cut end is joined to the centre line of the road it was riding on, so it does not hang next to it
+  const a=plAt(pts,c,s0),b=plAt(pts,c,s1),out=[];if(rA){const q=projOn(rA,a[0],a[1]);out.push(q[0],q[1])}out.push(a[0],a[1]);for(let i=a[4]+1;i<=b[4];i++)out.push(pts[i*2],pts[i*2+1]);out.push(b[0],b[1]);if(rB){const q=projOn(rB,b[0],b[1]);out.push(q[0],q[1])}return out}
+function sideRun(pts,k){const c=plCum(pts),L=c[c.length-1];let run=0,best=0;
+  for(let s=0;s<L;s+=10){const p=plAt(pts,c,s);if(ridesOn(p[0],p[1],p[2],p[3],k)){run+=10;if(run>best)best=run}else run=0}return best}
 function connect(A,B,k){const key=A.id<B.id?A.id+'_'+B.id+'_'+k:B.id+'_'+A.id+'_'+k;if(pairs.has(key))return;pairs.add(key);
   const dx=B.x-A.x,dy=B.y-A.y,L=M.hypot(dx,dy),ux=dx/L,uy=dy/L;
   const rr=(C,ang)=>k===5&&C.type>=1?C.R*(C.type===3?1.3:1.15):C.type===3?(k===0?ringR(C,ang):C.R*1.0):C.type===2?C.R*0.82:C.type===1?C.R*0.6:0;const ra=rr(A,M.atan2(uy,ux)),rb=rr(B,M.atan2(-uy,-ux));
   let ax=A.x+ux*ra,ay=A.y+uy*ra,bx=B.x-ux*rb,by=B.y-uy*rb;
   // roads that end inside a town end exactly on a street node (preferably on an avenue), not in the middle of a block
-  if(k!==5){if(A.type>=1&&!(k===0&&A.type===3))[ax,ay]=snapNode(A,ax,ay);if(B.type>=1&&!(k===0&&B.type===3))[bx,by]=snapNode(B,bx,by)}
+  const wA=k===0&&A.type===3&&landE(ax,ay,0)<0,wB=k===0&&B.type===3&&landE(bx,by,0)<0; // ring point in the water: go into the city
+  if(k!==5){if(A.type>=1&&(!(k===0&&A.type===3)||wA))[ax,ay]=snapNode(A,ax,ay);if(B.type>=1&&(!(k===0&&B.type===3)||wB))[bx,by]=snapNode(B,bx,by)}
   const cfg=k===0?[0.1,60,420,900,0.2]:k===1?[0.1,50,300,450,0.15]:k===5?[0.07,30,380,700,0.2]:[0.13,40,160,150,0.1];
-  for(let a=0;a<4;a++){const ph=hr(A.id,B.id,k*13+a)*100;const pts=routePts(ax,ay,bx,by,cfg[0]*(a%2?-1:1),cfg[1],ph,cfg[2]);
-    if(waterRunOK(pts,cfg[3],cfg[4])){const r=mkRoad(k,pts);if(r){bridgesOf(r);if(k===0){const p=r.pts,n=r.n;if(A.type===3)JUNC.push([A,ax,ay,p[2]-p[0],p[3]-p[1]]);if(B.type===3)JUNC.push([B,bx,by,p[n*2-4]-p[n*2-2],p[n*2-3]-p[n*2-1]])}}return}}}
+  let fb=null,fbr=1e9;const ring=(C)=>k===0&&C.type===3&&!(C===A?wA:wB);
+  for(let a=0;a<=4;a++){let pts;if(a<4){const ph=hr(A.id,B.id,k*13+a)*100;
+      if(k===5){const d=(a%2?-1:1)*(0.32+0.1*(a>>1)),th=M.atan2(uy,ux);ax=A.x+M.cos(th+d)*ra;ay=A.y+M.sin(th+d)*ra;bx=B.x-M.cos(th-d)*rb;by=B.y-M.sin(th-d)*rb} // rails approach towns off the highway bearing
+      pts=routePts(ax,ay,bx,by,cfg[0]*(a%2?-1:1),cfg[1],ph,cfg[2]);if(!waterRunOK(pts,cfg[3],cfg[4]))continue;
+      if(k!==5){pts=trimAlong(pts,k,ring(A),ring(B));if(!pts)continue}
+      const sr=sideRun(pts,k);if(sr>40){if(sr<fbr){fb=pts;fbr=sr}continue}}else{if(!fb||fbr>100&&k!==5)return;pts=fb} // a road that would ride on top of another for >100 m duplicates it: skip
+    {const r=mkRoad(k,pts);if(r){bridgesOf(r);if(k===0){const p=r.pts,n=r.n;if(A.type===3&&!wA)JUNC.push([A,ax,ay,p[2]-p[0],p[3]-p[1],r]);if(B.type===3&&!wB)JUNC.push([B,bx,by,p[n*2-4]-p[n*2-2],p[n*2-3]-p[n*2-1],r])}}return}}}
 const JUNC=[];
 function ringR(c,a){return c.R*(1.08+0.07*noise(M.cos(a)*1.5+c.id,M.sin(a)*1.5))}
 const bigs=live.filter(c=>c.type>=2),towns=live.filter(c=>c.type===1),vills=live.filter(c=>c.type===0);
@@ -227,7 +251,10 @@ for(const c of bigs){if(c.type!==3)continue;const n=96,pts=[],wat=[];
   if(st<0){const p=[];for(let k=0;k<=n;k++)p.push(pts[k%n][0],pts[k%n][1]);runs.push(p)}else{
     let cur=[],wrun=0;for(let q=1;q<=n;q++){const k=(st+q)%n;if(wat[k]){wrun++;cur.push(pts[k][0],pts[k][1]);if(wrun>3){if(cur.length>8)runs.push(cur.slice(0,cur.length-2*wrun));cur=[]}}else{wrun=0;cur.push(pts[k][0],pts[k][1])}}
     if(cur.length>8)runs.push(cur)}
-  c.rings=[];for(const p of runs){const r=mkRoad(0,p,{ring:1});if(r){bridgesOf(r);c.rings.push(r)}}}
+  for(const p of runs){while(p.length>4&&landE(p[p.length-2],p[p.length-1],0)<0)p.length-=2;while(p.length>4&&landE(p[0],p[1],0)<0)p.splice(0,2)} // a ring piece never ends in the water
+  c.rings=[];for(const p of runs){if(p.length<2*14)continue;const r=mkRoad(0,p,{ring:1});if(!r)continue;bridgesOf(r);c.rings.push(r);
+    if(runs.length>1||st>=0)for(const e of [0,r.n-1]){const x=r.pts[e*2],y=r.pts[e*2+1],a0=M.atan2(y-c.y,x-c.x);
+      for(const [f,da] of [[0.85,0],[0.85,0.25],[0.85,-0.25],[0.7,0],[0.7,0.4],[0.7,-0.4],[0.55,0]]){const q=snapNode(c,c.x+M.cos(a0+da)*M.hypot(x-c.x,y-c.y)*f,c.y+M.sin(a0+da)*M.hypot(x-c.x,y-c.y)*f);if(waterRunOK([x,y,q[0],q[1]],120,0.2)||f===0.55){mkRoad(2,[x,y,q[0],q[1]]);break}}}}}
 
 // ---------------------------------------------------------------- zones
 const zones=[],emitters=[],airports=[],farms=[];
@@ -261,8 +288,9 @@ function mkZoneRaw(c,kind,x,y,a,W,H){const rad=M.hypot(W,H)/2;const z={kind:'zon
 function mkZone(c,kind,x,y,a,W,H,rad){const z={kind:'zone',zk:kind,id:zones.length,city:c,x,y,ang:a,ca:M.cos(a),sa:M.sin(a),W,H,rad,seed:hh(c.id,zones.length,91)};
   z.bb=[x-rad-50,y-rad-50,x+rad+50,y+rad+50];zones.push(z);genZone(z);addF(z,z.bb[0],z.bb[1],z.bb[2],z.bb[3]);
   // access road
-  if(kind!=='port'||true){const dx=c.x-x,dy=c.y-y,L=M.hypot(dx,dy);const ux=dx/L,uy=dy/L;const sx=x+ux*rad*0.55,sy=y+uy*rad*0.55;const ex=c.x-ux*c.R*0.75,ey=c.y-uy*c.R*0.75;
-    if(M.hypot(ex-sx,ey-sy)>60){const r=mkRoad(['farm','dacha','cem'].includes(kind)?4:1,[sx,sy,(sx+ex)/2+(-uy)*40,(sy+ey)/2+ux*40,ex,ey]);if(r){z.acc=r;bridgesOf(r)}}}
+  if(kind!=='port'||true){const dx=c.x-x,dy=c.y-y,L=M.hypot(dx,dy);const ux=dx/L,uy=dy/L;const sx=x+ux*rad*0.55,sy=y+uy*rad*0.55;let ex=c.x-ux*c.R*0.75,ey=c.y-uy*c.R*0.75;if(c.type>=1)[ex,ey]=snapNode(c,ex,ey);else if(c.vst&&c.vst.length){let bd=1e18,bq=null;for(const st of c.vst){const q=projOn(st.r,ex,ey),d=(q[0]-ex)**2+(q[1]-ey)**2;if(d<bd){bd=d;bq=q}}[ex,ey]=bq}const kk=['farm','dacha','cem'].includes(kind)?4:1;
+    if(M.hypot(ex-sx,ey-sy)>60){let pp=null,pr=1e9;for(const o of [40,-40,140,-140,260,-260]){const q=trimAlong([sx,sy,(sx+ex)/2+(-uy)*o,(sy+ey)/2+ux*o,ex,ey],kk,true,false);if(!q||!waterRunOK(q,kk===4?150:450,0.15))continue;const sr=sideRun(q,kk);if(sr<pr){pp=q;pr=sr}if(sr<=40)break}
+    const r=pp&&mkRoad(kk,pp);if(r){z.acc=r;bridgesOf(r)}}}
   return z}
 for(const c of live){if(c.type<1)continue;const R=rng(c.seed^0x3131);
   if(c.type===3){placeZone(c,'air');placeZone(c,'port');placeZone(c,'ind');placeZone(c,'ind');if(R()<0.6)placeZone(c,'ref');placeZone(c,'pow');if(R()<0.5)placeZone(c,'solar')}
@@ -274,18 +302,20 @@ for(const c of live){const R=rng(c.seed^0x5151);
   if(c.type>=1){if(R()<(c.type>=2?0.85:0.3))placeZone(c,'dacha');if(R()<0.55)placeZone(c,'cem');if(R()<0.3)placeZone(c,'agro');if(baseH(c.x,c.y,6)>0.18&&R()<0.45)placeZone(c,'quarry')}
   else if(R()<0.32)placeZone(c,'farm')}
 // interchanges -------------------------------------------------------------
-function addClover(Jx,Jy,tx,ty,nx,ny,half){const rl=46,D=17,E=RW[0]/2-2.5;
+function addClover(Jx,Jy,tx,ty,nx,ny,half,RA,RB){const rl=46,D=17,E=RW[0]/2-2.5;
+  // ramp ends sit on the real carriageway (the roads bend away from the crossing tangents)
+  const fix=(pts)=>{for(const [i,rd] of [[0,RB],[pts.length-2,RA]]){if(!rd)continue;const q=projOn(rd,pts[i],pts[i+1]),dx=pts[i]-q[0],dy=pts[i+1]-q[1],L=M.hypot(dx,dy)||1;pts[i]=q[0]+dx/L*E;pts[i+1]=q[1]+dy/L*E}return pts};
   for(const sa of [-1,1])for(const sb of (half?[1]:[-1,1])){const ax=tx*sa,ay=ty*sa,bx=nx*sb,by=ny*sb;const qx=Jx+(ax+bx)*(rl+D),qy=Jy+(ay+by)*(rl+D);
     const pts=[Jx+ax*E+bx*(rl+D+150),Jy+ay*E+by*(rl+D+150),qx-ax*rl+bx*70,qy-ay*rl+by*70];for(let d=180;d>=-90;d-=10){const t=d*PI/180;pts.push(qx+rl*(M.cos(t)*ax+M.sin(t)*bx),qy+rl*(M.cos(t)*ay+M.sin(t)*by))}
-    pts.push(qx-bx*rl+ax*70,qy-by*rl+ay*70,Jx+bx*E+ax*(rl+D+150),Jy+by*E+ay*(rl+D+150));mkRoad(6,pts);
+    pts.push(qx-bx*rl+ax*70,qy-by*rl+ay*70,Jx+bx*E+ax*(rl+D+150),Jy+by*E+ay*(rl+D+150));mkRoad(6,fix(pts));
     const p1x=Jx+ax*(D+3)+bx*rl*3.3,p1y=Jy+ay*(D+3)+by*rl*3.3,p2x=Jx+bx*(D+3)+ax*rl*3.3,p2y=Jy+by*(D+3)+ay*rl*3.3,cx=Jx+(ax+bx)*rl*3.05,cy=Jy+(ay+by)*rl*3.05;
-    const op=[Jx+ax*E+bx*(rl*3.3-130),Jy+ay*E+by*(rl*3.3-130)];for(let q=0;q<=14;q++){const t=q/14,u=1-t;op.push(u*u*p1x+2*u*t*cx+t*t*p2x,u*u*p1y+2*u*t*cy+t*t*p2y)}op.push(Jx+bx*E+ax*(rl*3.3-130),Jy+by*E+ay*(rl*3.3-130));mkRoad(6,op)}}
+    const op=[Jx+ax*E+bx*(rl*3.3-130),Jy+ay*E+by*(rl*3.3-130)];for(let q=0;q<=14;q++){const t=q/14,u=1-t;op.push(u*u*p1x+2*u*t*cx+t*t*p2x,u*u*p1y+2*u*t*cy+t*t*p2y)}op.push(Jx+bx*E+ax*(rl*3.3-130),Jy+by*E+ay*(rl*3.3-130));mkRoad(6,fix(op))}}
 function nearestS(r,x,y){let best=1e18,bs=0;for(let i=0;i<r.n-1;i++){const ax=r.pts[i*2],ay=r.pts[i*2+1],bx=r.pts[i*2+2],by=r.pts[i*2+3];const dx=bx-ax,dy=by-ay,l2=dx*dx+dy*dy||1;let t=((x-ax)*dx+(y-ay)*dy)/l2;t=clamp(t,0,1);const px=ax+dx*t,py=ay+dy*t;const d=(px-x)**2+(py-y)**2;if(d<best){best=d;bs=r.cum[i]+t*M.sqrt(l2)}}return [M.sqrt(best),bs]}
-for(const [c,jx,jy,hx,hy] of JUNC){if(landE(jx,jy,0)<0)continue;const L=M.hypot(jx-c.x,jy-c.y);const nx=(jx-c.x)/L,ny=(jy-c.y)/L;
+for(const [c,jx,jy,hx,hy,hr0] of JUNC){if(landE(jx,jy,0)<0)continue;let ringR0=null;for(const r of c.rings||[]){const [d]=nearestS(r,jx,jy);if(d<120){ringR0=r;break}}const L=M.hypot(jx-c.x,jy-c.y);const nx=(jx-c.x)/L,ny=(jy-c.y)/L;
   // half cloverleaf only where the highway meets the ring almost radially and on dry land
   const hl=M.hypot(hx,hy)||1;let ok=(hx*nx+hy*ny)/hl>0.93;for(let q=0;q<16&&ok;q++){const a=q/16*TAU,rr=q&1?150:280;if(landE(jx+M.cos(a)*rr,jy+M.sin(a)*rr,0.002)<0)ok=false}
-  if(ok)addClover(jx,jy,-ny,nx,nx,ny,true);
-  {const e=snapNode(c,c.x+(jx-c.x)*0.8,c.y+(jy-c.y)*0.8);mkRoad(2,[jx,jy,e[0],e[1]])}
+  if(ok&&ringR0)addClover(jx,jy,-ny,nx,nx,ny,true,ringR0,hr0);
+  {const e=snapNode(c,c.x+(jx-c.x)*0.8,c.y+(jy-c.y)*0.8);const pts=trimAlong([jx,jy,e[0],e[1]],2,true,false);if(pts)mkRoad(2,pts)}
   for(const r of c.rings||[]){const [d,s]=nearestS(r,jx,jy);if(d<120){(r.ov=r.ov||[]).push([s-42,s+42]);break}}}
 // grade-separated crossings ----------------------------------------------
 {const SC=512,SN=WORLD/SC;const cells=new Map();
@@ -302,11 +332,11 @@ for(const [c,jx,jy,hx,hy] of JUNC){if(landE(jx,jy,0)<0)continue;const L=M.hypot(
       const X=ax+r1x*t,Y=ay+r1y*t;if(X<cx0||X>=cx0+SC||Y<cy0||Y>=cy0+SC)continue;
       const sA=ra.cum[ia]+t*M.hypot(r1x,r1y),sB=rb.cum[ib]+u*M.hypot(r2x,r2y);if(sA<30||sA>ra.L-30||sB<30||sB>rb.L-30)continue;
       const kk=M.min(ra.id,rb.id)+'_'+M.max(ra.id,rb.id)+'_'+M.round(X/50)+'_'+M.round(Y/50);if(seen.has(kk))continue;seen.add(kk);
-      if(landE(X,Y,0)<0)continue;
+      const wet=landE(X,Y,0)<0; // over water the upper road still passes above the lower one (no interchange there)
       let up,lo,su;if(ka===5){up=rb;lo=ra;su=sB}else if(kb===5){up=ra;lo=rb;su=sA}else if(ka===0&&kb===0){if(ra.id>rb.id){up=ra;lo=rb;su=sA}else{up=rb;lo=ra;su=sB}}
       else if(ka===0){up=ra;lo=rb;su=sA}else{up=rb;lo=ra;su=sB}
       const hw=RW[lo.k]/2+24;(up.ov=up.ov||[]).push([su-hw,su+hw]);
-      if(ka===0&&kb===0&&!ra.ring&&!rb.ring){const l1=M.hypot(r1x,r1y),l2=M.hypot(r2x,r2y);const cosA=M.abs((r1x*r2x+r1y*r2y)/(l1*l2));let dry=cosA<0.3;for(const c of live)if(M.hypot(c.x-X,c.y-Y)<c.R*1.35+300){dry=false;break}for(let q=0;q<16&&dry;q++){const a=q/16*TAU,rr=q&1?140:260;if(landE(X+M.cos(a)*rr,Y+M.sin(a)*rr,0.002)<0)dry=false}if(dry){addClover(X,Y,r1x/l1,r1y/l1,r2x/l2,r2y/l2)}}}}}}
+      if(!wet&&ka===0&&kb===0&&!ra.ring&&!rb.ring&&M.min(sA,ra.L-sA,sB,rb.L-sB)>420){const l1=M.hypot(r1x,r1y),l2=M.hypot(r2x,r2y);const cosA=M.abs((r1x*r2x+r1y*r2y)/(l1*l2));let dry=cosA<0.3;for(const c of live)if(M.hypot(c.x-X,c.y-Y)<c.R*1.35+300){dry=false;break}for(let q=0;q<16&&dry;q++){const a=q/16*TAU,rr=q&1?140:260;if(landE(X+M.cos(a)*rr,Y+M.sin(a)*rr,0.002)<0)dry=false}if(dry){addClover(X,Y,r1x/l1,r1y/l1,r2x/l2,r2y/l2,false,ra,rb)}}}}}}
 // gas stations along highways / trunk roads ---------------------------------
 var GASOFF=40,GASHW=false;
 {const base=roads.length;for(let i=0;i<base;i++){const r=roads[i];if((r.k!==0&&r.k!==1)||r.ring||r.L<5000)continue;const R=rng(hh(r.id,5,55));
@@ -340,7 +370,7 @@ for(const z of zones){const P=z.prims;if(!P||z.zk==='air')continue;const keep=[]
   for(const p of P){let w=0,h=0,cx=0,cy=0;const k=p.k;
     if(k==='b'||k==='pk'||k==='cont'||k==='bund'){w=p.w;h=p.h;cx=p.x+w/2;cy=p.y+h/2}else if(k==='cyl'||k==='pile'){w=h=p.r*2;cx=p.x;cy=p.y}else if(k==='t'){w=h=p.d*0.8;cx=p.x;cy=p.y}
     if(w){const x=z.x+cx*z.ca-cy*z.sa,y=z.y+cx*z.sa+cy*z.ca;
-      if(roadHits(x,y,z.ang+(p.a||0),w,h,2,z.acc)){cut++;if(k==='cyl'&&p.H){const ex=x+LEANX*p.H,ey=y+LEANY*p.H;for(let i=emitters.length-1;i>=0;i--)if(M.abs(emitters[i].x-ex)<0.5&&M.abs(emitters[i].y-ey)<0.5)emitters.splice(i,1)}continue}}
+      if(roadHits(x,y,z.ang+(p.a||0),w,h,2,z.acc)){cut++;if(k==='cyl'&&p.H)dropEmit(z,p);continue}}
     keep.push(p)}
   if(cut)z.prims=keep}
 // wind farms
@@ -348,7 +378,7 @@ for(const z of zones){const P=z.prims;if(!P||z.zk==='air')continue;const keep=[]
   const x=(cx+0.2+0.6*R())*CELL,y=(cy+0.2+0.6*R())*CELL;const e=landE(x,y,0.01);if(e<0.03||e>0.3)continue;
   let bad=false;for(const c of live){if(M.hypot(c.x-x,c.y-y)<c.R+700){bad=true;break}}for(const z of zones){if(M.hypot(z.x-x,z.y-y)<z.rad+700){bad=true;break}}if(bad)continue;const a=R()*PI,ca=M.cos(a),sa=M.sin(a);const rows=2+(R()*2|0),per=4+(R()*4|0);const tb=[];
   for(let r=0;r<rows;r++)for(let k=0;k<per;k++){const u=(k-(per-1)/2)*380,v=(r-(rows-1)/2)*620+(k%2)*60;const px=x+u*ca-v*sa,py=y+u*sa+v*ca;
-    if(landE(px,py,0.006)<0)continue;let inC=false;for(const c of live){if(M.hypot(c.x-px,c.y-py)<c.R*1.2+250){inC=true;break}}if(inC)continue;
+    if(landE(px,py,0.006)<0||roadHits(px,py,0,24,24,4,null))continue;let inC=false;for(const c of live){if(M.hypot(c.x-px,c.y-py)<c.R*1.2+250){inC=true;break}}if(inC)continue;
     tb.push({x:px,y:py,ph:R()*TAU,sp:1.1+R()*0.5})}
   if(tb.length<3)continue;const f={kind:'farm',t:tb,bb:[x-2200,y-2200,x+2200,y+2200]};farms.push(f);addF(f,f.bb[0],f.bb[1],f.bb[2],f.bb[3])}}
 
@@ -482,7 +512,17 @@ function genZone(z){
     G(P,-W/2,-H/2,W,H,[146,150,112]);P.push({k:'solar',x:-W/2+15,y:-H/2+15,w:W-30,h:H-30});
     B(P,-W/2+4,-H/2+4,14,10,4,[200,200,200],'f');
   }
+  dedupeZone(z);z.prims=dropCrowns(fitGround(z.prims));
 }
+// randomly placed zone objects must not interpenetrate: a building that overlaps an earlier one is dropped,
+// a tank / tower / chimney that overlaps a building or an earlier cylinder too (with its smoke)
+function fpOver(a,b){if(a.k==='b'&&b.k==='b')return a.x<b.x+b.w-0.2&&b.x<a.x+a.w-0.2&&a.y<b.y+b.h-0.2&&b.y<a.y+a.h-0.2;
+  if(a.k==='cyl'&&b.k==='cyl')return M.hypot(a.x-b.x,a.y-b.y)<a.r+b.r-0.2;const c=a.k==='cyl'?a:b,r=a.k==='cyl'?b:a;
+  return M.hypot(c.x-clamp(c.x,r.x,r.x+r.w),c.y-clamp(c.y,r.y,r.y+r.h))<c.r-0.2}
+function dropEmit(z,p){const ex=z.x+p.x*z.ca-p.y*z.sa+LEANX*p.H,ey=z.y+p.x*z.sa+p.y*z.ca+LEANY*p.H;for(let i=emitters.length-1;i>=0;i--)if(M.abs(emitters[i].x-ex)<0.5&&M.abs(emitters[i].y-ey)<0.5)emitters.splice(i,1)}
+function dedupeZone(z){if(z.zk==='air')return;const P=z.prims,K=mkBins(),out=[];let cut=0;
+  for(const pass of ['b','cyl'])for(const p of P){if(p.k!==pass||p.nd||p.lvl!==undefined)continue;const bb=fpBox(p);let bad=false;for(const q of binGet(K,bb[0],bb[1],bb[2],bb[3]))if(fpOver(p,q)){bad=true;break}if(bad){p._x=1;cut++}else binAdd(K,p,bb)}
+  if(!cut)return;for(const p of P){if(p._x){if(p.k==='cyl'&&p.H)dropEmit(z,p);continue}out.push(p)}z.prims=out}
 
 // ---------------------------------------------------------------- ships & flights
 const ships=[];
@@ -753,7 +793,31 @@ const MASS=MASS_.concat([[112,132,90],[180,182,180],[130,120,120],[112,130,96],[
 function occ(O,x,y,m){for(let i=0;i<O.length;i+=4){if(x>O[i]-m&&x<O[i]+O[i+2]+m&&y>O[i+1]-m&&y<O[i+1]+O[i+3]+m)return true}return false}
 let LITE=false,LITE2=false;
 function treesIn(P,O,R,x0,y0,w,h,n,dmin,dmax,vset){if(LITE)n=M.min(n,LITE2?4:10);for(let q=0;q<n;q++){const x=x0+R()*w,y=y0+R()*h,d=dmin+R()*(dmax-dmin);if(occ(O,x,y,d*0.45))continue;TR(P,x,y,d,vset[R()*vset.length|0])}}
-function streetTrees(P,R,x0,y0,x1,y1,sp){if(LITE2)return;if(LITE)sp*=1.6;const v=R()*3|0;for(let x=x0+4;x<x1-4;x+=sp){TR(P,x,y0+1.8,5+R()*3,v);TR(P,x,y1-1.8,5+R()*3,v)}for(let y=y0+4+sp;y<y1-4-sp;y+=sp){TR(P,x0+1.8,y,5+R()*3,v);TR(P,x1-1.8,y,5+R()*3,v)}}
+// flat ground objects never run under buildings or each other: beds and car parks are clipped to the free part,
+// playgrounds, greenhouses, courts, tracks and pads that collide are dropped (after layout, no RNG involved)
+function gRect(p){return p.k==='helipad'?[p.x-p.r,p.y-p.r,2*p.r,2*p.r]:[p.x,p.y,p.w,p.h]}
+function rOver(a,b,m){return a[0]<b[0]+b[2]-m&&b[0]<a[0]+a[2]-m&&a[1]<b[1]+b[3]-m&&b[1]<a[1]+a[3]-m}
+function fitGround(P){const GCLIP={pk:1,rows:1},GDROP={play:1,gh:1,court:1,track:1,field:1,helipad:1,wood:1,pool:1};const BG=mkBins();let nb=0;for(const p of P)if(p.k==='b'){const q=p.a?fpBox(p):[p.x-0.4,p.y-0.4,p.x+p.w+0.4,p.y+p.h+0.4];binAdd(BG,[q[0],q[1],q[2]-q[0],q[3]-q[1]],q);nb++}
+  const Gs=[];let cut=false;
+  for(const p of P){const k=p.k;if(!GCLIP[k]&&!GDROP[k])continue;let r=gRect(p);const Bs=nb?binGet(BG,r[0],r[1],r[0]+r[2],r[1]+r[3]):[];
+    if(GCLIP[k]){for(const b of Bs){if(!rOver(r,b,0.05))continue;const c=[[r[0],r[1],b[0]-r[0],r[3]],[b[0]+b[2],r[1],r[0]+r[2]-b[0]-b[2],r[3]],[r[0],r[1],r[2],b[1]-r[1]],[r[0],b[1]+b[3],r[2],r[1]+r[3]-b[1]-b[3]]];
+        let best=null;for(const q of c)if(q[2]>0&&q[3]>0&&(!best||q[2]*q[3]>best[2]*best[3]))best=q;r=best;if(!r)break}
+      const min=k==='pk'?5.4:2.5;if(!r||r[2]<min||r[3]<min){p._x=1;cut=true;continue}p.x=r[0];p.y=r[1];p.w=r[2];p.h=r[3];if(k==='pk')Gs.push(r);continue}
+    let bad=false;for(const b of Bs)if(rOver(r,b,0.05)){bad=true;break}if(!bad)for(const g of Gs)if(rOver(r,g,0.05)){bad=true;break}
+    if(bad){p._x=1;cut=true}else Gs.push(r)}
+  return cut?P.filter(p=>!p._x):P}
+// trees are drawn above buildings, so a crown must not cover a roof: drop such trees (after layout, no RNG involved)
+// buckets of footprints (local metres) for the layout checks below
+function fpBox(p){if(p.k==='cyl')return [p.x-p.r,p.y-p.r,p.x+p.r,p.y+p.r];if(p.a){const r=M.hypot(p.w,p.h)/2,cx=p.x+p.w/2,cy=p.y+p.h/2;return [cx-r,cy-r,cx+r,cy+r]}return [p.x,p.y,p.x+p.w,p.y+p.h]}
+function mkBins(){return new Map()}
+function binAdd(G,p,b){for(let j=M.floor(b[1]/24);j<=M.floor(b[3]/24);j++)for(let i=M.floor(b[0]/24);i<=M.floor(b[2]/24);i++){const k=i*65536+j;let a=G.get(k);if(!a)G.set(k,a=[]);a.push(p)}}
+function binGet(G,x0,y0,x1,y1){const out=[];for(let j=M.floor(y0/24);j<=M.floor(y1/24);j++)for(let i=M.floor(x0/24);i<=M.floor(x1/24);i++){const a=G.get(i*65536+j);if(a)for(const p of a)if(out.indexOf(p)<0)out.push(p)}return out}
+function dropCrowns(P){const G=mkBins();let nb=0;for(const p of P)if(p.k==='b'||p.k==='cyl'){binAdd(G,p,fpBox(p));nb++}if(!nb)return P;let cut=false;
+  for(const p of P){if(p.k!=='t')continue;const r=p.d*0.45-0.4;for(const b of binGet(G,p.x-r,p.y-r,p.x+r,p.y+r)){let tx=p.x,ty=p.y;if(b.a){const cx=b.x+b.w/2,cy=b.y+b.h/2,c=M.cos(b.a),sn=M.sin(b.a);tx=cx+(p.x-cx)*c+(p.y-cy)*sn;ty=cy-(p.x-cx)*sn+(p.y-cy)*c}
+    const d=b.k==='b'?M.hypot(tx-clamp(tx,b.x,b.x+b.w),ty-clamp(ty,b.y,b.y+b.h)):M.hypot(p.x-b.x,p.y-b.y)-b.r;if(d<r){p._x=1;cut=true;break}}}
+  return cut?P.filter(p=>!p._x):P}
+// street trees on the sidewalk; a crown that would cover a roof is left out (trees are drawn above buildings)
+function streetTrees(P,R,x0,y0,x1,y1,sp,O){if(LITE2)return;if(LITE)sp*=1.6;const v=R()*3|0;const T=(x,y)=>{const d=5+R()*3;if(!O||!occ(O,x,y,d*0.5))TR(P,x,y,d,v)};for(let x=x0+4;x<x1-4;x+=sp){T(x,y0+1.8);T(x,y1-1.8)}for(let y=y0+4+sp;y<y1-4-sp;y+=sp){T(x0+1.8,y);T(x1-1.8,y)}}
 function genBlock(c,bi,bj,t){
   const R=rng(hh(c.id,bi*1013+bj,61));const i=bi-c.N,j=bj-c.N;const hu=(c.us[bi+1]-c.us[bi])/2,hv=(c.vs[bj+1]-c.vs[bj])/2;
   const iL=lineHalf(i),iR=lineHalf(i+1),iB=lineHalf(j),iT=lineHalf(j+1);
@@ -766,7 +830,7 @@ function genBlock(c,bi,bj,t){
   case 1:{ // towers
     G(P,X0,Y0,W,H,PAVE);P.push({k:'plz',x:X0,y:Y0,w:W,h:H,seed:hh(c.id,bi*1013+bj,99)});const n=1+(R()*3|0);const horiz=W>=H;
     for(let q=0;q<n;q++){const pw=(horiz?W:H)/n;const tw=M.min(pw*0.7,26+R()*24),th=M.min((horiz?H:W)*0.7,24+R()*24);
-      const pc=(horiz?X0:Y0)+pw*(q+0.5);let x,y;if(horiz){x=pc-tw/2+(R()-0.5)*(pw-tw)*0.6;y=cy-th/2+(R()-0.5)*(H-th)*0.6}else{y=pc-th/2+(R()-0.5)*(pw-th)*0.6;x=cx-tw/2+(R()-0.5)*(W-tw)*0.6}
+      const pc=(horiz?X0:Y0)+pw*(q+0.5);let x,y;if(horiz){x=pc-tw/2+(R()-0.5)*(pw-tw)*0.6;y=cy-th/2+(R()-0.5)*(H-th)*0.6}else{y=pc-tw/2+(R()-0.5)*(pw-tw)*0.6;x=cx-th/2+(R()-0.5)*(W-th)*0.6}
       const w2=horiz?tw:th,h2=horiz?th:tw;const Hh=M.max(40,(c.type===3?90+R()*220:50+R()*90)*(1-dn*1.6));
       const gl=R()<0.6;const col=gl?[[62,92,116],[74,108,122],[56,80,104],[96,118,130],[88,96,112]][R()*5|0]:[[176,174,170],[152,150,146],[124,124,128],[186,170,150]][R()*4|0],rf=gl?'gl':'f';const st=R();
       if(st<0.4){bld(x,y,w2,h2,Hh,col,rf,{heli:Hh>150&&R()<0.6,ant:Hh>170&&R()<0.5,sol:!gl&&R()<0.2})}
@@ -775,15 +839,15 @@ function genBlock(c,bi,bj,t){
       else if(st<0.84){const rr2=M.min(w2,h2)/2;CY(P,x+w2/2,y+h2/2,rr2,Hh,col,'gtow');O.push(x,y,w2,h2)}
       else{const tw2=w2*0.42;bld(x,y,tw2,h2,Hh,col,rf,{lvl:1,ant:1});bld(x+w2-tw2,y,tw2,h2,Hh,col,rf,{lvl:1,ant:1});bld(x+tw2,y+h2*0.35,w2-2*tw2,h2*0.3,Hh*0.62,[200,205,210],'gl',{H0:Hh*0.55,lvl:2,nd:1})}}
     if(n<3&&R()<0.5){P.push({k:'gc',x:cx+(R()-0.5)*W*0.4,y:cy+(R()-0.5)*H*0.4,r:6,c:[160,170,175]});}
-    treesIn(P,O,R,X0+4,Y0+4,W-8,H-8,8,4,7,[0,2,4]);streetTrees(P,R,sx0,sy0,sx1,sy1,11);break}
+    treesIn(P,O,R,X0+4,Y0+4,W-8,H-8,8,4,7,[0,2,4]);streetTrees(P,R,sx0,sy0,sx1,sy1,11,O);break}
   case 2:{ // perimeter
-    G(P,X0,Y0,W,H,YARD);const d=13+R()*4;const col=ROOFP[R()*ROOFP.length|0];
+    G(P,X0,Y0,W,H,YARD);const d=M.min(13+R()*4,(M.min(W,H)-1)/2);const col=ROOFP[R()*ROOFP.length|0];
     const seg=(x,y,w,h,alongX,gf)=>{let p=0;const L=alongX?w:h;while(p<L-6){let s=M.min(L-p,22+R()*40);if(L-p-s<14)s=L-p;
       const fl=(5+(R()*5|0))*3.1;const cc=[col[0]*(0.9+R()*0.2),col[1]*(0.9+R()*0.2),col[2]*(0.9+R()*0.2)];
       if(alongX)bld(x+p,y,s-0.5,h,fl,cc,R()<0.25?'h':'f',{gf});else bld(x,y+p,w,s-0.5,fl,cc,R()<0.25?'h':'f',{gf});p+=s}};
     seg(X0,Y0,W,d,1,[0,2,-1]);seg(X0,Y1-d,W,d,1,[2,0,-1]);seg(X0,Y0+d,d,H-2*d,0,[3,1,-1]);if(R()<0.8)seg(X1-d,Y0+d,d,H-2*d,0,[1,3,-1]);
     if(W>60&&H>60){PK(P,X0+d+4,cy-6,M.min(W-2*d-8,40),12,0.6,R()*1e9|0);P.push({k:'play',x:cx+5,y:Y0+d+6,w:14,h:10})}
-    treesIn(P,O,R,X0+d,Y0+d,W-2*d,H-2*d,14,5,9,[0,1,2,4]);streetTrees(P,R,sx0,sy0,sx1,sy1,12);break}
+    treesIn(P,O,R,X0+d,Y0+d,W-2*d,H-2*d,14,5,9,[0,1,2,4]);streetTrees(P,R,sx0,sy0,sx1,sy1,12,O);break}
   case 3:{ // panel slabs
     G(P,X0,Y0,W,H,YARD);const horiz=W>=H;const LA=horiz?W:H,SA=horiz?H:W;const n=M.max(1,M.floor((SA-8)/46));
     const fls=[5,9,9,9,12,14,16][R()*7|0];const col=PANELC[R()*PANELC.length|0];
@@ -794,7 +858,7 @@ function genBlock(c,bi,bj,t){
     if(R()<0.45&&W>70&&H>70){const tx=X0+6+R()*(W-40),ty=Y0+6+R()*(H-40);if(!occ(O,tx+12,ty+12,16))bld(tx,ty,24,24,(16+(R()*8|0))*2.9,col,'f')}
     if(R()<0.5){const kx=cx-15,ky=cy-12;if(!occ(O,kx+15,ky+12,18)){bld(kx,ky,30,8,7,[176,118,80],'f');bld(kx,ky+8,8,16,7,[176,118,80],'f');P.push({k:'play',x:kx+12,y:ky+11,w:16,h:12})}}
     for(let q=0;q<2;q++){const px=X0+8+R()*(W-30),py=Y0+8+R()*(H-24);if(!occ(O,px+8,py+6,6))P.push({k:'play',x:px,py,y:py,w:14,h:10})}
-    treesIn(P,O,R,X0+2,Y0+2,W-4,H-4,M.floor(W*H/420),5,10,[0,1,2,4,6]);streetTrees(P,R,sx0,sy0,sx1,sy1,13);break}
+    treesIn(P,O,R,X0+2,Y0+2,W-4,H-4,M.floor(W*H/420),5,10,[0,1,2,4,6]);streetTrees(P,R,sx0,sy0,sx1,sy1,13,O);break}
   case 4:case 13:{ // private houses
     G(P,X0,Y0,W,H,[112,130,76]);const horiz=W>=H;const LA=horiz?W:H,SA=horiz?H:W;const lw=20+R()*8;const nl=M.max(1,M.floor(LA/lw)),lw2=LA/nl;const rows=SA>50?2:1;
     for(let r=0;r<rows;r++)for(let q=0;q<nl;q++){const Rl=rng(hh(c.id*7+bi,bj*131+q,r+5));if(Rl()<0.08)continue;
@@ -806,14 +870,14 @@ function genBlock(c,bi,bj,t){
       if(horiz){hx=lx+(lw3-hw)/2+(Rl()-0.5)*3;hy=r===0?ly+front:ly+lh3-front-hd}else{hy=ly+(lh3-hw)/2;hx=r===0?lx+front:lx+lw3-front-hd}
       const ww=horiz?hw:hd,hh2=horiz?hd:hw;if(horiz)P.push({k:'path',x:hx+ww*0.3,y:r===0?ly+0.4:hy+hh2,w:1.3,h:r===0?hy-ly-0.4:ly+lh3-hy-hh2-0.4});else P.push({k:'path',x:r===0?lx+0.4:hx+ww,y:hy+hh2*0.3,w:r===0?hx-lx-0.4:lx+lw3-hx-ww-0.4,h:1.3});
       bld(hx,hy,ww,hh2,5+Rl()*4,ROOFH[Rl()*ROOFH.length|0],Rl()<0.55?'g':'h',{a:(Rl()-0.5)*0.12});
-      if(Rl()<0.5){const sx=lx+lw3*0.15+Rl()*lw3*0.5,sy=ly+lh3*0.15+Rl()*lh3*0.6;if(!occ(O,sx,sy,4))bld(sx,sy,3.5,3,2.6,[[120,100,80],[100,100,100],[150,80,60]][Rl()*3|0],'f')}
+      if(Rl()<0.5){const sx=lx+lw3*0.15+Rl()*lw3*0.5,sy=ly+lh3*0.15+Rl()*lh3*0.6;if(!occ(O,sx+1.75,sy+1.5,3.4))bld(sx,sy,3.5,3,2.6,[[120,100,80],[100,100,100],[150,80,60]][Rl()*3|0],'f')}
       if(Rl()<0.3){const gx=lx+lw3*0.5,gy=ly+lh3*0.5;if(!occ(O,gx+2,gy+4,3))P.push({k:'gh',x:gx,y:gy,w:3.5,h:8})}
       const nt=Rl()*3|0;for(let q2=0;q2<nt;q2++){const tx=lx+2+Rl()*(lw3-4),ty=ly+2+Rl()*(lh3-4);if(!occ(O,tx,ty,3))TR(P,tx,ty,4+Rl()*4,[0,2,4,6][Rl()*4|0])}
       // back of the plot: vegetable garden, orchard, bathhouse, woodpile
       const D=horiz?lh3:lw3,Wp=horiz?lw3:lh3;if(D>30){const back=(a,b)=>r===0?a:D-a-b;const loc=(u,v,w,h)=>horiz?[lx+u,ly+back(v,h),w,h]:[lx+back(v,h),ly+u,h,w];
         if(Rl()<0.8){const gd=D*(0.25+Rl()*0.2);const [x1,y1,w1,h1]=loc(1.5,D-gd-1.5,Wp-3,gd);P.push({k:'rows',x:x1,y:y1,w:w1,h:h1,o:horiz?0:1})}
         const no=Rl()<0.7?3+(Rl()*6|0):0;for(let q2=0;q2<no;q2++){const u=2.5+(q2%3)*(Wp-5)/2+(Rl()-0.5),v=D*0.42+((q2/3)|0)*5+(Rl()-0.5);const [tx,ty]=loc(u,v,0,0);if(!occ(O,tx,ty,2.5))TR(P,tx,ty,3+Rl()*1.8,[2,4,0][Rl()*3|0])}
-        if(Rl()<0.45){const [bx,by,bw,bh]=loc(Wp-5.5,D-6.5,4,3.6);bld(bx,by,bw,bh,2.8,[[132,104,76],[118,92,66]][Rl()*2|0],'g')}
+        if(Rl()<0.45){const [bx,by,bw,bh]=loc(Wp-5.5,D-6.5,4,3.6);if(!occ(O,bx+bw/2,by+bh/2,M.max(bw,bh)/2+1))bld(bx,by,bw,bh,2.8,[[132,104,76],[118,92,66]][Rl()*2|0],'g')}
         if(Rl()<0.5){const [wx,wy,ww2,wh]=loc(1,D*0.5,3,0.8);P.push({k:'wood',x:wx,y:wy,w:ww2,h:wh})}}}
     break}
   case 5:{ // park
@@ -827,9 +891,9 @@ function genBlock(c,bi,bj,t){
     else{const bh=H*0.55;bld(X0+2,Y0+2,W-4,bh,12,[196,196,198],'f',{sol,gf:[-1,-1,2]});PK(P,X0+4,Y0+bh+6,W-8,H-bh-10,0.7,R()*1e9|0)}break}
   case 7:{ // school
     G(P,X0,Y0,W,H,[118,138,88]);const col=[[184,120,90],[150,150,150],[176,150,110]][R()*3|0];
-    bld(X0+5,Y0+5,W*0.45,12,12,col,'f');bld(X0+5,Y0+17,12,H*0.4,12,col,'f');bld(X0+5+W*0.45-12,Y0+17,12,H*0.25,12,col,'f');
+    const sw=M.max(W*0.45,30);bld(X0+5,Y0+5,sw,12,12,col,'f');bld(X0+5,Y0+17,12,H*0.4,12,col,'f');bld(X0+5+sw-12,Y0+17,12,H*0.25,12,col,'f');
     const tw=M.min(W*0.5,90),th=M.min(H*0.55,50);P.push({k:'track',x:X1-tw-5,y:Y1-th-5,w:tw,h:th});O.push(X1-tw-5,Y1-th-5,tw,th);
-    treesIn(P,O,R,X0,Y0,W,H,12,5,9,[0,2,4]);streetTrees(P,R,sx0,sy0,sx1,sy1,12);break}
+    treesIn(P,O,R,X0,Y0,W,H,12,5,9,[0,2,4]);streetTrees(P,R,sx0,sy0,sx1,sy1,12,O);break}
   case 8:{ // garages
     G(P,X0,Y0,W,H,[122,118,110]);const horiz=W>=H;const LA=horiz?W:H,SA=horiz?H:W;let p=-SA/2+4;
     while(p<SA/2-12){for(let s2=0;s2<2;s2++){const rowY=p+s2*6;for(let a=-LA/2+4;a<LA/2-4;a+=3.6){const col=[[120,90,72],[100,100,104],[134,112,92],[90,86,82],[140,100,80]][R()*5|0];
@@ -854,8 +918,8 @@ function genBlock(c,bi,bj,t){
     for(let q=0;q<5;q++)P.push({k:'pile',x:X0+10+R()*(W-20),y:Y1-10-R()*20,r:3+R()*4,c:[[160,150,130],[120,110,100],[180,160,120]][R()*3|0]});
     PK(P,X0+4,Y1-12,30,8,0.5,R()*1e9|0,1);break}
   case 12:{ // low-rise commercial
-    G(P,X0,Y0,W,H,[150,146,138]);let p=X0;while(p<X1-10){const w=M.min(X1-p,14+R()*24);const h=14+R()*16;bld(p,Y0,w-1,h,(2+(R()*3|0))*3.2,ROOFP[R()*ROOFP.length|0],R()<0.3?'h':'f',{gf:[0,2,-1]});bld(p,Y1-h,w-1,h,(2+(R()*3|0))*3.2,ROOFP[R()*ROOFP.length|0],'f',{gf:[2,0,-1]});p+=w}
-    PK(P,X0+4,cy-9,W-8,18,0.6,R()*1e9|0);streetTrees(P,R,sx0,sy0,sx1,sy1,12);break}
+    G(P,X0,Y0,W,H,[150,146,138]);let p=X0;while(p<X1-10){const w=M.min(X1-p,14+R()*24);const h=M.min(14+R()*16,(H-22)/2);bld(p,Y0,w-1,h,(2+(R()*3|0))*3.2,ROOFP[R()*ROOFP.length|0],R()<0.3?'h':'f',{gf:[0,2,-1]});bld(p,Y1-h,w-1,h,(2+(R()*3|0))*3.2,ROOFP[R()*ROOFP.length|0],'f',{gf:[2,0,-1]});p+=w}
+    PK(P,X0+4,cy-9,W-8,18,0.6,R()*1e9|0);streetTrees(P,R,sx0,sy0,sx1,sy1,12,O);break}
 
   case 13:{ // cottages with pools
     G(P,X0,Y0,W,H,[104,132,72]);const horiz=W>=H;const LA=horiz?W:H,SA=horiz?H:W;const nl=M.max(1,M.floor(LA/34)),lw2=LA/nl,rows=SA>70?2:1;
@@ -871,10 +935,10 @@ function genBlock(c,bi,bj,t){
     break}
   case 14:{ // hospital
     G(P,X0,Y0,W,H,[118,140,94]);const fl=(5+(R()*4|0))*3.3;const col=[[214,212,206],[196,200,204]][R()*2|0];const d=14;
-    bld(X0+6,Y0+6,d,H*0.7,fl,col,'f',{fc:[230,230,226]});bld(X0+6+d,Y0+6+H*0.3,W*0.5,d,fl,col,'f',{fc:[230,230,226]});bld(X0+6+d+W*0.5,Y0+6,d,H*0.7,fl,col,'f',{fc:[230,230,226]});
-    bld(X0+6+d+W*0.12,Y0+6+H*0.3+d,W*0.25,H*0.18,8,[180,184,190],'f');
+    const mw=M.min(W*0.5,W-2*d-14);bld(X0+6,Y0+6,d,H*0.7,fl,col,'f',{fc:[230,230,226]});bld(X0+6+d,Y0+6+H*0.3,mw,d,fl,col,'f',{fc:[230,230,226]});bld(X0+6+d+mw,Y0+6,d,H*0.7,fl,col,'f',{fc:[230,230,226]});
+    bld(X0+6+d+mw*0.24,Y0+6+H*0.3+d,mw*0.5,H*0.18,8,[180,184,190],'f');
     P.push({k:'helipad',x:X1-16,y:Y0+16,r:9});O.push(X1-26,Y0+6,20,20);PK(P,X0+6,Y1-16,W-40,11,0.8,R()*1e9|0);
-    treesIn(P,O,R,X0,Y0,W,H,16,5,9,[0,1,2,4]);streetTrees(P,R,sx0,sy0,sx1,sy1,12);break}
+    treesIn(P,O,R,X0,Y0,W,H,16,5,9,[0,1,2,4]);streetTrees(P,R,sx0,sy0,sx1,sy1,12,O);break}
   case 15:{ // market
     G(P,X0,Y0,W,H,[110,110,108]);const CC=[[40,90,170],[190,50,40],[230,230,228],[60,140,80],[230,170,40],[120,60,140]];
     bld(X0+3,Y0+3,W-6,16,7,[176,180,186],'co');
@@ -883,7 +947,7 @@ function genBlock(c,bi,bj,t){
   case 16:{ // sports complex
     G(P,X0,Y0,W,H,[112,132,90]);const fw=M.min(W-20,105),fh=M.min(H*0.5,68);P.push({k:'field',x:X0+10,y:Y0+8,w:fw,h:fh});O.push(X0+10,Y0+8,fw,fh);
     let x=X0+10;const yy=Y0+fh+16;while(x<X1-20&&yy+34<Y1){const t=R()<0.7?0:1;P.push({k:'court',x,y:yy,w:17,h:34,t});O.push(x,yy,17,34);x+=20}
-    bld(X1-30,Y1-22,24,16,8,[190,190,192],'f');treesIn(P,O,R,X0,Y0,W,H,14,5,9,[0,1,2,4]);streetTrees(P,R,sx0,sy0,sx1,sy1,12);break}
+    bld(X1-30,Y1-22,24,16,8,[190,190,192],'f');treesIn(P,O,R,X0,Y0,W,H,14,5,9,[0,1,2,4]);streetTrees(P,R,sx0,sy0,sx1,sy1,12,O);break}
   case 17:{ // bus depot
     G(P,X0,Y0,W,H,[104,104,104]);const horiz=W>=H;
     if(horiz){bld(X0+3,Y0+3,W*0.4,H-6,12,[186,190,194],'co');P.push({k:'pk',x:X0+W*0.45,y:Y0+4,w:W*0.53,h:H-8,fill:0.7,seed:R()*1e9|0,bus:1})}
@@ -893,7 +957,7 @@ function genBlock(c,bi,bj,t){
     for(let q=0;q<n;q++){const pw=(horiz?W:H)/n;const a=(horiz?X0:Y0)+q*pw+4;const ow=pw-8,oh=(horiz?H:W)*(0.45+R()*0.3);const fl=(6+(R()*9|0))*3.6;const gl=R()<0.6;
       const col=gl?[[80,110,128],[96,120,136],[70,96,120]][R()*3|0]:[[186,182,176],[160,160,162]][R()*2|0];const o=(horiz?H:W)-oh-8;const off=R()*o;
       if(horiz)bld(a,Y0+4+off,ow,oh,fl,col,gl?'gl':'f',{rg:!gl&&R()<0.5,sol:!gl&&R()<0.4});else bld(X0+4+off,a,oh,ow,fl,col,gl?'gl':'f',{rg:!gl&&R()<0.5,sol:!gl&&R()<0.4})}
-    P.push({k:'gc',x:cx,y:cy,r:5,c:[120,160,180]});treesIn(P,O,R,X0,Y0,W,H,10,4,8,[0,2,4]);streetTrees(P,R,sx0,sy0,sx1,sy1,11);break}
+    P.push({k:'gc',x:cx,y:cy,r:5,c:[120,160,180]});treesIn(P,O,R,X0,Y0,W,H,10,4,8,[0,2,4]);streetTrees(P,R,sx0,sy0,sx1,sy1,11,O);break}
   case 20:{ // green buffer along a through-road: meadow + tree groups kept clear of the carriageway
     G(P,X0,Y0,W,H,[104,124,72]);const ca=c.ca,sa=c.sa,u0=(c.us[bi]+c.us[bi+1])/2,v0=(c.vs[bj]+c.vs[bj+1])/2,bx=c.x+u0*ca-v0*sa,by=c.y+u0*sa+v0*ca;
     const n=M.floor(W*H/90);for(let q=0;q<n;q++){const x=X0+3+R()*(W-6),y=Y0+3+R()*(H-6),d=4+R()*6;const wx=bx+x*ca-y*sa,wy=by+x*sa+y*ca;if(roadHits(wx,wy,0,d,d,4,null))continue;TR(P,x,y,d,[0,1,2,4,6][R()*5|0])}
@@ -901,23 +965,29 @@ function genBlock(c,bi,bj,t){
   }
   // towers and offices: lobby + entrance canopy on the facade nearest to the street
   if(t===1||t===19)for(const p of P)if(p.k==='b'&&!p.H0&&!p.nd){const d=[p.y-Y0,X1-p.x-p.w,Y1-p.y-p.h,p.x-X0];let e=0;for(let q=1;q<4;q++)if(d[q]<d[e])e=q;p.gf=[-1,-1,e]}
-  return P;
+  return dropCrowns(fitGround(P));
 }
+// oriented boxes [cx,cy,hw,hh,ca,sa] overlap (separating axis)
+function obbOver(a,b){for(const [ux,uy] of [[a[4],a[5]],[-a[5],a[4]],[b[4],b[5]],[-b[5],b[4]]]){const pa=a[2]*M.abs(ux*a[4]+uy*a[5])+a[3]*M.abs(-ux*a[5]+uy*a[4]),pb=b[2]*M.abs(ux*b[4]+uy*b[5])+b[3]*M.abs(-ux*b[5]+uy*b[4]);
+  if(M.abs((b[0]-a[0])*ux+(b[1]-a[1])*uy)>=pa+pb)return false}return true}
+// plots of a village street in world space (for the streets that are laid out after it)
+function vPlots(c,sj){const s=c.vst[sj],out=[];for(const p of genVillage(c,sj))if(p.k==='g'){const lx=p.x+p.w/2,ly=p.y+p.h/2;out.push([s.x0+lx*s.ca-ly*s.sa,s.y0+lx*s.sa+ly*s.ca,p.w/2,p.h/2,s.ca,s.sa])}return out}
 function genVillage(c,si){
-  const s=c.vst[si];const R=rng(hh(c.id,si,71));const P=[],O=[];
+  const s=c.vst[si];const R=rng(hh(c.id,si,71));const P=[],O=[];const OP=[];for(let sj=0;sj<si;sj++)for(const q of vPlots(c,sj))OP.push(q);
   for(let a=12;a<s.L-12;a+=26+R()*12){for(const side of [-1,1]){if(R()<0.16)continue;
     const Rl=R;const lw=24+Rl()*4,ld=36+Rl()*26;const ly=side>0?5:-5-ld;
     const wx=s.x0+s.ca*a-s.sa*(side*(5+ld/2)),wy=s.y0+s.sa*a+s.ca*(side*(5+ld/2));if(landE(wx,wy,0.002)<0)continue;
     let inZ=false;for(const z of zones){if(M.hypot(z.x-wx,z.y-wy)<z.rad){inZ=true;break}}if(inZ)continue;
     if(roadHits(wx,wy,M.atan2(s.sa,s.ca),lw,ld,1.5,s.r))continue;
+    if(OP.length){const me=[wx,wy,lw/2+0.5,ld/2+0.5,s.ca,s.sa];let hit=false;for(const q of OP)if(obbOver(me,q)){hit=true;break}if(hit)continue}
     const gc=[[100,124,66],[112,128,72],[118,120,74],[92,118,62]][Rl()*4|0];G(P,a-lw/2,ly,lw,ld,gc);P.push({k:'fence',x:a-lw/2+0.3,y:ly+0.3,w:lw-0.6,h:ld-0.6});
     if(Rl()<0.75)P.push({k:'rows',x:a-lw/2+3,y:side>0?ly+ld*0.62:ly+3,w:(lw-6)*(0.4+Rl()*0.5),h:ld*0.3,o:Rl()<0.5?0:1});
     const hw=7.5+Rl()*4,hd=6.5+Rl()*3;const hy=side>0?ly+3:ly+ld-3-hd;P.push(side>0?{k:'path',x:a-0.6,y:ly+0.3,w:1.3,h:2.8}:{k:'path',x:a-0.6,y:ly+ld-3.1,w:1.3,h:2.8});
-    B(P,a-hw/2+(Rl()-0.5)*4,hy,hw,hd,4.5+Rl()*2.5,ROOFH[Rl()*ROOFH.length|0],Rl()<0.6?'g':'h',{a:(Rl()-0.5)*0.15});O.push(a-hw/2,hy,hw,hd);
-    if(Rl()<0.7){const bx=a-lw/2+2+Rl()*(lw-7),by=side>0?ly+ld*0.3:ly+ld*0.6;B(P,bx,by,3.5+Rl()*2,3,2.5,[[118,96,72],[98,98,100],[140,84,64]][Rl()*3|0],'f');O.push(bx,by,5,3)}
+    const ho=B(P,a-hw/2+(Rl()-0.5)*4,hy,hw,hd,4.5+Rl()*2.5,ROOFH[Rl()*ROOFH.length|0],Rl()<0.6?'g':'h',{a:(Rl()-0.5)*0.15});O.push(ho.x-0.6,hy-0.6,hw+1.2,hd+1.2);
+    if(Rl()<0.7){const bx=a-lw/2+2+Rl()*(lw-7),by=side>0?ly+ld*0.3:ly+ld*0.6,sw=3.5+Rl()*2,sc=[[118,96,72],[98,98,100],[140,84,64]][Rl()*3|0];if(!occ(O,bx+sw/2,by+1.5,M.max(sw/2,1.5)+0.5)){B(P,bx,by,sw,3,2.5,sc,'f');O.push(bx,by,sw,3)}}
     if(Rl()<0.25)P.push({k:'gh',x:a+lw/2-6,y:side>0?ly+ld-12:ly+3,w:3.5,h:8});
     const nt=1+(Rl()*3|0);for(let q=0;q<nt;q++){const tx=a-lw/2+2+Rl()*(lw-4),ty=ly+2+Rl()*(ld-4);if(!occ(O,tx,ty,3))TR(P,tx,ty,4+Rl()*5,[0,2,4,6][Rl()*4|0])}}}
-  return P}
+  return dropCrowns(fitGround(P))}
 
 // ---------------------------------------------------------------- primitive drawing
 let SDX=0,SDY=0,LNX=0,LNY=0,FCA=1,FSA=0,FOX=0,FOY=0,FS=1;const TREEQ=[];

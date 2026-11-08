@@ -1,111 +1,52 @@
-// Геометрия мира: постройки не должны стоять на дорогах (тесты без браузера).
-import fs from 'node:fs';
-import path from 'node:path';
-import vm from 'node:vm';
+// Геометрия мира (без браузера): ничего ни на что не налезает. Проверяются два разных мира целиком.
+// Подробная сводка с координатами мест: node tools/audit.mjs <seed>.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fileURLToPath } from 'node:url';
+import { world, audit, deadEnds, groundClash, parallelRoads, where, label } from './audit.mjs';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const ctx = vm.createContext({ console });
-vm.runInContext(fs.readFileSync(path.join(root, 'src/gen.js'), 'utf8'), ctx);
-const W = ctx.WorldGen(20261107);
-const { genVillage, genBlock, RW } = W._dbg;
+for (const seed of [20261107, 1337]) {
+  const W = world(seed);
+  const A = audit(W, { trees: true });
+  const list = (xs, f) => xs.slice(0, 8).map(f);
 
-// пересечение отрезка с прямоугольником (центр, угол, полуразмеры + запас)
-function segHitsRect(ax, ay, bx, by, cx, cy, ca, sa, hx, hy) {
-  const tx = (x, y) => [(x - cx) * ca + (y - cy) * sa, -(x - cx) * sa + (y - cy) * ca];
-  const [x0, y0] = tx(ax, ay), [x1, y1] = tx(bx, by);
-  let t0 = 0, t1 = 1; const dx = x1 - x0, dy = y1 - y0;
-  for (const [p, q] of [[-dx, x0 + hx], [dx, hx - x0], [-dy, y0 + hy], [dy, hy - y0]]) {
-    if (p === 0) { if (q < 0) return false; continue; }
-    const t = q / p; if (p < 0) { if (t > t1) return false; if (t > t0) t0 = t; } else { if (t < t0) return false; if (t < t1) t1 = t; }
-  }
-  return true;
+  test(`${seed}: здания, резервуары и дома не стоят на дорогах`, () => {
+    assert.ok(A.n > 500000, 'проверено мало объектов');
+    assert.deepEqual(list(A.onRoad, (it) => `${label(it.o)} на дороге k=${it.r.k} @${where(it.o)}`), []);
+  });
+  test(`${seed}: деревья не растут на проезжей части и не закрывают крыши`, () => {
+    assert.deepEqual(list(A.treeOnRoad, (it) => `${label(it.o)} k=${it.r.k} @${where(it.o)}`), []);
+    assert.deepEqual(list(A.crown, (it) => `${label(it.o)} @${where(it.o)}`), []);
+  });
+  test(`${seed}: постройки не налезают друг на друга`, () => {
+    assert.deepEqual(list(A.overlap, (it) => `${label(it.a)} | ${label(it.b)} @${where(it.a)}`), []);
+    assert.deepEqual(list(A.overlapSame, (it) => `${label(it.a)} @${where(it.a)}`), []);
+    assert.deepEqual(list(A.turbine, (it) => `ветряк @${Math.round(it.t.x)},${Math.round(it.t.y)}`), []);
+  });
+  test(`${seed}: парковки, грядки и площадки не уходят под здания`, () => {
+    assert.deepEqual(groundClash(W).slice(0, 8), []);
+  });
+  test(`${seed}: у дорог нет висячих концов`, () => {
+    assert.deepEqual(list(deadEnds(W), (d) => `k=${d.r.k} конец @${Math.round(d.x)},${Math.round(d.y)}`), []);
+  });
+  test(`${seed}: загородные дороги не идут поверх других дорог`, () => {
+    const bad = parallelRoads(W).filter((it) => it.a.city === undefined && it.b.city === undefined);
+    assert.deepEqual(list(bad, (it) => `k=${it.a.k} вдоль k=${it.b.k} @${Math.round(it.x)},${Math.round(it.y)}`), []);
+  });
+  test(`${seed}: съезды развязок у кольцевых не заходят в кварталы`, () => {
+    const bad = [];
+    for (const r of W.roads) {
+      if (r.k !== 6) continue;
+      for (let i = 0; i < r.n; i += 3) {
+        const x = r.pts[i * 2], y = r.pts[i * 2 + 1];
+        for (const c of W.cities) {
+          if (c.type < 1 || x < c.bb[0] || x > c.bb[2] || y < c.bb[1] || y > c.bb[3]) continue;
+          const dx = x - c.x, dy = y - c.y, uu = dx * c.ca + dy * c.sa, vv = -dx * c.sa + dy * c.ca;
+          const BD = c.D - 1; let bi = -1, bj = -1;
+          for (let q = 0; q < BD; q++) { if (uu >= c.us[q] && uu < c.us[q + 1]) bi = q; if (vv >= c.vs[q] && vv < c.vs[q + 1]) bj = q; }
+          if (bi >= 0 && bj >= 0 && c.blocks[bj * BD + bi] && c.blocks[bj * BD + bi] !== 20) { bad.push(`${c.name}: съезд в квартале`); break; }
+        }
+      }
+    }
+    assert.deepEqual(bad.slice(0, 10), []);
+  });
 }
-function hits(cx, cy, ang, w, h, keep) {
-  const ca = Math.cos(ang), sa = Math.sin(ang), rad = Math.hypot(w, h) / 2 + 20;
-  for (const r of W.queryRoads(cx - rad, cy - rad, cx + rad, cy + rad)) {
-    if (!keep(r)) continue;
-    const m = RW[r.k] / 2;
-    for (let i = 0; i < r.n - 1; i++)
-      if (segHitsRect(r.pts[i * 2], r.pts[i * 2 + 1], r.pts[i * 2 + 2], r.pts[i * 2 + 3], cx, cy, ca, sa, w / 2 + m, h / 2 + m)) return r;
-  }
-  return null;
-}
-const through = (r) => r.city === undefined && r.k !== 8;
-
-test('дома в сёлах не стоят на чужих дорогах и железных дорогах', () => {
-  let n = 0, bad = [];
-  for (const c of W.cities.filter((c) => c.type === 0).slice(0, 150)) {
-    c.vst.forEach((st, si) => {
-      for (const p of genVillage(c, si)) {
-        if (p.k !== 'b') continue; n++;
-        const lx = p.x + p.w / 2, ly = p.y + p.h / 2;
-        const x = st.x0 + lx * st.ca - ly * st.sa, y = st.y0 + lx * st.sa + ly * st.ca;
-        const r = hits(x, y, Math.atan2(st.sa, st.ca) + (p.a || 0), p.w, p.h, (r) => r !== st.r && r.k !== 8 && !c.vst.some((q) => q.r === r && q !== st && false));
-        if (r && r.k !== 4) bad.push(`${c.name}: дом на дороге k=${r.k}`);
-      }
-    });
-  }
-  assert.ok(n > 1000, 'проверено мало домов');
-  assert.deepEqual(bad.slice(0, 10), []);
-});
-
-test('здания в городах не стоят на магистралях, трассах и железных дорогах', () => {
-  let n = 0; const bad = [];
-  for (const c of W.cities.filter((c) => c.type >= 1)) {
-    const BD = c.D - 1;
-    for (let bj = 0; bj < BD; bj++) for (let bi = 0; bi < BD; bi++) {
-      const t = c.blocks[bj * BD + bi]; if (!t) continue;
-      const u = (c.us[bi] + c.us[bi + 1]) / 2, v = (c.vs[bj] + c.vs[bj + 1]) / 2;
-      const wx = c.x + u * c.ca - v * c.sa, wy = c.y + u * c.sa + v * c.ca;
-      for (const p of genBlock(c, bi, bj, t)) {
-        if (p.k !== 'b') continue; n++;
-        const lx = p.x + p.w / 2, ly = p.y + p.h / 2;
-        const x = wx + lx * c.ca - ly * c.sa, y = wy + lx * c.sa + ly * c.ca;
-        const r = hits(x, y, c.ang + (p.a || 0), p.w, p.h, (r) => through(r) && (r.k === 0 || r.k === 1 || r.k === 5 || r.k === 6));
-        if (r) bad.push(`${c.name}: здание на дороге k=${r.k}`);
-      }
-    }
-  }
-  assert.ok(n > 10000, 'проверено мало зданий');
-  assert.deepEqual(bad.slice(0, 10), []);
-});
-
-test('съезды развязок у кольцевых не заходят в кварталы', () => {
-  const bad = [];
-  for (const r of W.roads) {
-    if (r.k !== 6) continue;
-    for (let i = 0; i < r.n; i += 3) {
-      const x = r.pts[i * 2], y = r.pts[i * 2 + 1];
-      for (const c of W.cities) {
-        if (c.type < 1 || x < c.bb[0] || x > c.bb[2] || y < c.bb[1] || y > c.bb[3]) continue;
-        const dx = x - c.x, dy = y - c.y, uu = dx * c.ca + dy * c.sa, vv = -dx * c.sa + dy * c.ca;
-        const BD = c.D - 1; let bi = -1, bj = -1;
-        for (let q = 0; q < BD; q++) { if (uu >= c.us[q] && uu < c.us[q + 1]) bi = q; if (vv >= c.vs[q] && vv < c.vs[q + 1]) bj = q; }
-        if (bi >= 0 && bj >= 0 && c.blocks[bj * BD + bi]) { bad.push(`${c.name}: съезд в квартале`); break; }
-      }
-    }
-  }
-  assert.deepEqual(bad.slice(0, 10), []);
-});
-
-test('постройки и резервуары промзон не стоят на дорогах', () => {
-  let n = 0; const bad = [];
-  for (const z of W.zones) {
-    if (z.zk === 'air' || !z.prims) continue;
-    for (const p of z.prims) {
-      let w, h, cx, cy;
-      if (p.k === 'b') { w = p.w; h = p.h; cx = p.x + w / 2; cy = p.y + h / 2; }
-      else if (p.k === 'cyl') { w = h = p.r * 2; cx = p.x; cy = p.y; }
-      else continue;
-      n++;
-      const x = z.x + cx * z.ca - cy * z.sa, y = z.y + cx * z.sa + cy * z.ca;
-      const r = hits(x, y, z.ang + (p.a || 0), w, h, (r) => r !== z.acc && r.k !== 8);
-      if (r) bad.push(`зона ${z.zk}#${z.id}: объект на дороге k=${r.k}`);
-    }
-  }
-  assert.ok(n > 2000, 'проверено мало объектов');
-  assert.deepEqual(bad.slice(0, 10), []);
-});

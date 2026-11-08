@@ -48,8 +48,10 @@ src/main.js       камера, ввод, кеш тайлов, workers, аним
 tools/build.mjs   сборка в один файл dist/living-world.html
 tools/serve.mjs   локальный статический сервер без зависимостей
 tools/shot.mjs    скриншоты мест мира для проверки визуала
+tools/survey.mjs  обход 16 типовых мест мира (город, село, порт, ТЭЦ, развязка, мост, АЗС…) для любого seed
+tools/audit.mjs   аудит геометрии: что на что налезает, с координатами мест
 tools/perf.mjs    замер времени рендера тайлов
-tests/            тесты генератора (Node) и браузерный smoke-тест (Playwright)
+tests/            тесты генератора и геометрии мира (Node) и браузерный smoke-тест (Playwright)
 archive/          исходные однофайловые версии этапов 1–3 (MD5SUMS — контрольные суммы)
 docs/             архитектура, история этапов, скриншоты
 ```
@@ -59,7 +61,7 @@ Worker собирается на лету из `WorldGen.toString()`, поэто
 ## Разработка и проверка
 
 ```bash
-npm test                    # генератор в Node: seed 1337 → 433 населённых пункта и 6273 дороги, детерминизм
+npm test                    # генератор и геометрия в Node (~1,5 мин): эталон seed 1337, детерминизм, ничего ни на что не налезает
 npm run build               # dist/living-world.html — однофайловая версия (её можно загрузить в Notion)
 
 npm install                 # один раз: Playwright для браузерного теста
@@ -67,7 +69,7 @@ npx playwright install chromium
 npm run test:browser        # index.html и dist в режимах: день, ночь, зима со снегом, без workers
 ```
 
-Для проверки визуала: `node tools/shot.mjs` (скриншоты нужных мест мира в `/tmp/shots`) и `node tools/perf.mjs` (время рендера тайлов).
+Для проверки визуала: `node tools/shot.mjs` (скриншоты нужных мест мира в `/tmp/shots`), `node tools/survey.mjs <seed>` (обход типовых мест), `node tools/audit.mjs <seed>` (сводка наложений с координатами) и `node tools/perf.mjs` (время рендера тайлов).
 
 В браузере для отладки доступен `window.__world`: `setTod(h)`, `setSeason(s)`, `setWeather(i)`, `setSpeed(0|1|2)`, `stop()`, `cam`, `PROF` (профайлер кадра), `stats()`.
 
