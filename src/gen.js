@@ -226,7 +226,10 @@ function trimAlong(pts,k,keepA,keepB){const c=plCum(pts),L=c[c.length-1];let s0=
   if(!keepB)while(s1>s0){const p=plAt(pts,c,s1);const r=ridesOn(p[0],p[1],p[2],p[3],k);if(!r)break;rB=r;s1-=8}
   if(s0===0&&s1===L)return pts;if(s1-s0<80)return null;
   // the cut end is joined to the centre line of the road it was riding on, so it does not hang next to it
-  const a=plAt(pts,c,s0),b=plAt(pts,c,s1),out=[];if(rA){const q=projOn(rA,a[0],a[1]);out.push(q[0],q[1])}out.push(a[0],a[1]);for(let i=a[4]+1;i<=b[4];i++)out.push(pts[i*2],pts[i*2+1]);out.push(b[0],b[1]);if(rB){const q=projOn(rB,b[0],b[1]);out.push(q[0],q[1])}return out}
+  const a=plAt(pts,c,s0),b=plAt(pts,c,s1),out=[];if(rA){const q=joinOn(rA,a[0],a[1],-a[2],-a[3]);out.push(q[0],q[1])}out.push(a[0],a[1]);for(let i=a[4]+1;i<=b[4];i++)out.push(pts[i*2],pts[i*2+1]);out.push(b[0],b[1]);if(rB){const q=joinOn(rB,b[0],b[1],b[2],b[3]);out.push(q[0],q[1])}return out}
+// join point on road r: straight ahead along (dx,dy) if the road is met within 90 m, otherwise the nearest point
+function joinOn(r,x,y,dx,dy){let bt=90,q=null;for(let i=0;i<r.n-1;i++){const ax=r.pts[i*2],ay=r.pts[i*2+1],ex=r.pts[i*2+2]-ax,ey=r.pts[i*2+3]-ay,den=dx*ey-dy*ex;if(M.abs(den)<1e-9)continue;
+    const t=((ax-x)*ey-(ay-y)*ex)/den,u=((ax-x)*dy-(ay-y)*dx)/den;if(t>0&&t<bt&&u>=0&&u<=1){bt=t;q=[x+dx*t,y+dy*t]}}return q||projOn(r,x,y)}
 function sideRun(pts,k){const c=plCum(pts),L=c[c.length-1];let run=0,best=0;
   for(let s=0;s<L;s+=10){const p=plAt(pts,c,s);if(ridesOn(p[0],p[1],p[2],p[3],k)){run+=10;if(run>best)best=run}else run=0}return best}
 function connect(A,B,k){const key=A.id<B.id?A.id+'_'+B.id+'_'+k:B.id+'_'+A.id+'_'+k;if(pairs.has(key))return;pairs.add(key);
@@ -243,6 +246,10 @@ function connect(A,B,k){const key=A.id<B.id?A.id+'_'+B.id+'_'+k:B.id+'_'+A.id+'_
       pts=routePts(ax,ay,bx,by,cfg[0]*(a%2?-1:1),cfg[1],ph,cfg[2]);if(!waterRunOK(pts,cfg[3],cfg[4]))continue;
       if(k!==5){pts=trimAlong(pts,k,ring(A),ring(B));if(!pts)continue}
       const sr=sideRun(pts,k);if(sr>40){if(sr<fbr){fb=pts;fbr=sr}continue}}else{if(!fb||fbr>100&&k!==5)return;pts=fb} // a road that would ride on top of another for >100 m duplicates it: skip
+    // a highway does not run into a town's street grid: from the town edge on it continues as an avenue to the node
+    if(k===0){const c=plCum(pts),L=c[c.length-1];const inn=(C,e)=>{if(C.type<1||(C.type===3&&!(e?wB:wA)))return 0;let d=0;while(d<L*0.45){const q=plAt(pts,c,e?L-d:d);if(cityF(C,q[0],q[1])>1.08)break;d+=10}return d>30?d:0};
+      const dA=inn(A,0),dB=inn(B,1);if(dA||dB){const cut=(s0,s1)=>{const a=plAt(pts,c,s0),b=plAt(pts,c,s1),o=[a[0],a[1]];for(let i=a[4]+1;i<=b[4];i++)o.push(pts[i*2],pts[i*2+1]);o.push(b[0],b[1]);return o};
+        if(dA){const q=mkRoad(2,cut(0,dA));if(q)bridgesOf(q)}if(dB){const q=mkRoad(2,cut(L-dB,L));if(q)bridgesOf(q)}pts=cut(dA,L-dB)}}
     {const r=mkRoad(k,pts);if(r){bridgesOf(r);if(k===0){const p=r.pts,n=r.n;if(A.type===3&&!wA)JUNC.push([A,ax,ay,p[2]-p[0],p[3]-p[1],r]);if(B.type===3&&!wB)JUNC.push([B,bx,by,p[n*2-4]-p[n*2-2],p[n*2-3]-p[n*2-1],r])}}return}}}
 const JUNC=[];
 function ringR(c,a){return c.R*(1.08+0.07*noise(M.cos(a)*1.5+c.id,M.sin(a)*1.5))}
@@ -281,9 +288,15 @@ function placeZone(c,kind){
   const rad=M.hypot(W,H)/2;const R=rng(hh(c.id,OLDK.includes(kind)?kind.length:100+kind.charCodeAt(0)*7+kind.charCodeAt(1),77));const a0=R()*TAU;
   for(let k=0;k<48;k++){const a=a0+k*TAU/16;const ca=M.cos(a),sa=M.sin(a);const ring=(k>>4)*900;
     if(kind==='port'){let found=-1;for(let d=c.R*0.7;d<c.R+2200;d+=60){if(baseH(c.x+ca*d,c.y+sa*d,7)<-0.01){found=d;break}}
-      if(found<0)continue;const d=found-260;const x=c.x+ca*d,y=c.y+sa*d;
-      let okk=true;for(let q=-2;q<=2;q++){const px=x-ca*160-sa*q*180,py=y-sa*160+ca*q*180;if(landE(px,py,0.002)<0){okk=false;break}}
-      if(!okk)continue;if(!zoneFree(x,y,rad*0.7,c))continue;return mkZone(c,kind,x,y,a,W,H,rad)}
+      if(found<0)continue;
+      // face the open water: the port axis follows the coast normal (height gradient), not the ray from the town
+      const fx=c.x+ca*found,fy=c.y+sa*found,gx=baseH(fx+60,fy,7)-baseH(fx-60,fy,7),gy=baseH(fx,fy+60,7)-baseH(fx,fy-60,7),gl=M.hypot(gx,gy);if(gl<1e-6)continue;
+      const pa=M.atan2(-gy,-gx),pc=M.cos(pa),ps=M.sin(pa);const x=fx-pc*260,y=fy-ps*260;
+      // land part (x in [-0.62W, 40]) on dry land and outside every town, pier heads in the water
+      let okk=true;for(let qx=0;qx<=6&&okk;qx++)for(let qy=-3;qy<=3;qy++){const lx=-W*0.62+(W*0.62+40)*qx/6,ly=qy/3*H*0.48,px=x+lx*pc-ly*ps,py=y+lx*ps+ly*pc;
+        if(landE(px,py,0.002)<0){okk=false;break}for(const o of live)if(o.type>=1&&cityF(o,px,py)<1.08){okk=false;break}if(!okk)break}
+      for(let q=-1;q<=1&&okk;q++){const lx=300,ly=q*H*0.33,px=x+lx*pc-ly*ps,py=y+lx*ps+ly*pc;if(landE(px,py,0)>=0)okk=false}
+      if(!okk)continue;if(!zoneFree(x,y,rad*0.7,c))continue;return mkZone(c,kind,x,y,pa,W,H,rad)}
     const d=c.R*1.05+rad+120+ring;const x=c.x+ca*d,y=c.y+sa*d;if(x<4000||y<4000||x>WORLD-4000||y>WORLD-4000)continue;
     const za=a+PI/2+(R()-0.5)*0.3,zc=M.cos(za),zs=M.sin(za);let okk=true;
     for(let q=0;q<25&&okk;q++){const u=((q%5)/4-0.5)*W*1.05,v=((q/5|0)/4-0.5)*H*1.05;const px=x+u*zc-v*zs,py=y+u*zs+v*zc;const e=landE(px,py,0.003);if(e<0||e>(kind==='air'?0.3:0.4))okk=false}
@@ -292,12 +305,16 @@ function placeZone(c,kind){
   if(ZSTRICT&&OLDK.includes(kind)){ZSTRICT=false;const z=placeZone(c,kind);ZSTRICT=true;return z}
   return null}
 let ZSTRICT=true;
+// the access road starts on the edge of the zone's grounds (never runs under its buildings)
+function zoneExit(z,ux,uy){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const p of z.prims)if(p.k==='g'){x0=M.min(x0,p.x);y0=M.min(y0,p.y);x1=M.max(x1,p.x+p.w);y1=M.max(y1,p.y+p.h)}
+  if(x0>x1){x0=-z.W/2;x1=z.W/2;y0=-z.H/2;y1=z.H/2}const lx=ux*z.ca+uy*z.sa,ly=-ux*z.sa+uy*z.ca;
+  const tx=lx>1e-9?x1/lx:lx<-1e-9?x0/lx:1e9,ty=ly>1e-9?y1/ly:ly<-1e-9?y0/ly:1e9,t=M.max(0,M.min(tx,ty)-3);return [z.x+ux*t,z.y+uy*t]}
 function mkZoneRaw(c,kind,x,y,a,W,H){const rad=M.hypot(W,H)/2;const z={kind:'zone',zk:kind,id:zones.length,city:c,x,y,ang:a,ca:M.cos(a),sa:M.sin(a),W,H,rad,seed:hh(c?c.id:7,zones.length,93)};
   z.bb=[x-rad-50,y-rad-50,x+rad+50,y+rad+50];zones.push(z);genZone(z);addF(z,z.bb[0],z.bb[1],z.bb[2],z.bb[3]);return z}
 function mkZone(c,kind,x,y,a,W,H,rad){const z={kind:'zone',zk:kind,id:zones.length,city:c,x,y,ang:a,ca:M.cos(a),sa:M.sin(a),W,H,rad,seed:hh(c.id,zones.length,91)};
   z.bb=[x-rad-50,y-rad-50,x+rad+50,y+rad+50];zones.push(z);genZone(z);addF(z,z.bb[0],z.bb[1],z.bb[2],z.bb[3]);
   // access road
-  if(kind!=='port'||true){const dx=c.x-x,dy=c.y-y,L=M.hypot(dx,dy);const ux=dx/L,uy=dy/L;const sx=x+ux*rad*0.55,sy=y+uy*rad*0.55;let ex=c.x-ux*c.R*0.75,ey=c.y-uy*c.R*0.75;if(c.type>=1)[ex,ey]=snapNode(c,ex,ey);else if(c.vst&&c.vst.length){let bd=1e18,bq=null;for(const st of c.vst){const q=projOn(st.r,ex,ey),d=(q[0]-ex)**2+(q[1]-ey)**2;if(d<bd){bd=d;bq=q}}[ex,ey]=bq}const kk=['farm','dacha','cem'].includes(kind)?4:1;
+  if(kind!=='port'||true){const dx=c.x-x,dy=c.y-y,L=M.hypot(dx,dy);const ux=dx/L,uy=dy/L;const [sx,sy]=zoneExit(z,ux,uy);let ex=c.x-ux*c.R*0.75,ey=c.y-uy*c.R*0.75;if(c.type>=1)[ex,ey]=snapNode(c,ex,ey);else if(c.vst&&c.vst.length){let bd=1e18,bq=null;for(const st of c.vst){const q=projOn(st.r,ex,ey),d=(q[0]-ex)**2+(q[1]-ey)**2;if(d<bd){bd=d;bq=q}}[ex,ey]=bq}const kk=['farm','dacha','cem'].includes(kind)?4:1;
     if(M.hypot(ex-sx,ey-sy)>60){let pp=null,pr=1e9;for(const o of [40,-40,140,-140,260,-260]){const q=trimAlong([sx,sy,(sx+ex)/2+(-uy)*o,(sy+ey)/2+ux*o,ex,ey],kk,true,false);if(!q||!waterRunOK(q,kk===4?150:450,0.15))continue;const sr=sideRun(q,kk);if(sr<pr){pp=q;pr=sr}if(sr<=40)break}
     const r=pp&&mkRoad(kk,pp);if(r){z.acc=r;bridgesOf(r)}}}
   return z}
@@ -380,12 +397,28 @@ for(const r of roads){if(r.k!==7)continue;const xs=[];for(const o of queryRoads(
     const den=ex*fy-ey*fx;if(M.abs(den)<1e-9)continue;const t=((cx-ax)*fy-(cy-ay)*fx)/den,u=((cx-ax)*ey-(cy-ay)*ex)/den;if(t<-0.01||t>1.01||u<-0.01||u>1.01)continue;
     const sin=M.abs(den)/(li*M.hypot(fx,fy));xs.push([r.cum[i]+t*li,RW[o.k]/2/M.max(0.3,sin)+7])}}}
   if(xs.length){xs.sort((a,b)=>a[0]-b[0]);r.xs=xs}}
+// at-grade junction zones (r.jz): where a road runs over another road's carriageway (a crossing, or the end of
+// a road that joins another), its markings and tyre tracks are left out so junctions read as one clean surface;
+// r.inC: stretches of rural roads inside towns (no grass verge there)
+{const onOv=(r,s)=>{if(!r.ov)return false;for(const o of r.ov)if(s>o[0]-2&&s<o[1]+2)return true;return false};
+ for(const r of roads){if(r.k===8||r.k===5)continue;const J=[];const cand=queryRoads(r.bb[0]-30,r.bb[1]-30,r.bb[2]+30,r.bb[3]+30);
+  for(const o of cand){if(o===r||o.k===8||o.k===5)continue;
+    for(let i=0;i<r.n-1;i++){const ax=r.pts[i*2],ay=r.pts[i*2+1],ex=r.pts[i*2+2]-ax,ey=r.pts[i*2+3]-ay,li=M.hypot(ex,ey)||1;
+      for(let j=0;j<o.n-1;j++){const cx=o.pts[j*2],cy=o.pts[j*2+1],fx=o.pts[j*2+2]-cx,fy=o.pts[j*2+3]-cy,lj=M.hypot(fx,fy)||1;const den=ex*fy-ey*fx;if(M.abs(den)<1e-9)continue;
+        const t=((cx-ax)*fy-(cy-ay)*fx)/den,u=((cx-ax)*ey-(cy-ay)*ex)/den;if(t<0||t>1||u<0||u>1)continue;const sr=r.cum[i]+t*li,so=o.cum[j]+u*lj;if(onOv(r,sr)||onOv(o,so))continue;
+        const h=RW[o.k]/2/M.max(0.25,M.abs(den)/(li*lj))+0.6;J.push([sr-h,sr+h])}}
+    for(const e of [0,1]){const x=e?r.pts[r.n*2-2]:r.pts[0],y=e?r.pts[r.n*2-1]:r.pts[1];if(x<o.bb[0]-40||x>o.bb[2]+40||y<o.bb[1]-40||y>o.bb[3]+40)continue;const q=projOn(o,x,y),d=M.hypot(q[0]-x,q[1]-y);if(d>RW[o.k]/2+1)continue;
+      const so=nearestS(o,x,y)[1];if(onOv(o,so))continue;const pa=posAt(r,e?r.L-1:1),pb=posAt(o,so);const sn=M.max(0.3,M.abs(pa[2]*pb[3]-pa[3]*pb[2]));const ext=(RW[o.k]/2+d)/sn+0.6;J.push(e?[r.L-ext,r.L+1]:[-1,ext])}}
+  if(J.length){J.sort((a,b)=>a[0]-b[0]);const m=[J[0].slice()];for(let q=1;q<J.length;q++){const l=m[m.length-1];if(J[q][0]<=l[1])l[1]=M.max(l[1],J[q][1]);else m.push(J[q].slice())}r.jz=m}}
+ for(const r of roads){if(r.city!==undefined||(r.k!==0&&r.k!==1&&r.k!==4))continue;const I=[];let st=-1;
+  for(let s=0;s<=r.L;s+=15){const p=posAt(r,s);let inC=false;for(const c of queryF(p[0]-1,p[1]-1,p[0]+1,p[1]+1))if(c.kind==='city'&&c.type>=1&&cityF(c,p[0],p[1])<1.02){inC=true;break}
+    if(inC&&st<0)st=M.max(0,s-15);if(!inC&&st>=0){I.push([st,s]);st=-1}}if(st>=0)I.push([st,r.L]);if(I.length)r.inC=I}}
 // zone objects never stand on roads that cross the zone (fallback placement, later access roads): drop them
 for(const z of zones){const P=z.prims;if(!P||z.zk==='air')continue;const keep=[];let cut=0;
   for(const p of P){let w=0,h=0,cx=0,cy=0;const k=p.k;
     if(k==='b'||k==='pk'||k==='cont'||k==='bund'){w=p.w;h=p.h;cx=p.x+w/2;cy=p.y+h/2}else if(k==='cyl'||k==='pile'){w=h=p.r*2;cx=p.x;cy=p.y}else if(k==='t'){w=h=p.d*0.8;cx=p.x;cy=p.y}else if(k==='pipe'&&p.gr&&p.n===2){w=h=4;cx=p.pts[0];cy=p.pts[1]} // tank stub follows its tank
     if(w){const x=z.x+cx*z.ca-cy*z.sa,y=z.y+cx*z.sa+cy*z.ca;
-      if(roadHits(x,y,z.ang+(p.a||0),w,h,2,z.acc)){cut++;if(k==='cyl'&&p.H)dropEmit(z,p);continue}}
+      if(roadHits(x,y,z.ang+(p.a||0),w,h,2,null)){cut++;if(k==='cyl'&&p.H)dropEmit(z,p);continue}}
     keep.push(p)}
   if(cut)z.prims=keep}
 // wind farms
@@ -721,7 +754,7 @@ function raster(ctx,x0,y0,mpp,near){const WIN=SEASON===2;
       const d1=noise(wx*id1+0.5,wy*id1+0.3),d2=noise(wx*id2+7.1,wy*id2+3.9);const d0=((mix32(M.imul(px,73856093)^M.imul(py,19349663)^(x0|0))&255)/255-0.5);const dt=d1*0.4+d2*0.45+d0*0.3;
       let aL=clamp(e/(gh*mpp*1.2+1e-7)+0.5,0,1);
       let aR=0;if(ww>0&&e>-0.03){const gr=(gGR[k]*w00+gGR[k+1]*w10+gGR[k+GN]*w01+gGR[k+GN+1]*w11)*mpp+1e-7;const r=rv<0?-rv:rv;
-        aR=clamp((ww-r)/gr+0.5,0,1);if(aR>0)aR*=M.min(1,0.22+3*ww/gr)}
+        aR=clamp((ww-r)/gr+0.5,0,1);if(aR>0)aR*=M.min(1,0.22+3*ww/gr)*smooth(-0.003,0.006,e)} // the channel fades out at the mouth instead of running on into the sea
       const land=aL*(1-aR);
       let R=0,Gc=0,Bc=0;
       if(land>0){
@@ -812,7 +845,7 @@ function raster(ctx,x0,y0,mpp,near){const WIN=SEASON===2;
         if(e<0.003&&aR<0.999){const t=clamp(-e/0.13,0,1),t2=M.sqrt(t);wr=lerp(58,14,t2);wg=lerp(134,46,t2);wb=lerp(140,82,t2);
           const sh2=smooth(0.0,-0.012,e);wr=lerp(wr+40,wr,sh2);wg=lerp(wg+36,wg,sh2);wb=lerp(wb+18,wb,sh2)}
         else{wr=50;wg=96;wb=100}
-        if(aR>0&&e>0.003){const r2=rv<0?-rv:rv;const dp=M.sqrt(clamp((ww-r2)/(ww+1e-7),0,1));const rr2=lerp(78,30,dp),rg2=lerp(112,74,dp),rb2=lerp(96,90,dp);wr=lerp(wr,rr2,aR);wg=lerp(wg,rg2,aR);wb=lerp(wb,rb2,aR)}
+        if(aR>0&&e>0.003){const r2=rv<0?-rv:rv;const dp=M.sqrt(clamp((ww-r2)/(ww+1e-7),0,1));let rr2=lerp(78,30,dp),rg2=lerp(112,74,dp),rb2=lerp(96,90,dp);{const m=smooth(0.03,0.004,e)*0.85;rr2=lerp(rr2,92,m);rg2=lerp(rg2,166,m);rb2=lerp(rb2,160,m)} /* the estuary takes on the colour of the shallow sea */wr=lerp(wr,rr2,aR);wg=lerp(wg,rg2,aR);wb=lerp(wb,rb2,aR)}
         wr+=dt*5;wg+=dt*6;wb+=dt*6;let wa=0.66;
         if(WIN){let ice=0;if(aR>0&&e>0.003){const r2=rv<0?-rv:rv;const dp=clamp((ww-r2)/(ww+1e-7),0,1);ice=1-smooth(0.55,0.85,dp)*smooth(0.006,0.012,ww)}
           else if(e<0.003){const t=clamp(-e/0.13,0,1);ice=smooth(0.05,0.015,t+d1*0.025)}
@@ -1519,52 +1552,61 @@ function medStroke(ctx,L){ctx.beginPath();for(const it of L){const r=it.r||it,a=
     for(const [c,g] of r.xs||[]){if(c+g<cur||c-g>b)continue;if(c-g>cur+0.5)offsetRange(ctx,r,0,cur,c-g);cur=M.max(cur,c+g)}if(cur<b-0.5)offsetRange(ctx,r,0,cur,b)}ctx.stroke()}
 function strokeAll(ctx,L,off){ctx.beginPath();for(const it of L)PT(ctx,it,off);ctx.stroke()}
 function strokeSym(ctx,L,offs){ctx.beginPath();for(const it of L)for(const o of offs){PT(ctx,it,o);PT(ctx,it,-o)}ctx.stroke()}
+// pieces of an item outside the junction zones (and outside other exclusion lists such as r.inC)
+function cutIv(a,b,X){if(!X)return [[a,b]];const out=[];let cur=a;for(const [c,d] of X){if(d<cur||c>b)continue;if(c>cur+0.3)out.push([cur,c]);cur=M.max(cur,d)}if(cur<b-0.3)out.push([cur,b]);return out}
+function itIv(it){const r=it.r||it;return [r,it.r?it.a:0,it.r?it.b:r.L]}
+function strokeAllM(ctx,L,off){ctx.beginPath();for(const it of L){const [r,a,b]=itIv(it);for(const [c,d] of cutIv(a,b,r.jz))offsetRange(ctx,r,off,c,d)}ctx.stroke()}
+function strokeSymM(ctx,L,offs){ctx.beginPath();for(const it of L){const [r,a,b]=itIv(it);const P=cutIv(a,b,r.jz);for(const o of offs)for(const [c,d] of P){offsetRange(ctx,r,o,c,d);offsetRange(ctx,r,-o,c,d)}}ctx.stroke()}
+// Roads are drawn in phases over all kinds: verges, then casings, then surfaces, then markings. So a road that meets
+// another never paints its curb or lines across it: junctions read as one continuous surface.
 function drawRoads(ctx,list,mpp,over){const s=1/mpp;
   const byK=[[],[],[],[],[],[],[],[],[]];for(const it of list){const r=it.r||it;if(r.k!==8)byK[r.k].push(it)}
-  ctx.lineJoin='round';
-  for(const k of ORDER){let L=byK[k];if(!L.length)continue;const w=RW[k];const px=w*s;let alpha=1,lw=w;if(px<RMIN[k]){alpha=M.max(0.25,M.pow(px/RMIN[k],0.45));lw=RMIN[k]*mpp}
-    if(k===3&&mpp>22)continue;if((k===2||k===7)&&mpp>40)continue;if(k===4&&mpp>45)continue;if(k===6&&mpp>30)continue;
-    ctx.globalAlpha=alpha;
-    if(k===5){ctx.lineCap='butt';ctx.strokeStyle=px>2?'#7c7466':'#5a5650';ctx.lineWidth=lw;strokeAll(ctx,L,0);
-      if(s>1.4){ctx.strokeStyle='#5a4636';ctx.lineWidth=2.8;ctx.setLineDash([0.32,0.33]);strokeAll(ctx,L,0);ctx.setLineDash([]);
-        ctx.strokeStyle='#9a9ca2';ctx.lineWidth=0.14;strokeSym(ctx,L,[0.72])}
-      if(!over)for(const r of L)if(r.br&&px>1)bridgeDecks(ctx,r,w+3,s);
-      ctx.globalAlpha=1;continue}
-    ctx.lineCap=over||k===0||k===1||k===2||k===7?'butt':'round';
-    const dirt=[],paved=[];if(k===4){for(const it of L)(isDirt(it.r||it)?dirt:paved).push(it)}
-    // rural roads: mown grass verge, hides field margins / tree belts under the road
-    if(!over&&px>1.2&&(k===0||k===1||k===4)){const V=[];for(const it of L){const r=it.r||it;if(r.city!==undefined)continue;if(!r.br||!r.br.length){V.push(it);continue}let a=it.r?it.a:0;const e=it.r?it.b:r.L;for(const b of r.br){if(b[1]<a||b[0]>e)continue;if(b[0]-6>a)V.push({r,a,b:b[0]-6});a=M.max(a,b[1]+6)}if(a<e)V.push({r,a,b:e})}if(V.length){ctx.strokeStyle=SEASON===2?'#d6dade':SEASON===1?'#8e8a52':'#6c8a4a';ctx.lineWidth=lw+(k===0?14:k===1?10:6);strokeAll(ctx,V,0);
-      if(s>0.4){const P=matP(ctx,'grass',s,0,0,0);if(P){ctx.globalAlpha=alpha*(SEASON===2?0.2:0.6);ctx.strokeStyle=P;strokeAll(ctx,V,0);ctx.globalAlpha=alpha}}}}
-    // casing / curbs
+  ctx.lineJoin='round';const KS=[];
+  for(const k of ORDER){const L=byK[k];if(!L.length)continue;const w=RW[k];const px=w*s;let alpha=1,lw=w;if(px<RMIN[k]){alpha=M.max(0.25,M.pow(px/RMIN[k],0.45));lw=RMIN[k]*mpp}
+    if(k===3&&mpp>22)continue;if((k===2||k===7)&&mpp>40)continue;if(k===4&&mpp>45)continue;if(k===6&&mpp>30)continue;KS.push({k,L,w,px,alpha,lw})}
+  const cap=(k)=>over||k===0||k===1||k===2||k===7?'butt':'round';
+  // railways first (everything else lies over them)
+  for(const {k,L,w,px,alpha,lw} of KS){if(k!==5)continue;ctx.globalAlpha=alpha;ctx.lineCap='butt';ctx.strokeStyle=px>2?'#7c7466':'#5a5650';ctx.lineWidth=lw;strokeAll(ctx,L,0);
+    if(s>1.4){ctx.strokeStyle='#5a4636';ctx.lineWidth=2.8;ctx.setLineDash([0.32,0.33]);strokeAll(ctx,L,0);ctx.setLineDash([]);ctx.strokeStyle='#9a9ca2';ctx.lineWidth=0.14;strokeSym(ctx,L,[0.72])}
+    if(!over)for(const r of L)if(r.br&&px>1)bridgeDecks(ctx,r,w+3,s);ctx.globalAlpha=1}
+  // phase 1: rural roads get a mown grass verge (hides field margins under the road); not inside towns, not on bridges
+  if(!over)for(const {k,L,px,alpha,lw} of KS){if(px<=1.2||(k!==0&&k!==1&&k!==4))continue;const V=[];
+    for(const it of L){const [r,a,b]=itIv(it);if(r.city!==undefined)continue;let X=r.inC||[];if(r.br)X=X.concat(r.br.map(q=>[q[0]-6,q[1]+6])).sort((p,q)=>p[0]-q[0]);for(const [c,d] of cutIv(a,b,X.length?X:null))V.push({r,a:c,b:d})}
+    if(!V.length)continue;ctx.globalAlpha=alpha;ctx.lineCap=cap(k);ctx.strokeStyle=SEASON===2?'#d6dade':SEASON===1?'#8e8a52':'#6c8a4a';ctx.lineWidth=lw+(k===0?14:k===1?10:6);strokeAll(ctx,V,0);
+    if(s>0.4){const P=matP(ctx,'grass',s,0,0,0);if(P){ctx.globalAlpha=alpha*(SEASON===2?0.2:0.6);ctx.strokeStyle=P;strokeAll(ctx,V,0)}}ctx.globalAlpha=1}
+  // phase 2: casings / curbs and bridge decks
+  for(const {k,L,w,px,alpha,lw} of KS){if(k===5)continue;ctx.globalAlpha=alpha;ctx.lineCap=cap(k);
     if(px>1.2){ctx.strokeStyle=SEASON===2&&k!==6?(k===4?'#c4c6c8':'#d2d6da'):k===0?'#8c8a84':k===1?'#9a968a':k===4?'#8a8070':k===6?'#8c8a84':'#a8a69e';ctx.lineWidth=lw+(k===0?2:k===4?1.5:1.2);strokeAll(ctx,L,0)}
-    if(!over)for(const r of L)if(r.br&&px>0.8)bridgeDecks(ctx,r,w+4,s);
+    if(!over)for(const r of L)if(r.br&&px>0.8)bridgeDecks(ctx,r,w+4,s);ctx.globalAlpha=1}
+  // phase 3: carriageways
+  for(const {k,L,w,px,alpha,lw} of KS){if(k===5)continue;ctx.globalAlpha=alpha;ctx.lineCap=cap(k);
+    const dirt=[],paved=[];if(k===4){for(const it of L)(isDirt(it.r||it)?dirt:paved).push(it)}
     const fc=px<2?(k===0?'#c0b8a8':k===1?'#aaa396':k===4?(SEASON===2?'#c8c8c4':'#a89c86'):SEASON===2?'#8a8c90':'#9a9890'):(k===0?'#56585c':k===1?'#5e6064':k===2?'#58595d':k===3?'#626366':k===6?'#5a5c60':k===7?'#5a5b5f':SEASON===2?'#b4b6b8':'#76726a');
     const tex=(m,wd,offs,LL)=>{if(s<0.4)return;for(let l=0;l<2;l++){const P=l?matP(ctx,m,s,0.73,13.1,7.7,2.618):matP(ctx,m,s,0,0,0);if(!P)continue;ctx.globalAlpha=alpha*(m==='asph'?0.4:0.45);ctx.strokeStyle=P;ctx.lineWidth=wd;if(offs)strokeSym(ctx,LL||L,offs);else strokeAll(ctx,LL||L,0)}ctx.globalAlpha=alpha};
-    if(k===0&&px>4){ctx.strokeStyle='#8a8880';ctx.lineWidth=w;strokeAll(ctx,L,0);tex('conc',w);ctx.strokeStyle=fc;ctx.lineWidth=12;ctx.lineCap='butt';strokeSym(ctx,L,[7.6]);tex('asph',12,[7.6]);ctx.lineCap='butt';
-      ctx.strokeStyle='#b8b6ae';ctx.lineWidth=0.8;strokeAll(ctx,L,0)}
+    if(k===0&&px>4){ctx.strokeStyle='#8a8880';ctx.lineWidth=w;strokeAll(ctx,L,0);tex('conc',w);ctx.strokeStyle=fc;ctx.lineWidth=12;ctx.lineCap='butt';strokeSym(ctx,L,[7.6]);tex('asph',12,[7.6]);
+      ctx.strokeStyle='#b8b6ae';ctx.lineWidth=0.8;strokeAllM(ctx,L,0)}
     else if(k===7&&px>4){ctx.strokeStyle=fc;ctx.lineWidth=w-1;strokeAll(ctx,L,0);tex('asph',w-1);ctx.strokeStyle='#b0aea6';ctx.lineWidth=6;medStroke(ctx,L);ctx.strokeStyle=SEASON===2?'#dde2e6':SEASON===1?'#8a8a46':'#628a48';ctx.lineWidth=5;medStroke(ctx,L);
       if(s>0.35&&!over){for(const r of L){const n=M.floor(r.L/9);for(let q=1;q<n;q++){if(inGap(r,q*9,4))continue;const p=posAt(r,q*9);TREEQ.push((p[0]-TX0)*s,(p[1]-TY0)*s,(6+((q*7+r.id)%3))*s,(q+r.id)%3===0?4:0)}}}}
     else if(k===4&&px>2){
-      if(dirt.length){ctx.strokeStyle='#8c7a5c';ctx.lineWidth=lw;strokeAll(ctx,dirt,0);tex('soil',lw,null,dirt);if(s>0.9){const lc=ctx.lineCap;ctx.lineCap='butt';ctx.strokeStyle='rgba(70,56,40,0.45)';ctx.lineWidth=0.7;strokeSym(ctx,dirt,[1.15]);ctx.strokeStyle='rgba(96,120,64,0.55)';ctx.lineWidth=0.6;strokeAll(ctx,dirt,0);ctx.lineCap=lc}}
+      if(dirt.length){ctx.strokeStyle='#8c7a5c';ctx.lineWidth=lw;strokeAll(ctx,dirt,0);tex('soil',lw,null,dirt);if(s>0.9){const lc=ctx.lineCap;ctx.lineCap='butt';ctx.strokeStyle='rgba(70,56,40,0.45)';ctx.lineWidth=0.7;strokeSymM(ctx,dirt,[1.15]);ctx.strokeStyle='rgba(96,120,64,0.55)';ctx.lineWidth=0.6;strokeAllM(ctx,dirt,0);ctx.lineCap=lc}}
       if(paved.length){ctx.strokeStyle='#6c6a66';ctx.lineWidth=lw;strokeAll(ctx,paved,0);tex('asph',lw,null,paved)}}
     else{ctx.strokeStyle=fc;ctx.lineWidth=lw;strokeAll(ctx,L,0);if(px>3)tex('asph',lw)}
-    // noise barriers along highways inside towns (wall + shadow + posts)
+    ctx.globalAlpha=1}
+  // phase 4: barriers, trams, tyre tracks and markings (left out inside junction zones)
+  for(const {k,L,px,alpha} of KS){if(k===5)continue;ctx.globalAlpha=alpha;
     if(k===0&&px>3&&!over){const B=[];for(const it of L){const r=it.r||it;if(!r.urb)continue;for(const u of r.urb){const a=M.max(u[0],it.r?it.a:0),b=M.min(u[1],it.r?it.b:r.L);if(b-a>20)B.push({r,a,b})}}
-      if(B.length){const o=RW[0]/2+2.2,lc=ctx.lineCap;ctx.lineCap='butt';ctx.save();ctx.translate(SUNX*3.5,SUNY*3.5);ctx.strokeStyle='rgba(12,16,26,0.3)';ctx.lineWidth=2.6;strokeSym(ctx,B,[o]);ctx.restore();
-        ctx.strokeStyle=SEASON===2?'#c8ccd0':'#7a8c80';ctx.lineWidth=0.5;strokeSym(ctx,B,[o]);ctx.strokeStyle='rgba(200,220,215,0.6)';ctx.lineWidth=0.16;strokeSym(ctx,B,[o-0.2]);
-        if(s>2){ctx.strokeStyle='#4a4e52';ctx.lineWidth=0.7;ctx.setLineDash([0.25,3.75]);strokeSym(ctx,B,[o]);ctx.setLineDash([])}ctx.lineCap=lc}}
-    // trams
+      if(B.length){const o=RW[0]/2+2.2;ctx.lineCap='butt';ctx.save();ctx.translate(SUNX*3.5,SUNY*3.5);ctx.strokeStyle='rgba(12,16,26,0.3)';ctx.lineWidth=2.6;strokeSymM(ctx,B,[o]);ctx.restore();
+        ctx.strokeStyle=SEASON===2?'#c8ccd0':'#7a8c80';ctx.lineWidth=0.5;strokeSymM(ctx,B,[o]);ctx.strokeStyle='rgba(200,220,215,0.6)';ctx.lineWidth=0.16;strokeSymM(ctx,B,[o-0.2]);
+        if(s>2){ctx.strokeStyle='#4a4e52';ctx.lineWidth=0.7;ctx.setLineDash([0.25,3.75]);strokeSymM(ctx,B,[o]);ctx.setLineDash([])}}}
     if(k===2&&s>0.6){const T=L.filter(it=>(it.r||it).tram);if(T.length){ctx.lineCap='butt';ctx.strokeStyle='#76736c';ctx.lineWidth=3.1;strokeSym(ctx,T,[1.75]);if(s>1.3){ctx.strokeStyle='#a9abb0';ctx.lineWidth=0.12;strokeSym(ctx,T,[1.03,2.47])}}}
-    // tyre wear
     if(s>0.7&&(k<=3||k===6||k===7)){ctx.lineCap='butt';ctx.strokeStyle='rgba(20,20,20,0.10)';ctx.lineWidth=0.7;const LO=k===0?[3.6,7.1,10.6]:k===2?[2.6,6.2]:k===1?[2.6]:k===6?[0]:k===7?[5.6,9.2]:[2.3];
-      ctx.beginPath();for(const it of L)for(const o of LO){PT(ctx,it,o-0.85);PT(ctx,it,o+0.85);if(o){PT(ctx,it,-o-0.85);PT(ctx,it,-o+0.85)}}ctx.stroke()}
-    // markings
+      ctx.beginPath();for(const it of L){const [r,a,b]=itIv(it);const P=cutIv(a,b,r.jz);for(const o of LO)for(const [c,d] of P){offsetRange(ctx,r,o-0.85,c,d);offsetRange(ctx,r,o+0.85,c,d);if(o){offsetRange(ctx,r,-o-0.85,c,d);offsetRange(ctx,r,-o+0.85,c,d)}}}ctx.stroke()}
     if(s>0.9){ctx.lineCap='butt';ctx.strokeStyle='rgba(240,240,235,0.85)';ctx.lineWidth=0.16;
-      if(k===0){strokeSym(ctx,L,[1.9,13.3]);ctx.setLineDash([3,9]);strokeSym(ctx,L,[5.4,8.9]);ctx.setLineDash([])}
-      else if(k===2){strokeSym(ctx,L,[0.25]);ctx.setLineDash([3,6]);strokeSym(ctx,L,[4.3]);ctx.setLineDash([])}
-      else if(k===7){strokeSym(ctx,L,[13.6]);ctx.setLineDash([3,6]);strokeSym(ctx,L,[7.4]);ctx.setLineDash([])}
-      else if(k===6){strokeSym(ctx,L,[3.4])}
-      else if(k===1||k===3){ctx.setLineDash([3,5]);strokeAll(ctx,L,0);ctx.setLineDash([]);if(k===1)strokeSym(ctx,L,[4.6])}}
+      if(k===0){strokeSymM(ctx,L,[1.9,13.3]);ctx.setLineDash([3,9]);strokeSymM(ctx,L,[5.4,8.9]);ctx.setLineDash([])}
+      else if(k===2){strokeSymM(ctx,L,[0.25]);ctx.setLineDash([3,6]);strokeSymM(ctx,L,[4.3]);ctx.setLineDash([])}
+      else if(k===7){strokeSymM(ctx,L,[13.6]);ctx.setLineDash([3,6]);strokeSymM(ctx,L,[7.4]);ctx.setLineDash([])}
+      else if(k===6){strokeSymM(ctx,L,[3.4])}
+      else if(k===1||k===3){ctx.setLineDash([3,5]);strokeAllM(ctx,L,0);ctx.setLineDash([]);if(k===1)strokeSymM(ctx,L,[4.6])}}
     ctx.globalAlpha=1}
   ctx.lineCap='butt'}
 function drawOverpasses(ctx,rl,mpp){const s=1/mpp;if(mpp>20)return;const items=[];
@@ -1790,6 +1832,6 @@ function drawFeat(ctx,f,pass,x0,y0,s,mpp,qx0,qy0,qx1,qy1){
 // zone cylinder shadows need stroke not fill: patch drawPrims pass1 for cyl via stroke
 const _dp=drawPrims;
 
-return {setSeason,season:()=>SEASON,renderLights,WORLD,TS,SUNX,SUNY,WDX,WDY,LEANX,LEANY,cities:live,roads,zones,farms,ships,flights,emitters,airports,queryRoads,queryF,posAt,renderTile,sprites,drawShip,drawPlane,baseH,landE,rng,hh,noise,genTime:Date.now()-T0,mkCanvas,_dbg:{genVillage,genBlock,RW}};
+return {setSeason,season:()=>SEASON,renderLights,WORLD,TS,SUNX,SUNY,WDX,WDY,LEANX,LEANY,cities:live,roads,zones,farms,ships,flights,emitters,airports,queryRoads,queryF,posAt,renderTile,sprites,drawShip,drawPlane,baseH,landE,rng,hh,noise,genTime:Date.now()-T0,mkCanvas,_dbg:{genVillage,genBlock,RW,riverV,riverW}};
 }
 

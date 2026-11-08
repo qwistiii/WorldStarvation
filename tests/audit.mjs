@@ -108,7 +108,6 @@ export function collect(W, { trees = false } = {}) {
 // какие дороги «свои» для объекта и потому не считаются помехой
 function ownRoad(o, r) {
   if (o.st && r === o.st.r) return true;                         // улица села, вдоль которой стоит дом
-  if (o.zone && r === o.zone.acc) return true;                   // подъездная дорога зоны начинается внутри неё
   if (o.zone && o.zone.zk === 'air') return true;                // у аэропорта свои рулёжки
   return false;
 }
