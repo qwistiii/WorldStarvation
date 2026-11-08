@@ -109,9 +109,10 @@ function queryRoads(x0,y0,x1,y1){stampR++;const out=[];const a=clamp(M.floor(x0/
   for(let j=c;j<=d;j++)for(let i=a;i<=b;i++){const A=gridR[j*RNC+i];if(!A)continue;for(let k=0;k<A.length;k++){const r=roads[A[k]];if(r._s===stampR)continue;r._s=stampR;
     if(r.bb[2]<x0-40||r.bb[0]>x1+40||r.bb[3]<y0-40||r.bb[1]>y1+40)continue;out.push(r)}}return out}
 function bridgesOf(r){ // water intervals along road
-  if(r.n===2){const mx=(r.pts[0]+r.pts[2])/2,my=(r.pts[1]+r.pts[3])/2;if(M.abs(riverV(mx,my))>0.0137+r.L*0.8e-4){let dry=true;for(let q=0;q<=8;q++){const t=q/8;if(baseH(r.pts[0]+(r.pts[2]-r.pts[0])*t,r.pts[1]+(r.pts[3]-r.pts[1])*t,7)<0.004){dry=false;break}}if(dry){r.br=null;return}}}
-  const out=[];let inW=false,s0=0;const step=24;
-  for(let s=0;s<=r.L;s+=step){const p=posAt(r,s);const w=landE(p[0],p[1],0)<0;
+  r._b=1;
+  if(r.n===2){const mx=(r.pts[0]+r.pts[2])/2,my=(r.pts[1]+r.pts[3])/2;if(M.abs(riverV(mx,my))>0.0137+r.L*1.6e-4){let dry=true;const nq=M.max(8,M.ceil(r.L/20));for(let q=0;q<=nq;q++){const t=q/nq;if(baseH(r.pts[0]+(r.pts[2]-r.pts[0])*t,r.pts[1]+(r.pts[3]-r.pts[1])*t,7)<0.004){dry=false;break}}if(dry){r.br=null;return}}}
+  const out=[];let inW=false,s0=0;const step=10;
+  for(let s=0;s<=r.L+step-0.01;s+=step){if(s>r.L)s=r.L;const p=posAt(r,s);const w=landE(p[0],p[1],0)<0;
     if(w&&!inW){inW=true;s0=s}else if(!w&&inW){inW=false;out.push([M.max(0,s0-28),M.min(r.L,s+4)])}}
   if(inW)out.push([M.max(0,s0-28),r.L]);r.br=out.length?out:null}
 const _p=[0,0,0,0];
@@ -155,10 +156,11 @@ function buildCity(c){
   // streets along U (fixed j)
   const eU=c.eU=new Uint8Array(D*D),eV=c.eV=new Uint8Array(D*D);
   const bridgeGap=(k,a0,a1,b0,b1)=>{if(k!==2&&k!==7)return;const A=cpt(c,a0,a1),B=cpt(c,b0,b1);const L=M.hypot(B[0]-A[0],B[1]-A[1]);if(L>520||L<20)return;let w=0;for(let q=1;q<6;q++){if(landE(A[0]+(B[0]-A[0])*q/6,A[1]+(B[1]-A[1])*q/6,0)<0)w++}if(w<2)return;const r=mkRoad(k,[A[0],A[1],B[0],B[1]],{city:c.id});if(r)bridgesOf(r)};
-  for(let j=0;j<D;j++){let s=-1,le=-1;for(let i=0;i<=D;i++){const e=i<D-1&&ok[j*D+i]&&ok[j*D+i+1]&&(blk(i,j-1)||blk(i,j));if(e)eU[j*D+i]=1;
-      if(e&&s<0){s=i;if(le>=0)bridgeGap(lineKind(j-N),le-N,j-N,i-N,j-N)}if(!e&&s>=0){addStreet(c,s-N,j-N,i-N,j-N,lineKind(j-N));le=i;s=-1}}}
-  for(let i=0;i<D;i++){let s=-1,le=-1;for(let j=0;j<=D;j++){const e=j<D-1&&ok[j*D+i]&&ok[(j+1)*D+i]&&(blk(i-1,j)||blk(i,j));if(e)eV[j*D+i]=1;
-      if(e&&s<0){s=j;if(le>=0)bridgeGap(lineKind(i-N),i-N,le-N,i-N,j-N)}if(!e&&s>=0){addStreet(c,i-N,s-N,i-N,j-N,lineKind(i-N));le=j;s=-1}}}
+  // an edge with blocks on both sides is dry (blocks are checked for water), only open edges may cross a river
+  for(let j=0;j<D;j++){let s=-1,le=-1,op=0;for(let i=0;i<=D;i++){const e=i<D-1&&ok[j*D+i]&&ok[j*D+i+1]&&(blk(i,j-1)||blk(i,j));if(e){eU[j*D+i]=1;if(!(blk(i,j-1)&&blk(i,j)))op=1}
+      if(e&&s<0){s=i;if(le>=0)bridgeGap(lineKind(j-N),le-N,j-N,i-N,j-N)}if(!e&&s>=0){addStreet(c,s-N,j-N,i-N,j-N,lineKind(j-N),op);le=i;s=-1;op=0}}}
+  for(let i=0;i<D;i++){let s=-1,le=-1,op=0;for(let j=0;j<=D;j++){const e=j<D-1&&ok[j*D+i]&&ok[(j+1)*D+i]&&(blk(i-1,j)||blk(i,j));if(e){eV[j*D+i]=1;if(!(blk(i-1,j)&&blk(i,j)))op=1}
+      if(e&&s<0){s=j;if(le>=0)bridgeGap(lineKind(i-N),i-N,le-N,i-N,j-N)}if(!e&&s>=0){addStreet(c,i-N,s-N,i-N,j-N,lineKind(i-N),op);le=j;s=-1;op=0}}}
 }
 // any water inside the rectangle [u0,u1]x[v0,v1] of a rotated frame (origin ox,oy), sampled every ~st metres
 function wetArea(ox,oy,ca,sa,u0,v0,u1,v1,st,mg){const nu=M.max(1,M.ceil((u1-u0)/st)),nv=M.max(1,M.ceil((v1-v0)/st));
@@ -168,7 +170,7 @@ function wetArea(ox,oy,ca,sa,u0,v0,u1,v1,st,mg){const nu=M.max(1,M.ceil((u1-u0)/
   for(let a=0;a<=nu;a++)for(let b=0;b<=nv;b++){const u=u0+(u1-u0)*a/nu,v=v0+(v1-v0)*b/nv;if(landE(ox+u*ca-v*sa,oy+u*sa+v*ca,mg)<0)return true}return false}
 function bsr(a,v){let lo=0,hi=a.length-1;if(v<=a[0])return -1;if(v>=a[hi])return hi;while(hi-lo>1){const m=(lo+hi)>>1;if(a[m]>v)hi=m;else lo=m}return lo}
 function cpt(c,i,j){const u=c.us[i+c.N],v=c.vs[j+c.N];return [c.x+u*c.ca-v*c.sa,c.y+u*c.sa+v*c.ca]}
-function addStreet(c,i0,j0,i1,j1,k){const a=cpt(c,i0,j0),b=cpt(c,i1,j1);const r=mkRoad(k,[a[0],a[1],b[0],b[1]],{city:c.id});if(r)bridgesOf(r);if(r&&k===2&&c.type>=2&&hr(c.id,i0===i1?i0*7+1:j0*7+2,88)<0.5)r.tram=1}
+function addStreet(c,i0,j0,i1,j1,k,open){const a=cpt(c,i0,j0),b=cpt(c,i1,j1);const r=mkRoad(k,[a[0],a[1],b[0],b[1]],{city:c.id});if(r){if(open)bridgesOf(r);else r._b=1}if(r&&k===2&&c.type>=2&&hr(c.id,i0===i1?i0*7+1:j0*7+2,88)<0.5)r.tram=1}
 function lineKind(n){n=((n%8)+8)%8;return n===0?7:n===4?2:3}
 function lineHalf(n){const k=lineKind(n);return k===7?14.5:k===2?10:5}
 function pickW(r,T){let s=0;for(let i=1;i<T.length;i+=2)s+=T[i];r*=s;for(let i=1;i<T.length;i+=2){r-=T[i];if(r<=0)return T[i-1]}return T[T.length-2]}
@@ -231,7 +233,7 @@ function trimAlong(pts,k,keepA,keepB){const c=plCum(pts),L=c[c.length-1];let s0=
 function joinOn(r,x,y,dx,dy){let bt=90,q=null;for(let i=0;i<r.n-1;i++){const ax=r.pts[i*2],ay=r.pts[i*2+1],ex=r.pts[i*2+2]-ax,ey=r.pts[i*2+3]-ay,den=dx*ey-dy*ex;if(M.abs(den)<1e-9)continue;
     const t=((ax-x)*ey-(ay-y)*ex)/den,u=((ax-x)*dy-(ay-y)*dx)/den;if(t>0&&t<bt&&u>=0&&u<=1){bt=t;q=[x+dx*t,y+dy*t]}}return q||projOn(r,x,y)}
 function sideRun(pts,k){const c=plCum(pts),L=c[c.length-1];let run=0,best=0;
-  for(let s=0;s<L;s+=10){const p=plAt(pts,c,s);if(ridesOn(p[0],p[1],p[2],p[3],k)){run+=10;if(run>best)best=run}else run=0}return best}
+  for(let s=0;s<L;s+=16){const p=plAt(pts,c,s);if(ridesOn(p[0],p[1],p[2],p[3],k)){run+=16;if(run>best)best=run}else run=0}return best}
 function connect(A,B,k){const key=A.id<B.id?A.id+'_'+B.id+'_'+k:B.id+'_'+A.id+'_'+k;if(pairs.has(key))return;pairs.add(key);
   const dx=B.x-A.x,dy=B.y-A.y,L=M.hypot(dx,dy),ux=dx/L,uy=dy/L;
   const rr=(C,ang)=>k===5&&C.type>=1?C.R*(C.type===3?1.3:1.15):C.type===3?(k===0?ringR(C,ang):C.R*1.0):C.type===2?C.R*0.82:C.type===1?C.R*0.6:0;const ra=rr(A,M.atan2(uy,ux)),rb=rr(B,M.atan2(-uy,-ux));
@@ -391,6 +393,8 @@ for(const r of roads){if(r.city!==undefined||r.k===8)continue;const hw=RW[r.k]/2
         const bi=bsr(c.us,u),bj=bsr(c.vs,v);if(bi>=0&&bj>=0&&bi<BD&&bj<BD&&bl[bj*BD+bi])bl[bj*BD+bi]=20}}
     for(const e of [0,r.n-1])for(let q=0;q<16;q++){const a=q/16*TAU;for(const rr of [hw*0.6,hw]){const x=r.pts[e*2]+M.cos(a)*rr-c.x,y=r.pts[e*2+1]+M.sin(a)*rr-c.y;const u=x*c.ca+y*c.sa,v=-x*c.sa+y*c.ca;
       const bi=bsr(c.us,u),bj=bsr(c.vs,v);if(bi>=0&&bj>=0&&bi<BD&&bj<BD&&bl[bj*BD+bi])bl[bj*BD+bi]=20}}}}
+// every road over water gets its bridges (also connectors, ramps and avenues added late)
+for(const r of roads)if(!r._b&&r.k!==8)bridgesOf(r);
 // boulevards: where another road crosses, the median strip and its trees are interrupted (r.xs = [s, half gap])
 for(const r of roads){if(r.k!==7)continue;const xs=[];for(const o of queryRoads(r.bb[0]-5,r.bb[1]-5,r.bb[2]+5,r.bb[3]+5)){if(o===r||o.k===8||o.k===5)continue;
   for(let i=0;i<r.n-1;i++){const ax=r.pts[i*2],ay=r.pts[i*2+1],ex=r.pts[i*2+2]-ax,ey=r.pts[i*2+3]-ay,li=M.hypot(ex,ey);for(let j=0;j<o.n-1;j++){const cx=o.pts[j*2],cy=o.pts[j*2+1],fx=o.pts[j*2+2]-cx,fy=o.pts[j*2+3]-cy;
@@ -401,13 +405,14 @@ for(const r of roads){if(r.k!==7)continue;const xs=[];for(const o of queryRoads(
 // a road that joins another), its markings and tyre tracks are left out so junctions read as one clean surface;
 // r.inC: stretches of rural roads inside towns (no grass verge there)
 {const onOv=(r,s)=>{if(!r.ov)return false;for(const o of r.ov)if(s>o[0]-2&&s<o[1]+2)return true;return false};
- for(const r of roads){if(r.k===8||r.k===5)continue;const J=[];const cand=queryRoads(r.bb[0]-30,r.bb[1]-30,r.bb[2]+30,r.bb[3]+30);
-  for(const o of cand){if(o===r||o.k===8||o.k===5)continue;
-    for(let i=0;i<r.n-1;i++){const ax=r.pts[i*2],ay=r.pts[i*2+1],ex=r.pts[i*2+2]-ax,ey=r.pts[i*2+3]-ay,li=M.hypot(ex,ey)||1;
-      for(let j=0;j<o.n-1;j++){const cx=o.pts[j*2],cy=o.pts[j*2+1],fx=o.pts[j*2+2]-cx,fy=o.pts[j*2+3]-cy,lj=M.hypot(fx,fy)||1;const den=ex*fy-ey*fx;if(M.abs(den)<1e-9)continue;
+ for(const r of roads){if(r.k===8||r.k===5)continue;const J=[];
+  for(let i=0;i<r.n-1;i++){const ax=r.pts[i*2],ay=r.pts[i*2+1],ex=r.pts[i*2+2]-ax,ey=r.pts[i*2+3]-ay,li=M.hypot(ex,ey)||1;const sx0=M.min(ax,ax+ex),sx1=M.max(ax,ax+ex),sy0=M.min(ay,ay+ey),sy1=M.max(ay,ay+ey);
+    for(const o of queryRoads(sx0-2,sy0-2,sx1+2,sy1+2)){if(o===r||o.k===8||o.k===5)continue;
+      for(let j=0;j<o.n-1;j++){const cx=o.pts[j*2],cy=o.pts[j*2+1],fx=o.pts[j*2+2]-cx,fy=o.pts[j*2+3]-cy;if(M.max(cx,cx+fx)<sx0||M.min(cx,cx+fx)>sx1||M.max(cy,cy+fy)<sy0||M.min(cy,cy+fy)>sy1)continue;const lj=M.hypot(fx,fy)||1;const den=ex*fy-ey*fx;if(M.abs(den)<1e-9)continue;
         const t=((cx-ax)*fy-(cy-ay)*fx)/den,u=((cx-ax)*ey-(cy-ay)*ex)/den;if(t<0||t>1||u<0||u>1)continue;const sr=r.cum[i]+t*li,so=o.cum[j]+u*lj;if(onOv(r,sr)||onOv(o,so))continue;
-        const h=RW[o.k]/2/M.max(0.25,M.abs(den)/(li*lj))+0.6;J.push([sr-h,sr+h])}}
-    for(const e of [0,1]){const x=e?r.pts[r.n*2-2]:r.pts[0],y=e?r.pts[r.n*2-1]:r.pts[1];if(x<o.bb[0]-40||x>o.bb[2]+40||y<o.bb[1]-40||y>o.bb[3]+40)continue;const q=projOn(o,x,y),d=M.hypot(q[0]-x,q[1]-y);if(d>RW[o.k]/2+1)continue;
+        const h=RW[o.k]/2/M.max(0.25,M.abs(den)/(li*lj))+0.6;J.push([sr-h,sr+h])}}}
+  for(const e of [0,1]){const x=e?r.pts[r.n*2-2]:r.pts[0],y=e?r.pts[r.n*2-1]:r.pts[1];
+    for(const o of queryRoads(x-20,y-20,x+20,y+20)){if(o===r||o.k===8||o.k===5)continue;const q=projOn(o,x,y),d=M.hypot(q[0]-x,q[1]-y);if(d>RW[o.k]/2+1)continue;
       const so=nearestS(o,x,y)[1];if(onOv(o,so))continue;const pa=posAt(r,e?r.L-1:1),pb=posAt(o,so);const sn=M.max(0.3,M.abs(pa[2]*pb[3]-pa[3]*pb[2]));const ext=(RW[o.k]/2+d)/sn+0.6;J.push(e?[r.L-ext,r.L+1]:[-1,ext])}}
   if(J.length){J.sort((a,b)=>a[0]-b[0]);const m=[J[0].slice()];for(let q=1;q<J.length;q++){const l=m[m.length-1];if(J[q][0]<=l[1])l[1]=M.max(l[1],J[q][1]);else m.push(J[q].slice())}r.jz=m}}
  for(const r of roads){if(r.city!==undefined||(r.k!==0&&r.k!==1&&r.k!==4))continue;const I=[];let st=-1;

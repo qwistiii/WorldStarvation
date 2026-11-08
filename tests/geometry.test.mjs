@@ -2,7 +2,7 @@
 // Подробная сводка с координатами мест: node tools/audit.mjs <seed>.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { world, audit, deadEnds, groundClash, parallelRoads, inWater, where, label } from './audit.mjs';
+import { world, audit, deadEnds, groundClash, parallelRoads, inWater, roadWater, levelCrossings, where, label } from './audit.mjs';
 
 for (const seed of [20261107, 1337]) {
   const W = world(seed);
@@ -30,6 +30,12 @@ for (const seed of [20261107, 1337]) {
   });
   test(`${seed}: у дорог нет висячих концов`, () => {
     assert.deepEqual(list(deadEnds(W), (d) => `k=${d.r.k} конец @${Math.round(d.x)},${Math.round(d.y)}`), []);
+  });
+  test(`${seed}: над водой у дорог и рельсов есть мосты`, () => {
+    assert.deepEqual(list(roadWater(W), (it) => `k=${it.r.k} над водой без моста @${Math.round(it.x)},${Math.round(it.y)}`), []);
+  });
+  test(`${seed}: железные дороги и магистрали пересекают дороги только на путепроводах`, () => {
+    assert.deepEqual(list(levelCrossings(W), (it) => `k=${it.a.k} × k=${it.b.k} в одном уровне @${Math.round(it.x)},${Math.round(it.y)}`), []);
   });
   test(`${seed}: загородные дороги не идут поверх других дорог`, () => {
     const bad = parallelRoads(W).filter((it) => it.a.city === undefined && it.b.city === undefined);

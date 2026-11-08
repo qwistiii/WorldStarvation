@@ -280,3 +280,39 @@ export function inWater(W) {
   }
   return out;
 }
+
+// дороги над водой без моста (мосты рисуются по r.br) и пересечения в одном уровне, которых быть не должно:
+// железная дорога с магистралью, трассой или проспектом, магистраль с трассой
+export function roadWater(W) {
+  const out = [];
+  for (const r of W.roads) {
+    if (r.k === 8) continue;
+    for (let s = 0; s <= r.L; s += 10) { // те же точки, что и у bridgesOf: пятна воды мельче шага не видны под дорогой
+      const p = W.posAt(r, s);
+      if (W.landE(p[0], p[1], 0) >= 0) continue;
+      if (!(r.br || []).some((b) => s >= b[0] - 1 && s <= b[1] + 1)) { out.push({ r, x: p[0], y: p[1] }); break; }
+    }
+  }
+  return out;
+}
+export function levelCrossings(W) {
+  const out = [], onOv = (r, s) => (r.ov || []).some((o) => s > o[0] - 1 && s < o[1] + 1);
+  const bad = (a, b) => (a.k === 5 && (b.k === 0 || b.k === 1 || b.k === 2 || b.k === 7)) || (a.k === 0 && b.k === 1);
+  for (const a of W.roads) {
+    if (a.k !== 5 && a.k !== 0) continue;
+    for (const b of W.queryRoads(a.bb[0], a.bb[1], a.bb[2], a.bb[3])) {
+      if (b === a || !bad(a, b)) continue;
+      for (let i = 0; i < a.n - 1; i++) for (let j = 0; j < b.n - 1; j++) {
+        const ax = a.pts[i * 2], ay = a.pts[i * 2 + 1], ex = a.pts[i * 2 + 2] - ax, ey = a.pts[i * 2 + 3] - ay;
+        const cx = b.pts[j * 2], cy = b.pts[j * 2 + 1], fx = b.pts[j * 2 + 2] - cx, fy = b.pts[j * 2 + 3] - cy, den = ex * fy - ey * fx;
+        if (Math.abs(den) < 1e-9) continue;
+        const t = ((cx - ax) * fy - (cy - ay) * fx) / den, u = ((cx - ax) * ey - (cy - ay) * ex) / den;
+        if (t < 0 || t > 1 || u < 0 || u > 1) continue;
+        const sa = a.cum[i] + t * Math.hypot(ex, ey), sb = b.cum[j] + u * Math.hypot(fx, fy);
+        if (sa < 25 || sa > a.L - 25 || sb < 25 || sb > b.L - 25) continue; // примыкание концом
+        if (!onOv(a, sa) && !onOv(b, sb)) out.push({ a, b, x: ax + ex * t, y: ay + ey * t });
+      }
+    }
+  }
+  return out;
+}
