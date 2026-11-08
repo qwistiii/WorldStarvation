@@ -224,11 +224,12 @@ function ridesOn(x,y,dx,dy,k,only){for(const r of queryRoads(x-40,y-40,x+40,y+40
     for(let i=0;i<r.n-1;i++){const ax=r.pts[i*2],ay=r.pts[i*2+1],ex=r.pts[i*2+2]-ax,ey=r.pts[i*2+3]-ay,l2=ex*ex+ey*ey||1;const t=clamp(((x-ax)*ex+(y-ay)*ey)/l2,0,1);
       if(M.hypot(ax+ex*t-x,ay+ey*t-y)<lim&&M.abs(ex*dx+ey*dy)/M.sqrt(l2)>0.85)return r}}return null}
 function projOn(r,x,y){let best=1e18,bx=x,by=y;for(let i=0;i<r.n-1;i++){const ax=r.pts[i*2],ay=r.pts[i*2+1],ex=r.pts[i*2+2]-ax,ey=r.pts[i*2+3]-ay,l2=ex*ex+ey*ey||1;const t=clamp(((x-ax)*ex+(y-ay)*ey)/l2,0,1);const d=(ax+ex*t-x)**2+(ay+ey*t-y)**2;if(d<best){best=d;bx=ax+ex*t;by=ay+ey*t}}return [bx,by]}
-function trimAlong(pts,k,keepA,keepB){const c=plCum(pts),L=c[c.length-1];let s0=0,s1=L,rA=null,rB=null;
+let TSTUB=false;
+function trimAlong(pts,k,keepA,keepB){TSTUB=false;const c=plCum(pts),L=c[c.length-1];let s0=0,s1=L,rA=null,rB=null;
   if(!keepA)while(s0<L){const p=plAt(pts,c,s0);const r=ridesOn(p[0],p[1],p[2],p[3],k);if(!r)break;rA=r;s0+=8}
   if(!keepB)while(s1>s0){const p=plAt(pts,c,s1);const r=ridesOn(p[0],p[1],p[2],p[3],k);if(!r)break;rB=r;s1-=8}
   // a minor road never joins a highway on the level: it stops short of it instead
-  const hw=(r)=>r&&r.k===0&&(k===3||k===4);if(hw(rA)){s0=M.min(L,s0+22);rA=null}if(hw(rB)){s1=M.max(0,s1-22);rB=null}
+  const hw=(r)=>r&&r.k===0&&(k===3||k===4);TSTUB=false;if(hw(rA)){s0=M.min(L,s0+22);rA=null;TSTUB=true}if(hw(rB)){s1=M.max(0,s1-22);rB=null;TSTUB=true}
   if(s0===0&&s1===L)return pts;if(s1-s0<80)return null;
   // the cut end is joined to the centre line of the road it was riding on, so it does not hang next to it
   // the cut end merges into the road it was riding on at a shallow angle (a point on that road a little way back)
@@ -247,20 +248,20 @@ function connect(A,B,k){const key=A.id<B.id?A.id+'_'+B.id+'_'+k:B.id+'_'+A.id+'_
   if(k!==5){if(A.type>=1&&(!(k===0&&A.type===3)||wA))[ax,ay]=snapNode(A,ax,ay);if(B.type>=1&&(!(k===0&&B.type===3)||wB))[bx,by]=snapNode(B,bx,by)}
   const cfg=k===0?[0.1,60,420,900,0.2]:k===1?[0.1,50,300,450,0.15]:k===5?[0.07,30,380,700,0.2]:[0.13,40,160,150,0.1];
   let fb=null,fbr=1e9;const ring=(C)=>k===0&&C.type===3&&!(C===A?wA:wB);
-  for(let a=0;a<=4;a++){let pts;if(a<4){const ph=hr(A.id,B.id,k*13+a)*100;
-      if(k===5){const d=(a%2?-1:1)*(0.32+0.1*(a>>1)),th=M.atan2(uy,ux);ax=A.x+M.cos(th+d)*ra;ay=A.y+M.sin(th+d)*ra;bx=B.x-M.cos(th-d)*rb;by=B.y-M.sin(th-d)*rb} // rails approach towns off the highway bearing
-      pts=routePts(ax,ay,bx,by,cfg[0]*(a%2?-1:1),cfg[1],ph,cfg[2]);if(!waterRunOK(pts,cfg[3],cfg[4]))continue;
-      if(k!==5){pts=trimAlong(pts,k,ring(A),ring(B));if(!pts)continue}else if(plCum(pts).pop()<3000)return; // no room for stations at both ends
+  const NA=k===5?10:4;for(let a=0;a<=NA;a++){let pts;if(a<NA){const ph=hr(A.id,B.id,k*13+a)*100;
+      if(k===5){const d=(a%2?-1:1)*(0.32+0.09*(a>>1)),th=M.atan2(uy,ux);ax=A.x+M.cos(th+d)*ra;ay=A.y+M.sin(th+d)*ra;bx=B.x-M.cos(th-d)*rb;by=B.y-M.sin(th-d)*rb} // rails approach towns off the highway bearing
+      pts=routePts(ax,ay,bx,by,cfg[0]*(a%2?-1:1)*(1+(a>>2)*0.6),cfg[1],ph,cfg[2]);if(!waterRunOK(pts,cfg[3],cfg[4]))continue;
+      if(k!==5){pts=trimAlong(pts,k,ring(A),ring(B));if(!pts)continue;pts.stub=TSTUB}else if(plCum(pts).pop()<3000)return; // no room for stations at both ends
       const sr=sideRun(pts,k);if(sr>40){if(sr<fbr){fb=pts;fbr=sr}continue}}else{if(!fb||fbr>100&&k!==5)return;pts=fb} // a road that would ride on top of another for >100 m duplicates it: skip
     // round off corners (Chaikin, end points kept): no kinks where the route bends towards a street node
-    if(k!==5)pts=chaikin(pts,2);
+    const stub=pts.stub;if(k!==5)pts=chaikin(pts,2);
     // a highway does not run into a town's street grid: from the town edge on it continues as an avenue to the node
     if(k===0){const c=plCum(pts),L=c[c.length-1];const inn=(C,e)=>{if(C.type<1||(C.type===3&&!(e?wB:wA)))return 0;let d=0,last=-1;const BD=C.D-1;
         while(d<L*0.45){const q=plAt(pts,c,e?L-d:d);if(cityF(C,q[0],q[1])>1.3)break;const x=q[0]-C.x,y=q[1]-C.y,u=x*C.ca+y*C.sa,v=-x*C.sa+y*C.ca,bi=bsr(C.us,u),bj=bsr(C.vs,v);
           if(bi>=0&&bj>=0&&bi<BD&&bj<BD&&C.blocks[bj*BD+bi])last=d;d+=10}return last>=0?last+25:70}; // at least a short avenue stub: a highway never meets a street head-on
       const dA=inn(A,0),dB=inn(B,1);if(dA||dB){const cut=(s0,s1)=>{const a=plAt(pts,c,s0),b=plAt(pts,c,s1),o=[a[0],a[1]];for(let i=a[4]+1;i<=b[4];i++)o.push(pts[i*2],pts[i*2+1]);o.push(b[0],b[1]);return o};
         if(dA){const q=mkRoad(2,cut(0,dA));if(q)bridgesOf(q)}if(dB){const q=mkRoad(2,cut(L-dB,L));if(q)bridgesOf(q)}pts=cut(dA,L-dB)}}
-    {const r=mkRoad(k,pts);if(r){bridgesOf(r);if(k===0){const p=r.pts,n=r.n;if(A.type===3&&!wA)JUNC.push([A,ax,ay,p[2]-p[0],p[3]-p[1],r]);if(B.type===3&&!wB)JUNC.push([B,bx,by,p[n*2-4]-p[n*2-2],p[n*2-3]-p[n*2-1],r])}}return}}}
+    {const r=mkRoad(k,pts);if(r&&stub)r.stub=1;if(r){bridgesOf(r);if(k===0){const p=r.pts,n=r.n;if(A.type===3&&!wA)JUNC.push([A,ax,ay,p[2]-p[0],p[3]-p[1],r]);if(B.type===3&&!wB)JUNC.push([B,bx,by,p[n*2-4]-p[n*2-2],p[n*2-3]-p[n*2-1],r])}}return}}}
 const JUNC=[];
 function ringR(c,a){return c.R*(1.08+0.07*noise(M.cos(a)*1.5+c.id,M.sin(a)*1.5))}
 const bigs=live.filter(c=>c.type>=2),towns=live.filter(c=>c.type===1),vills=live.filter(c=>c.type===0);
@@ -394,7 +395,7 @@ function trimRoad(r,a,b){const P=[];const pa=posAt(r,a);P.push(pa[0],pa[1]);for(
 function stnAccess(z){const lx=0,ly=z.H/2+2,sx=z.x+lx*z.ca-ly*z.sa,sy=z.y+lx*z.sa+ly*z.ca;let best=null,bd=1600;
   for(const o of queryRoads(sx-1600,sy-1600,sx+1600,sy+1600)){if(o.k===0||o.k===5||o.k===6||o.k===8)continue;const q=projOn(o,sx,sy),d=M.hypot(q[0]-sx,q[1]-sy);if(d>=bd)continue;
     const ax=q[0]-z.x,ay=q[1]-z.y;if(segBox(lx,ly+0.5,ax*z.ca+ay*z.sa,-ax*z.sa+ay*z.ca,z.W/2+4,z.H/2+1))continue; /* never across the station */
-    if(sideRun([sx,sy,q[0],q[1]],4)>30)continue;let cross=false;for(const h of queryRoads(M.min(sx,q[0]),M.min(sy,q[1]),M.max(sx,q[0]),M.max(sy,q[1])))if(h!==o&&(h.k===0||h.k===1||h.k===5)&&roadHitsSeg(h,sx,sy,q[0],q[1])){cross=true;break}if(cross)continue;bd=d;best=q}
+    if(sideRun([sx,sy,q[0],q[1]],4)>30)continue;let cross=false;for(const h of queryRoads(M.min(sx,q[0]),M.min(sy,q[1]),M.max(sx,q[0]),M.max(sy,q[1])))if(h!==o&&(h.k===0||h.k===1||h.k===5||h.k===6)&&roadHitsSeg(h,sx,sy,q[0],q[1])){cross=true;break}if(cross)continue;bd=d;best=q}
   if(!best||bd<15)return;const pts=[sx,sy,best[0],best[1]];if(!waterRunOK(pts,150,0.2))return;const r=mkRoad(4,pts);if(r){z.acc=r;bridgesOf(r)}}
 function roadHitsSeg(h,ax,ay,bx,by){for(let i=0;i<h.n-1;i++){const cx=h.pts[i*2],cy=h.pts[i*2+1],fx=h.pts[i*2+2]-cx,fy=h.pts[i*2+3]-cy,ex=bx-ax,ey=by-ay,den=ex*fy-ey*fx;if(M.abs(den)<1e-9)continue;const t=((cx-ax)*fy-(cy-ay)*fx)/den,u=((cx-ax)*ey-(cy-ay)*ex)/den;if(t>0.02&&t<0.98&&u>=0&&u<=1)return true}return false}
 function stnSpot(r,s,strict){const p=posAt(r,s);const ux=p[2],uy=p[3],cx=p[0],cy=p[1];

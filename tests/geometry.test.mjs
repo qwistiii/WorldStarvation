@@ -68,3 +68,19 @@ for (const seed of [20261107, 1337]) {
     assert.deepEqual(bad.slice(0, 10), []);
   });
 }
+
+// ещё два мира — только дороги и рельсы (быстро)
+for (const seed of [4242, 777]) {
+  const W = world(seed);
+  const xy = (it) => `@${Math.round(it.x)},${Math.round(it.y)}`;
+  test(`${seed}: дороги и рельсы — стыки, мосты, вокзалы, развязки`, () => {
+    assert.deepEqual(deadEnds(W).slice(0, 8).map((d) => `k=${d.r.k} висячий конец ${xy(d)}`), []);
+    assert.deepEqual(roadWater(W).slice(0, 8).map((d) => `k=${d.r.k} над водой без моста ${xy(d)}`), []);
+    assert.deepEqual(levelCrossings(W).slice(0, 8).map((d) => `k=${d.a.k}×k=${d.b.k} в одном уровне ${xy(d)}`), []);
+    assert.deepEqual(railEnds(W).slice(0, 8).map((d) => `рельсы в поле ${xy(d)}`), []);
+    assert.deepEqual(sharpBends(W).concat(hooks(W)).slice(0, 8).map((d) => `k=${d.r.k} излом ${xy(d)}`), []);
+    assert.deepEqual(minorOnHighway(W).slice(0, 8).map((d) => `k=${d.r.k} в магистраль ${xy(d)}`), []);
+    assert.deepEqual(rampCrossings(W).slice(0, 8).map((d) => `съезд × k=${d.o.k} ${xy(d)}`), []);
+    assert.deepEqual(parallelRoads(W).filter((it) => it.a.city === undefined && it.b.city === undefined).slice(0, 8).map((d) => `k=${d.a.k} вдоль k=${d.b.k} ${xy(d)}`), []);
+  });
+}
