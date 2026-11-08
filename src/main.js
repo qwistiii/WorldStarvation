@@ -40,7 +40,8 @@ onmessage=function(e){const m=e.data;
    const c=G.renderTile(m.z,m.x,m.y);const b=c.transferToImageBitmap();postMessage({t:'tile',key:m.key,b,s:G.season(),gv:m.gv},[b])}};`;
 let wurl=null;try{if(HS.indexOf('cpu')>=0)throw 0;const url=URL.createObjectURL(new Blob([wsrc],{type:'text/javascript'}));
   for(let i=0;i<NW;i++){const w=new Worker(url);w.busy=0;w.ready=false;w.dead=false;
-    w.onmessage=e=>{const m=e.data;if(m.t==='ready'){if(m.ok)w.ready=true;else{w.dead=true;if(workers.every(q=>q.dead))mainRender=true}return}
+    w.onmessage=e=>{const m=e.data;if(m.t==='ready'){if(m.ok){w.ready=true;mainRender=false} // a slow start fell back to the main thread: hand rendering back to the workers
+          else{w.dead=true;if(workers.every(q=>q.dead))mainRender=true}return}
       if(m.t==='tile'){w.busy--;if(!alive){if(m.b&&m.b.close)m.b.close();return}
         if(m.L){LPS[m.L].delete(m.key);if(outdated(m.key,m.gv)){if(m.b&&m.b.close)m.b.close();return}LCS[m.L].set(m.key,{b:m.b,f:frameNo});return}
         pending.delete(m.key);if(m.s!==season||outdated(m.key,m.gv)){if(m.b&&m.b.close)m.b.close();return}cache.set(m.key,{b:m.b,f:frameNo})}};
@@ -69,12 +70,14 @@ function setSeason(s){s=clamp(s|0,0,2);if(s===season)return;season=s;W.setSeason
 let GV=0;const INV=[];
 const tileBB=k=>{const z=M.floor(k/16777216),r=k-z*16777216,y=M.floor(r/4096),x=r-y*4096,ts=WORLD/(1<<z);return [x*ts,y*ts,(x+1)*ts,(y+1)*ts]};
 const hitBB=(a,b)=>a[0]<b[2]&&b[0]<a[2]&&a[1]<b[3]&&b[1]<a[3];
-function outdated(k,gv){if(gv===undefined||gv>=GV)return false;const bb=tileBB(k);for(const e of INV)if(e.gv>gv&&hitBB(bb,e.bb))return true;return false}
-function invalidate(bb){GV++;INV.push({gv:GV,bb});if(INV.length>64)INV.shift();
-  for(const [k,v] of cache){if(!hitBB(tileBB(k),bb))continue;const o=stale.get(k);if(o&&o.b&&o.b.close&&o!==v)o.b.close();stale.set(k,v);cache.delete(k)}staleT=0;
-  for(let L=1;L<=3;L++)for(const [k,v] of LCS[L])if(hitBB(tileBB(k),bb)){if(v.b&&v.b.close)v.b.close();LCS[L].delete(k)}}
-function setGrow(id,g){g=g>=1?1:g;if(GROWS.get(id)===g)return;if(g>=1)GROWS.delete(id);else GROWS.set(id,g);W.setGrow(id,g);for(const w of workers)w.postMessage({t:'grow',id,g});
-  const c=W.cities.find(q=>q.id===id);if(c){let bb=c.bb.slice();for(const z of W.zones)if(z.city===c)bb=[M.min(bb[0],z.bb[0]),M.min(bb[1],z.bb[1]),M.max(bb[2],z.bb[2]),M.max(bb[3],z.bb[3])];invalidate([bb[0]-300,bb[1]-300,bb[2]+300,bb[3]+300])}}
+const tileZ0=k=>M.floor(k/16777216);
+function outdated(k,gv){if(gv===undefined||gv>=GV)return false;const bb=tileBB(k),z=tileZ0(k);for(const e of INV)if(e.gv>gv&&z>=e.zmin&&hitBB(bb,e.bb))return true;return false}
+// zmin: coarse levels (whole regions per tile) are refreshed only on big growth steps — a town is a few pixels there
+function invalidate(bb,zmin){zmin=zmin||0;GV++;INV.push({gv:GV,bb,zmin});if(INV.length>64)INV.shift();
+  for(const [k,v] of cache){if(tileZ0(k)<zmin||!hitBB(tileBB(k),bb))continue;const o=stale.get(k);if(o&&o.b&&o.b.close&&o!==v)o.b.close();stale.set(k,v);cache.delete(k)}staleT=0;
+  for(let L=1;L<=3;L++)for(const [k,v] of LCS[L])if(tileZ0(k)>=zmin&&hitBB(tileBB(k),bb)){if(v.b&&v.b.close)v.b.close();LCS[L].delete(k)}}
+function setGrow(id,g){g=g>=1?1:g;const g0=GROWS.has(id)?GROWS.get(id):1;if(g0===g)return;const coarse=g>=1||M.floor(g*4)!==M.floor(g0*4);if(g>=1)GROWS.delete(id);else GROWS.set(id,g);W.setGrow(id,g);for(const w of workers)w.postMessage({t:'grow',id,g});
+  const c=W.cities.find(q=>q.id===id);if(c){let bb=c.bb.slice();for(const z of W.zones)if(z.city===c)bb=[M.min(bb[0],z.bb[0]),M.min(bb[1],z.bb[1]),M.max(bb[2],z.bb[2]),M.max(bb[3],z.bb[3])];invalidate([bb[0]-300,bb[1]-300,bb[2]+300,bb[3]+300],coarse?0:6)}}
 const zoneOn=z=>!z.city||W.growOf(z.city.id)>=0.95;
 // game hooks must never stop the render loop: errors are reported once per hook
 const hkErr={};function hk(n,a,b){try{HK[n](a,b)}catch(e){if(!hkErr[n]){hkErr[n]=1;console.error('hook '+n+':',e)}ctx.setTransform(DPR,0,0,DPR,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}}
@@ -190,6 +193,16 @@ let flash=0,nextBolt=4;
 function setTod(h){tod=((h%24)+24)%24}
 function setSpeed(i){tSpeed=i}
 
+// ------------------------------------------------------------ water mask
+// the ripple layers are full-screen pattern fills; they are clipped to screen cells that actually contain water
+// (sea, lakes or a river), found from the terrain on a 12 x 8 grid and cached while the camera stays put
+let WCLIP=null,wcKey='';
+function waterClip(){const GX=12,GY=8,key=M.round(cam.x/(cam.m*VW/GX/4))+','+M.round(cam.y/(cam.m*VH/GY/4))+','+M.round(M.log(cam.m)*20)+','+VW+','+VH;if(key===wcKey)return !!WCLIP;wcKey=key;
+  const cw=VW/GX,ch=VH/GY,mg=M.hypot(cw,ch)*0.5*cam.m*1.6e-4;const P=new Path2D();let n=0;
+  for(let j=0;j<GY;j++)for(let i=0;i<GX;i++){let wet=false;for(const [a,b] of [[0.5,0.5],[0.1,0.1],[0.9,0.1],[0.1,0.9],[0.9,0.9]]){const x=cam.x+((i+a)*cw-VW/2)*cam.m,y=cam.y+((j+b)*ch-VH/2)*cam.m;
+      if(x<0||y<0||x>WORLD||y>WORLD||W.baseH(x,y,4)<0.03||W.landE(x,y,mg)<0){wet=true;break}}
+    if(wet){P.rect(i*cw-1,j*ch-1,cw+2,ch+2);n++}}
+  WCLIP=n?P:null;return n>0}
 // ------------------------------------------------------------ rendering helpers
 let T=0;
 const sxw=x=>(x-cam.x)/cam.m+VW/2,syw=y=>(y-cam.y)/cam.m+VH/2;
@@ -335,15 +348,22 @@ function drawFlightLights(a){if(a<0.02||!FLB.length)return;ctx.globalCompositeOp
     if(strobe){const e=d*2.6;ctx.drawImage(GL_B,-sz*0.07-e/2,-sz*0.43-e/2,e,e);ctx.drawImage(GL_B,-sz*0.07-e/2,sz*0.43-e/2,e,e)}
     if((T*0.9+f.ph)%1<0.12){const e=d*1.6;ctx.drawImage(GL_R,-e/2,-e/2,e,e)}}
   ctx.setTransform(DPR,0,0,DPR,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}
-function drawClouds(shadowPass){const H=camH();const cloudFar=MODE==='game'?1-smooth(18000,70000,H)*0.8:1;ctx.setTransform(DPR,0,0,DPR,0,0);const span=WORLD*1.3;const cov=wcur.cover*clouds.length;
+// clouds and their shadows are soft, so they are drawn into a quarter-size layer and scaled up: the big translucent
+// sprites overlap a lot, and at full resolution their fill cost dominated the frame
+const CLO=mk(4,4),cxl=CLO.getContext('2d');const CLK=0.25;
+function drawClouds(shadowPass){const H=camH();const cloudFar=MODE==='game'?1-smooth(9000,26000,H):1;if(cloudFar<0.02)return; // strategic view of the game: a clear map
+  const span=WORLD*1.3;
   if(shadowPass&&LG.day<0.03)return;
+  const lw=M.max(4,M.ceil(VW*CLK)),lh=M.max(4,M.ceil(VH*CLK));if(CLO.width!==lw||CLO.height!==lh){CLO.width=lw;CLO.height=lh}else cxl.clearRect(0,0,lw,lh);
+  const x2=cxl;x2.setTransform(CLK,0,0,CLK,0,0);let n=0;
   for(let ci=0;ci<clouds.length;ci++){const c=clouds[ci];const vis=clamp((wcur.cover-c.g)*14,0,1);if(vis<=0)continue;
     let x=((c.x+T*9+WORLD*0.15)%span+span)%span-WORLD*0.15,y=c.y;
-    if(LITE&&ci%2)continue;
-    if(shadowPass){if(cam.m<0.12)continue;const sx=x+W.SUNX*c.alt,sy=y+W.SUNY*c.alt;if(!inView(sx,sy,c.s))continue;const sz=c.s/cam.m;const sa=0.2*vis*LG.day*(1-0.45*smooth(0.6,1,wcur.cover))*cloudFar;if(sa<0.02)continue;ctx.globalAlpha=sa;ctx.drawImage(CLS[c.v][1],sxw(sx)-sz/2,syw(sy)-sz/2,sz,sz);continue}
+    if((LITE||(MODE==='game'&&VQ.dpr<2))&&ci%2)continue;
+    if(shadowPass){if(cam.m<0.12)continue;const sx=x+W.SUNX*c.alt,sy=y+W.SUNY*c.alt;if(!inView(sx,sy,c.s))continue;const sz=c.s/cam.m;const sa=0.2*vis*LG.day*(1-0.45*smooth(0.6,1,wcur.cover))*cloudFar;if(sa<0.02)continue;x2.globalAlpha=sa;x2.drawImage(CLS[c.v][1],sxw(sx)-sz/2,syw(sy)-sz/2,sz,sz);n++;continue}
     if(H<c.alt*1.12)continue;const kk=H/(H-c.alt);const a=smooth(c.alt*1.12,c.alt*2.6,H);if(a<=0.01)continue;
     const X=VW/2+(x-cam.x)/cam.m*kk,Y=VH/2+(y-cam.y)/cam.m*kk,sz=c.s/cam.m*kk;if(X+sz/2<0||Y+sz/2<0||X-sz/2>VW||Y-sz/2>VH)continue;
-    const ca=a*0.95*vis*cloudFar;if(ca<0.02)continue;ctx.globalAlpha=ca;ctx.drawImage(CLS[c.v][2],X-sz/2,Y-sz/2,sz,sz)}ctx.globalAlpha=1}
+    const ca=a*0.95*vis*cloudFar;if(ca<0.02)continue;x2.globalAlpha=ca;x2.drawImage(CLS[c.v][2],X-sz/2,Y-sz/2,sz,sz);n++}
+  x2.globalAlpha=1;if(!n)return;ctx.setTransform(DPR,0,0,DPR,0,0);ctx.imageSmoothingEnabled=true;ctx.drawImage(CLO,0,0,lw/CLK,lh/CLK)}
 function drawFog(){const f=wcur.fog;if(f<0.01)return;ctx.setTransform(DPR,0,0,DPR,0,0);
   for(let l=0;l<2;l++){const P=l?1700:5200,sc=P/256/cam.m;const ox=VW/2-(cam.x-T*(l?9:5))/cam.m,oy=VH/2-(cam.y+T*(l?3:-2))/cam.m;
     FOG.setTransform(new DOMMatrix([sc,0,0,sc,ox+l*91,oy+l*57]));ctx.fillStyle=FOG;ctx.globalAlpha=f*(l?0.42:0.6);ctx.fillRect(0,0,VW,VH)}
@@ -420,7 +440,9 @@ let last=performance.now(),fpsA=60,hudT=0,zNow=0,lowQ=false,qT=0,pfT=0;
 const PROF={};function pf(n){const t=performance.now();PROF[n]=(PROF[n]||0)*0.97+(t-pfT)*0.03;pfT=t}
 const hud={alt:document.getElementById('alt'),scale:document.getElementById('scalebar'),scaleT:document.getElementById('scalet'),pos:document.getElementById('pos'),fps:document.getElementById('fps'),load:document.getElementById('loading'),clock:null};
 const mini=document.getElementById('mini'),mctx=mini.getContext('2d');
-function frame(now){if(!alive)return;const dt=M.min(0.06,(now-last)/1000);last=now;T+=dt;frameNo++;fpsA=fpsA*0.95+(1/M.max(dt,1e-3))*0.05;
+let frameErr=0;
+function frame(now){if(!alive)return;try{frameBody(now)}catch(e){if(frameErr++<3)console.error('frame:',e);ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}requestAnimationFrame(frame)}
+function frameBody(now){const dt=M.min(0.06,(now-last)/1000);last=now;T+=dt;frameNo++;fpsA=fpsA*0.95+(1/M.max(dt,1e-3))*0.05;
   if(!todDrag&&DN)tod=(tod+(todRate!==null?todRate:SPEEDS[tSpeed])*dt)%24;if(HK.frame)hk('frame',dt);if(MODE==='bg')bgCam(dt);updWeather(dt);updLight();
   pfT=performance.now();updateCam(dt);
   vx0=cam.x-VW/2*cam.m;vy0=cam.y-VH/2*cam.m;vx1=cam.x+VW/2*cam.m;vy1=cam.y+VH/2*cam.m;
@@ -429,10 +451,13 @@ function frame(now){if(!alive)return;const dt=M.min(0.06,(now-last)/1000);last=n
   // animated water glints (seen through translucent water in tiles)
   // world-anchored octaves: texel size 0.08*2^k m; the two octaves around the current zoom cross-fade,
   // so ripples stay glued to the water and never look like a stretched picture
-  {const ga=(0.2+0.8*LG.day)*(1-wcur.cover*0.35)*(1-smooth(6,90,cam.m)*0.8);const lv=M.log2(M.max(cam.m,0.01)/0.08)+0.6,k0=M.floor(lv),fr=lv-k0;
+  // cost: each layer is a full-screen pattern fill. In the game the ripples fade out above ~14 m/px (they cannot be seen
+  // from there anyway); only the 'high' quality draws two layers per octave
+  const gaW=(0.2+0.8*LG.day)*(1-wcur.cover*0.35)*(1-smooth(6,90,cam.m)*0.8)*(MODE==='game'?smooth(5,2.5,cam.m):1);
+  if(!opt.noWater&&gaW>0.03&&waterClip()){const ga=gaW,NLW=VQ.dpr>=2?2:1;ctx.save();ctx.clip(WCLIP);const lv=M.log2(M.max(cam.m,0.01)/0.08)+0.6,k0=M.floor(lv),fr=lv-k0;
     for(let o=0;o<2;o++){const wgt=o?fr:1-fr;if(wgt<0.03||ga*wgt<0.03||(LITE&&o!==(fr>0.5?1:0)))continue;const tm=0.08*M.pow(2,k0+o),sp=M.sqrt(tm/0.08);
-      for(let l=0;l<2;l++){const sc=tm*(l?1.41:1)/cam.m,ang=l?0.35:0,ca=M.cos(ang)*sc,sa=M.sin(ang)*sc;const dx=W.WDX*T*(l?2.2:3.4)*sp+l*61*tm,dy=W.WDY*T*(l?2.2:3.4)*sp+l*29*tm;
-        wavePat.setTransform(new DOMMatrix([ca,sa,-sa,ca,(dx-cam.x)/cam.m+VW/2,(dy-cam.y)/cam.m+VH/2]));ctx.fillStyle=wavePat;ctx.globalAlpha=(l?0.45:0.65)*wgt*ga;ctx.fillRect(0,0,VW,VH)}}ctx.globalAlpha=1}
+      for(let l=0;l<NLW;l++){const sc=tm*(l?1.41:1)/cam.m,ang=l?0.35:0,ca=M.cos(ang)*sc,sa=M.sin(ang)*sc;const dx=W.WDX*T*(l?2.2:3.4)*sp+l*61*tm,dy=W.WDY*T*(l?2.2:3.4)*sp+l*29*tm;
+        wavePat.setTransform(new DOMMatrix([ca,sa,-sa,ca,(dx-cam.x)/cam.m+VW/2,(dy-cam.y)/cam.m+VH/2]));ctx.fillStyle=wavePat;ctx.globalAlpha=(l?0.45:NLW===1?0.8:0.65)*wgt*ga;ctx.fillRect(0,0,VW,VH)}}ctx.globalAlpha=1;ctx.restore()}
   pf('water');zNow=drawTiles();pf('tiles');
   {ctx.setTransform(DPR,0,0,DPR,0,0);ctx.fillStyle='rgba(14,46,82,0.8)';const X0=sxw(0),Y0=syw(0),X1=sxw(WORLD),Y1=syw(WORLD);if(X0>0||Y0>0||X1<VW||Y1<VH){ctx.beginPath();ctx.rect(-5,-5,VW+10,VH+10);ctx.rect(X0,Y0,X1-X0,Y1-Y0);ctx.fill('evenodd')}}
   if(opt.clouds)drawClouds(true);
@@ -462,7 +487,7 @@ function frame(now){if(!alive)return;const dt=M.min(0.06,(now-last)/1000);last=n
   // adaptive quality (hysteresis): drop the mid bloom layer when the frame rate is low
   if(LG.lights>0.05){if(!lowQ&&fpsA<22||lowQ&&fpsA>38)qT+=dt;else qT=0;if(qT>3){lowQ=!lowQ;qT=0}}
   hudT+=dt;if(hudT>0.12){hudT=0;updHUD()}
-  if(alive)requestAnimationFrame(frame)}
+}
 function fmtD(m){return m>=1000?(m/1000).toFixed(m>=10000?0:1).replace('.',',')+' км':M.round(m)+' м'}
 function updHUD(){const H=camH();hud.alt.textContent=fmtD(H);
   const target=110*cam.m;const p=M.pow(10,M.floor(M.log10(target)));let L=p;for(const f of [1,2,5,10])if(f*p<=target)L=f*p;hud.scale.style.width=(L/cam.m)+'px';hud.scaleT.textContent=fmtD(L);

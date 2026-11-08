@@ -50,7 +50,7 @@ const Game=(()=>{
 const N=256,CSZ=512; // territory grid: 256 x 256 cells of 512 m
 let api=null,W=null,cfg=null,G=null,ui=null;
 let land=null,elev=null,coast=null,jit=null,own=null,vis=null,expl=null,heaps=[],seen=[];
-let polC=null,fogC=null,borders=null,dirtyPol=true,dirtyFog=true,polT=0,fogT=0,simAcc=0;
+let polC=null,fogC=null,ovC=null,ovFa=-1,ovFg=null,ovE=false,dirtyOv=true,borders=null,dirtyPol=true,dirtyFog=true,polT=0,fogT=0,simAcc=0;
 let placing=false,pend=null,mapMode='pol',hintStep=0,hintsOff=false,tutorial=false;
 const ICONS={},DBG={};const PRF={};const prf=(n,f)=>{const t=performance.now();f();const d=performance.now()-t;const q=PRF[n]||(PRF[n]={n:0,sum:0,max:0});q.n++;q.sum+=d;q.max=M.max(q.max,d)};
 
@@ -182,33 +182,61 @@ function finish(w,why){G.over=true;setSpeed(0);const me=player();const won=w===m
 function rebuildPol(){if(!polC){polC=document.createElement('canvas');polC.width=N;polC.height=N}const x=polC.getContext('2d'),im=x.createImageData(N,N),d=im.data;
   for(let c=0;c<N*N;c++){const o=own[c];if(!o)continue;const s=G.states[o-1],k=c*4;d[k]=s.rgb[0];d[k+1]=s.rgb[1];d[k+2]=s.rgb[2];d[k+3]=255}x.putImageData(im,0,0);
   // borders: marching squares over each state's indicator field at cell corners (only states that changed, inside their bbox)
-  borders=[];for(const s of G.states){if(!s.cells)continue;if(!s._dirty&&s._P){borders.push([s,s._P]);continue}s._dirty=false;const id=s.id+1,P=new Path2D(),b=s.bb,i0=M.max(0,b[0]-1),j0=M.max(0,b[1]-1),i1=M.min(N,b[2]+2),j1=M.min(N,b[3]+2);
+  borders=[];for(const s of G.states){if(!s.cells)continue;if(!s._dirty&&s._P){borders.push([s,s._P]);continue}s._dirty=false;const id=s.id+1,SG=[],b=s.bb,i0=M.max(0,b[0]-1),j0=M.max(0,b[1]-1),i1=M.min(N,b[2]+2),j1=M.min(N,b[3]+2);
     const at=(i,j)=>i>=0&&j>=0&&i<N&&j<N&&own[j*N+i]===id?1:0,V=(i,j)=>(at(i-1,j-1)+at(i,j-1)+at(i-1,j)+at(i,j))/4;
     const T=0.49,L=(a,b)=>(T-a)/(b-a);let sx=0,sy=0;
     for(let j=j0;j<j1;j++){let a=V(i0,j),e=V(i0,j+1);for(let i=i0;i<i1;i++){const b=V(i+1,j),c=V(i+1,j+1);if(own[j*N+i]===id){sx+=i;sy+=j}const m=(a>T?8:0)|(b>T?4:0)|(c>T?2:0)|(e>T?1:0);
-      if(m!==0&&m!==15){const top=[i+L(a,b),j],rgt=[i+1,j+L(b,c)],bot=[i+L(e,c),j+1],lft=[i,j+L(a,e)];const seg=(p,q)=>{P.moveTo(p[0]*CSZ,p[1]*CSZ);P.lineTo(q[0]*CSZ,q[1]*CSZ)};
+      if(m!==0&&m!==15){const top=[i+L(a,b),j],rgt=[i+1,j+L(b,c)],bot=[i+L(e,c),j+1],lft=[i,j+L(a,e)];const seg=(p,q)=>{SG.push(p[0],p[1],q[0],q[1])};
         switch(m){case 1:case 14:seg(lft,bot);break;case 2:case 13:seg(bot,rgt);break;case 3:case 12:seg(lft,rgt);break;case 4:case 11:seg(top,rgt);break;case 6:case 9:seg(top,bot);break;case 7:case 8:seg(lft,top);break;
           case 5:seg(lft,top);seg(bot,rgt);break;case 10:seg(top,rgt);seg(lft,bot);break}}a=b;e=c}}
-    s.lx=(sx/s.cells+0.5)*CSZ;s.ly=(sy/s.cells+0.5)*CSZ;s._P=P;
-    borders.push([s,P])}dirtyPol=false}
+    s.lx=(sx/s.cells+0.5)*CSZ;s.ly=(sy/s.cells+0.5)*CSZ;const LS=chainLines(SG),P=new Path2D();s._L=[];
+    for(const pl of LS){const q=new Path2D();let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(let k=0;k<pl.length;k+=2){const X=pl[k]*CSZ,Y=pl[k+1]*CSZ;if(k){q.lineTo(X,Y);P.lineTo(X,Y)}else{q.moveTo(X,Y);P.moveTo(X,Y)}x0=M.min(x0,X);y0=M.min(y0,Y);x1=M.max(x1,X);y1=M.max(y1,Y)}s._L.push({P:q,bb:[x0,y0,x1,y1]})}
+    s._P=P;borders.push([s,P])}
+  dirtyPol=false;dirtyOv=true;bordDirty=true}
+// far views: all borders are rasterised into one 2048 x 2048 world layer (64 m per texel) when they change, then blitted
+let bordC=null,bordDirty=true,bordT=0;
+function rasterBorders(){bordT=performance.now();bordDirty=false;const R=2048;if(!bordC){bordC=document.createElement('canvas');bordC.width=bordC.height=R}const x=bordC.getContext('2d');x.setTransform(1,0,0,1,0,0);x.clearRect(0,0,R,R);
+  const k=R/(N*CSZ);x.setTransform(k,0,0,k,0,0);x.lineCap='round';x.lineJoin='round';for(const [s,P] of borders){x.strokeStyle='rgba(6,10,16,0.55)';x.lineWidth=4.6/k;x.stroke(P)}
+  for(const [s,P] of borders){x.strokeStyle=s._bc||(s._bc=`rgb(${s.rgb.map(v=>M.min(255,v*1.15+20)|0).join(',')})`);x.lineWidth=2.4/k;x.stroke(P)}}
+// marching-squares segments → continuous polylines (shared end points), then rounded off (Chaikin): far fewer
+// path pieces to stroke every frame and no staircase of 512 m cells
+function chainLines(SG){const key=(x,y)=>M.round(x*1000)+','+M.round(y*1000),ends=new Map(),n=SG.length/4,used=new Uint8Array(n),out=[];
+  for(let q=0;q<n;q++)for(const e of [0,1]){const k=key(SG[q*4+e*2],SG[q*4+e*2+1]);let a=ends.get(k);if(!a)ends.set(k,a=[]);a.push(q*2+e)}
+  const next=(x,y,skip)=>{const a=ends.get(key(x,y));if(!a)return -1;for(const r of a){const q=r>>1;if(!used[q]&&q!==skip)return r}return -1};
+  for(let q0=0;q0<n;q0++){if(used[q0])continue;used[q0]=1;let pl=[SG[q0*4],SG[q0*4+1],SG[q0*4+2],SG[q0*4+3]];
+    for(const dir of [1,0]){for(;;){const L=pl.length,x=dir?pl[L-2]:pl[0],y=dir?pl[L-1]:pl[1];const r=next(x,y,-1);if(r<0)break;const q=r>>1,e=r&1;used[q]=1;
+        const ox=SG[q*4+(1-e)*2],oy=SG[q*4+(1-e)*2+1];if(dir)pl.push(ox,oy);else pl.unshift(ox,oy)}}
+    const closed=pl.length>4&&M.abs(pl[0]-pl[pl.length-2])<1e-6&&M.abs(pl[1]-pl[pl.length-1])<1e-6;
+    for(let it=0;it<2;it++){const m=pl.length/2;if(m<3)break;const o=closed?[]:[pl[0],pl[1]];for(let i=0;i<m-1;i++){const ax=pl[i*2],ay=pl[i*2+1],bx=pl[i*2+2],by=pl[i*2+3];o.push(ax*0.75+bx*0.25,ay*0.75+by*0.25,ax*0.25+bx*0.75,ay*0.25+by*0.75)}
+      if(closed)o.push(o[0],o[1]);else o.push(pl[pl.length-2],pl[pl.length-1]);pl=o}
+    out.push(pl)}return out}
 function rebuildFog(){const me=player();const ids=[me.id+1,...me.allies.map(i=>i+1)];vis.fill(0);const R=9,R2=R*R;
   for(let c=0;c<N*N;c++){const o=own[c];if(!o||!ids.includes(o))continue;vis[c]=1;const i=c%N,j=(c/N)|0;
     const edge=i===0||j===0||i===N-1||j===N-1||!ids.includes(own[c-1])||!ids.includes(own[c+1])||!ids.includes(own[c-N])||!ids.includes(own[c+N]);if(!edge)continue;
     for(let b=-R;b<=R;b++)for(let a=-R;a<=R;a++){if(a*a+b*b>R2)continue;const ii=i+a,jj=j+b;if(ii<0||jj<0||ii>=N||jj>=N)continue;vis[jj*N+ii]=1}}
   for(let c=0;c<N*N;c++)if(vis[c])expl[c]=1;
   if(!fogC){fogC=document.createElement('canvas');fogC.width=N;fogC.height=N}const x=fogC.getContext('2d'),im=x.createImageData(N,N),d=im.data;
-  for(let c=0;c<N*N;c++){const k=c*4;d[k]=7;d[k+1]=12;d[k+2]=20;d[k+3]=vis[c]?0:expl[c]?120:226}x.putImageData(im,0,0);dirtyFog=false}
+  for(let c=0;c<N*N;c++){const k=c*4;d[k]=7;d[k+1]=12;d[k+2]=20;d[k+3]=vis[c]?0:expl[c]?120:226}x.putImageData(im,0,0);dirtyFog=false;dirtyOv=true}
 const fogOn=()=>cfg.rules.fog&&G.phase==='play';
 const seenAt=(x,y)=>{if(!fogOn())return true;const c=cellOf(x,y);return c>=0&&expl[c]};
 function drawOverlay(ctx,A){if(!G||(G.phase==='play'&&!own))return;const m=A.cam.m,VW=A.VW,VH=A.VH;const X0=A.sxw(0),Y0=A.syw(0),S=W.WORLD/m;
   if(G.phase==='play'){
-    if(mapMode!=='off'){if(dirtyPol&&performance.now()-polT>500){polT=performance.now();prf('pol',rebuildPol)}
-      if(polC){const fa=(mapMode==='res'?0.18:0.42)*smoothst(3.5,26,m); // the fill dissolves as the camera comes down to a town
-        if(fa>0.01&&!DBG.fill){ctx.save();ctx.globalAlpha=fa;ctx.imageSmoothingEnabled=true;ctx.drawImage(polC,X0,Y0,S,S);ctx.restore()}}
-      if(borders&&!DBG.border){ctx.save();ctx.setTransform(A.DPR/m,0,0,A.DPR/m,A.DPR*(VW/2-A.cam.x/m),A.DPR*(VH/2-A.cam.y/m));ctx.lineCap='round';ctx.lineJoin='round';
-        const near=m<45,bw=m<5?1.3:2;ctx.globalAlpha=m<5?0.75:1;for(const [s,P] of borders){if(near){ctx.strokeStyle='rgba(6,10,16,0.5)';ctx.lineWidth=(bw+2.2)*m;ctx.stroke(P)}ctx.strokeStyle=s._bc||(s._bc=`rgb(${s.rgb.map(v=>M.min(255,v*1.15+20)|0).join(',')})`);ctx.lineWidth=bw*m;ctx.stroke(P)}ctx.restore()}}
-    if(fogOn()&&!DBG.fog){if(dirtyFog&&performance.now()-fogT>500){fogT=performance.now();prf('fog',rebuildFog)}if(fogC){ctx.save();ctx.imageSmoothingEnabled=true;ctx.drawImage(fogC,X0,Y0,S,S);ctx.fillStyle='rgba(7,12,20,0.83)';ctx.beginPath();ctx.rect(-10,-10,VW+20,VH+20);ctx.rect(X0+0.5,Y0+0.5,S-1,S-1);ctx.fill('evenodd');ctx.restore()}}
-    drawDeposits(ctx,A);drawCaps(ctx,A);if(mapMode!=='off'&&!DBG.names)drawNames(ctx,A)}
+    if(dirtyPol&&performance.now()-polT>500){polT=performance.now();prf('pol',rebuildPol)}
+    if(fogOn()&&dirtyFog&&performance.now()-fogT>500){fogT=performance.now();prf('fog',rebuildFog)}
+    if(mapMode!=='off'&&borders&&!DBG.border){ctx.save();ctx.setTransform(A.DPR/m,0,0,A.DPR/m,A.DPR*(VW/2-A.cam.x/m),A.DPR*(VH/2-A.cam.y/m));ctx.lineCap='round';ctx.lineJoin='round';
+      const near=m<45,bw=m<5?1.3:2,far=m>50,vx0=A.cam.x-VW/2*m,vy0=A.cam.y-VH/2*m,vx1=A.cam.x+VW/2*m,vy1=A.cam.y+VH/2*m;ctx.globalAlpha=m<5?0.75:1;
+      if(far){if(bordDirty&&performance.now()-bordT>700)prf('bord',rasterBorders);ctx.restore();if(bordC){ctx.save();ctx.imageSmoothingEnabled=true;ctx.drawImage(bordC,X0,Y0,S,S);ctx.restore()}}
+      else for(const [s,P] of borders){const col=s._bc||(s._bc=`rgb(${s.rgb.map(v=>M.min(255,v*1.15+20)|0).join(',')})`);
+        if(far)continue;
+        const vis=s._L.filter(l=>l.bb[2]>vx0&&l.bb[0]<vx1&&l.bb[3]>vy0&&l.bb[1]<vy1);if(!vis.length)continue;
+        if(near){ctx.strokeStyle='rgba(6,10,16,0.5)';ctx.lineWidth=(bw+2.2)*m;for(const l of vis)ctx.stroke(l.P)}ctx.strokeStyle=col;ctx.lineWidth=bw*m;for(const l of vis)ctx.stroke(l.P)}ctx.restore()}
+    // the political fill and the fog are composed into one 256 x 256 layer (only when either changes) and drawn once
+    const fa=mapMode==='off'||DBG.fill?0:M.round((mapMode==='res'?0.18:0.42)*smoothst(3.5,26,m)*50)/50,fg=fogOn()&&!DBG.fog;
+    if(dirtyOv||fa!==ovFa||fg!==ovFg){dirtyOv=false;ovFa=fa;ovFg=fg;if(!ovC){ovC=document.createElement('canvas');ovC.width=ovC.height=N}const x=ovC.getContext('2d');x.clearRect(0,0,N,N);
+      if(fa>0&&polC){x.globalAlpha=fa;x.drawImage(polC,0,0)}x.globalAlpha=1;if(fg&&fogC)x.drawImage(fogC,0,0);ovE=fa>0||fg}
+    if(ovE){ctx.save();ctx.imageSmoothingEnabled=true;ctx.drawImage(ovC,X0,Y0,S,S);
+      if(fg&&(X0>0||Y0>0||X0+S<VW||Y0+S<VH)){ctx.fillStyle='rgba(7,12,20,0.83)';ctx.beginPath();ctx.rect(-10,-10,VW+20,VH+20);ctx.rect(X0+0.5,Y0+0.5,S-1,S-1);ctx.fill('evenodd')}ctx.restore()}
+    if(!DBG.dep)drawDeposits(ctx,A);if(!DBG.caps)drawCaps(ctx,A);if(mapMode!=='off'&&!DBG.names)drawNames(ctx,A)}
   if(G.phase==='found'){drawDeposits(ctx,A);drawPlacement(ctx,A)}}
 function smoothst(a,b,x){let t=(x-a)/(b-a);t=t<0?0:t>1?1:t;return t*t*(3-2*t)}
 // state names: each label is rendered once into its own canvas (per size step) and then just blitted
@@ -328,7 +356,7 @@ const hooks={
 function boot(caps,onReady,stage){if(api){api.destroy();api=null}
   const vo=ui.viewOpts();api=startWorld({seed:cfg.seed,opt:mapOpt(caps),mode:'game',tod:cfg.rules.dayNight?9.5:12.5,dayNight:cfg.rules.dayNight,view:vo,hooks,onReady:A=>{onReady&&onReady(A)}});
   W=api.W;ui.loading('Отрисовка карты',api.W.cities.length+' населённых пунктов · '+api.W.zones.length+' промышленных объектов');api.setTodRate(G.speed*4/60);if(!cfg.rules.dayNight)api.setTodRate(0);document.getElementById('fps').classList.toggle('hid',!vo.fps)}
-function initState(c,save){cfg=c;tutorial=!!c.tutorial;hintsOff=!ui.settings().hints;placing=false;pend=null;mapMode='pol';hintStep=0;simAcc=0;polC=null;fogC=null;borders=null;panelSig='';
+function initState(c,save){cfg=c;tutorial=!!c.tutorial;hintsOff=!ui.settings().hints;placing=false;pend=null;mapMode='pol';hintStep=0;simAcc=0;polC=null;fogC=null;ovC=null;dirtyOv=true;bordC=null;bordDirty=true;borders=null;panelSig='';
   G={t:0,speed:1,phase:'found',states:[],dep:[],offers:[],over:false,dec:0};
   G.states.push(mkState(0,Object.assign({},c.country,{money:c.rules.money,diff:1,trait:'random'}),true));
   botList().forEach((b,i)=>G.states.push(mkState(i+1,b,false)));
