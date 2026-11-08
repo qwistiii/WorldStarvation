@@ -1,6 +1,6 @@
 {
   "name": "world-starvation",
-  "version": "5.4.0",
+  "version": "5.5.0",
   "description": "World Starvation — браузерная стратегия на процедурном мире (вид сверху, Canvas 2D + Web Workers)",
   "private": true,
   "type": "module",

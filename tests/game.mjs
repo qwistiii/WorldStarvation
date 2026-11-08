@@ -55,17 +55,34 @@ try {
   const st = await page.evaluate(() => Game.G.states.map((s) => ({ cap: !!s.cap, city: s.cityId >= 0 && Game.api.W.cities[s.cityId].cap === s.id, cells: s.cells })));
   check(st.length === 3 && st.every((s) => s.cap && s.city && s.cells > 0), 'игрок и 2 бота основали столицы, у всех есть территория', JSON.stringify(st));
 
+  check(await page.evaluate(() => /Село/.test(document.getElementById('hintt').textContent) && document.querySelectorAll('#bb-cat .bcat').length === 11), 'подсказка «поставьте Село», внизу каталог из 11 построек');
+  // село: кнопка в каталоге, затем клик по подходящему месту на карте
+  await page.click('#bb-cat [data-k="village"]');
+  const vs = await page.evaluate(() => { const A = Game.api, c = Game.G.states[0].places[0]; A.stop(); A.cam.x = c.x; A.cam.y = c.y; A.cam.m = 30;
+    for (let r = 3000; r < 10000; r += 300) for (let a = 0; a < 6.28; a += 0.3) { const x = c.x + Math.cos(a) * r, y = c.y + Math.sin(a) * r; const sx = A.sxw(x), sy = A.syw(y);
+      if (sx > 320 && sx < 1100 && sy > 120 && sy < 700 && Game._test.canBuild('village', x, y) === null) return [sx, sy]; } return null; });
+  check(!!vs, 'нашлось место для села');
+  await page.mouse.move(vs[0], vs[1]); await page.waitForTimeout(150); await page.mouse.click(vs[0], vs[1]); await page.waitForTimeout(500);
+  check(await page.evaluate(() => Game.G.states[0].builds.some((q) => q.k === 'village')), 'село строится');
   await page.evaluate(() => Game.setSpeed(4));
-  await page.waitForTimeout(5000);
+  await page.waitForFunction(() => Game.G.states[0].places.some((p) => p.k === 'village'), null, { timeout: 20000 }).catch(() => {});
+  check(await page.evaluate(() => { const p = Game.G.states[0].places.find((q) => q.k === 'village'); return !!p && Game.api.W.cities[p.id].dyn && /Колхоз/.test(document.getElementById('hintt').textContent); }), 'село построено в мире, подсказка «Колхоз»');
   const st2 = await page.evaluate(() => Game.G.states.map((s) => s.cells));
-  check(st2.every((n, i) => n > st[i].cells), 'территории растут', st2.join(','));
-  const g0 = await page.evaluate(() => Game.G.states[0].grow);
-  check(g0 > 0.18, 'столица застраивается', g0.toFixed(2));
-  await page.evaluate(() => { Game.G.states[0].money = 1e6; });
-  await page.waitForTimeout(400);
-  await page.click('[data-a="boost"]');
-  check(await page.evaluate(() => Game.G.states[0].boostT > 0), 'действие «Ускорить расширение»');
-
+  check(st2[0] > st[0].cells, 'у села появилась своя земля', st2.join(','));
+  // военная часть → армия, сборка, набор бойцов
+  const ok = await page.evaluate(() => { const s = Game.G.states[0], c = s.places[0]; s.res.money = 1e6;
+    for (let r = 3500; r < 9000; r += 200) for (let a = 0; a < 6.28; a += 0.25) { const x = c.x + Math.cos(a) * r, y = c.y + Math.sin(a) * r; if (Game._test.canBuild('barracks', x, y) === null) return Game._test.startBuild('barracks', x, y); } return false; });
+  check(ok, 'военная часть заложена');
+  await page.waitForFunction(() => Game.G.states[0].armies.length > 0, null, { timeout: 20000 }).catch(() => {});
+  await page.evaluate(() => { Game.G.sel = { army: Game.G.states[0].armies[0] }; });
+  await page.waitForSelector('#gpanel [data-tpl="mixed"]', { timeout: 5000 }).catch(() => {});
+  await page.click('#gpanel [data-tpl="mixed"]');
+  await page.waitForTimeout(7000);
+  check(await page.evaluate(() => { const a = Game.G.states[0].armies[0]; return a.tpl === 'mixed' && a.units.length > 0; }), 'Армия №1: «Смешанная армия» набирает бойцов');
+  // война: объявление, дрон летит к цели
+  const war = await page.evaluate(() => { Game._test.declareWar(1); const t = Game.G.states[1], q = t.places[0]; return Game._test.launchDrone(Game.G.states[0], t, q.x, q.y); });
+  check(war && await page.evaluate(() => Game.G.drones.length > 0), 'война объявлена, дрон запущен');
+  await page.keyboard.press('Escape'); // первый Esc снимает выбор армии
   await page.keyboard.press('Escape');
   check(await page.evaluate(() => document.getElementById('pause').classList.contains('show') && Game.G.speed === 0), 'Esc — пауза');
   await page.click('#psave');
@@ -79,6 +96,7 @@ try {
   await page.waitForFunction(() => Game.api && Game.api.ready && Game.G && Game.G.phase === 'play', null, { timeout: 60000 });
   const loaded = await page.evaluate(() => Game.G.states.map((s) => s.cells));
   check(loaded.every((n, i) => Math.abs(n - saved[i]) <= 3), 'сохранение загружено', `${saved} → ${loaded}`);
+  check(await page.evaluate(() => { const s = Game.G.states[0]; return s.places.some((p) => p.k === 'village') && s.armies.length > 0 && Game.api.W.cities.some((c) => c.dyn); }), 'после загрузки на месте село, военная часть и армия');
 
   await page.click('#bdip');
   check(await page.evaluate(() => document.querySelectorAll('#dipb .dst').length === 3), 'дипломатия: 3 государства');

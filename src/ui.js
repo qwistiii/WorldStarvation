@@ -2,7 +2,7 @@
 (function(){
 'use strict';
 const $=id=>document.getElementById(id);
-const VERSION='5.4';
+const VERSION='5.5';
 let bg=null,C=null,prevWorker=null,prevId=0,prevT=0,setFrom=null,paused=null;
 
 // ---------------------------------------------------------------- settings
@@ -13,9 +13,9 @@ function saveS(){try{localStorage.setItem('ws.settings',JSON.stringify(S))}catch
 function applyS(){document.documentElement.style.setProperty('--ui',S.ui);const a=Game.api;if(a){a.opt.clouds=S.clouds;a.opt.traffic=S.traffic;a.opt.labels=S.labels}$('fps').classList.toggle('hid',!S.fps)}
 
 // ---------------------------------------------------------------- procedural icons (Canvas 2D → CSS)
-function icon(name,draw){const N=64,c=document.createElement('canvas');c.width=c.height=N;const x=c.getContext('2d');x.lineCap='round';x.lineJoin='round';
+function icon(name,draw,bld){const N=64,c=document.createElement('canvas');c.width=c.height=N;const x=c.getContext('2d');x.lineCap='round';x.lineJoin='round';
   const g=x.createLinearGradient(0,6,0,58);g.addColorStop(0,'#ffe7a0');g.addColorStop(0.55,'#ffcf55');g.addColorStop(1,'#d98f2a');x.strokeStyle=g;x.fillStyle=g;x.lineWidth=4.2;
-  x.shadowColor='rgba(0,0,0,0.45)';x.shadowBlur=4;x.shadowOffsetY=1.5;draw(x,g);return `.ic-${name},.ri-${name}{background-image:url(${c.toDataURL()})}`}
+  x.shadowColor='rgba(0,0,0,0.45)';x.shadowBlur=4;x.shadowOffsetY=1.5;draw(x,g);if(bld){Game.setIcon(name,c);return `.ic-b-${name}{background-image:url(${c.toDataURL()})}`}return `.ic-${name},.ri-${name}{background-image:url(${c.toDataURL()})}`}
 const P2=Math.PI*2;
 function paintIcons(){const css=[];
   css.push(icon('new',x=>{x.beginPath();x.arc(30,32,19,0,P2);x.stroke();x.lineWidth=2.6;x.beginPath();x.ellipse(30,32,8,19,0,0,P2);x.moveTo(11,32);x.lineTo(49,32);x.moveTo(14,22);x.lineTo(46,22);x.moveTo(14,42);x.lineTo(46,42);x.stroke();
@@ -33,6 +33,27 @@ function paintIcons(){const css=[];
   css.push(icon('ore',x=>{x.beginPath();x.moveTo(32,8);x.lineTo(50,24);x.lineTo(42,54);x.lineTo(22,54);x.lineTo(14,24);x.closePath();x.fill();x.strokeStyle='rgba(60,40,0,0.55)';x.lineWidth=2;x.beginPath();x.moveTo(14,24);x.lineTo(32,30);x.lineTo(50,24);x.moveTo(32,30);x.lineTo(32,54);x.moveTo(32,8);x.lineTo(32,30);x.stroke()}));
   css.push(icon('star',x=>{x.beginPath();for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,r=i%2?10:24;x.lineTo(32+Math.cos(a)*r,33+Math.sin(a)*r)}x.closePath();x.fill()}));
   css.push(icon('dip',x=>{x.beginPath();x.arc(24,32,13,0,P2);x.stroke();x.beginPath();x.arc(40,32,13,0,P2);x.stroke()}));
+
+  // resources
+  css.push(icon('food',x=>{x.beginPath();x.moveTo(32,56);x.lineTo(32,14);x.stroke();for(let i=0;i<5;i++){const y=18+i*7;for(const sd of [-1,1]){x.beginPath();x.ellipse(32+sd*7,y,6,3.4,sd*0.6,0,P2);x.fill()}}}));
+  css.push(icon('goods',x=>{x.beginPath();x.moveTo(32,8);x.lineTo(54,19);x.lineTo(54,45);x.lineTo(32,56);x.lineTo(10,45);x.lineTo(10,19);x.closePath();x.stroke();x.beginPath();x.moveTo(10,19);x.lineTo(32,30);x.lineTo(54,19);x.moveTo(32,30);x.lineTo(32,56);x.stroke()}));
+  css.push(icon('energy',x=>{x.beginPath();x.moveTo(38,6);x.lineTo(16,36);x.lineTo(30,36);x.lineTo(24,58);x.lineTo(48,26);x.lineTo(34,26);x.closePath();x.fill()}));
+  css.push(icon('wood',x=>{for(const [y,l] of [[44,0],[30,6],[16,12]]){x.beginPath();x.ellipse(14+l,y,7,7,0,0,P2);x.fill();x.fillRect(14+l,y-7,36-l,14)}x.globalCompositeOperation='destination-out';for(const [y,l] of [[44,0],[30,6],[16,12]]){x.beginPath();x.arc(14+l,y,2.5,0,P2);x.fill()}}));
+  css.push(icon('oil',x=>{x.beginPath();x.moveTo(32,6);x.bezierCurveTo(46,24,50,34,50,40);x.bezierCurveTo(50,52,42,58,32,58);x.bezierCurveTo(22,58,14,52,14,40);x.bezierCurveTo(14,34,18,24,32,6);x.fill()}));
+  css.push(icon('fuel',x=>{x.strokeRect(14,16,26,40);x.fillRect(18,22,18,12);x.beginPath();x.moveTo(40,24);x.lineTo(50,30);x.lineTo(50,48);x.quadraticCurveTo(50,54,45,52);x.stroke()}));
+  // buildings (also drawn on the map: construction sites and the build preview)
+  css.push(icon('city',x=>{x.fillRect(8,30,12,26);x.fillRect(22,14,14,42);x.fillRect(38,24,16,32);x.globalCompositeOperation='destination-out';for(let i=0;i<4;i++)for(let j=0;j<2;j++)x.fillRect(25+j*6,19+i*9,3,4)},1));
+  css.push(icon('village',x=>{for(const [cx,w] of [[20,24],[44,20]]){x.beginPath();x.moveTo(cx-w/2-3,36);x.lineTo(cx,20);x.lineTo(cx+w/2+3,36);x.closePath();x.fill();x.fillRect(cx-w/2,36,w,18)}},1));
+  css.push(icon('farm',x=>{x.beginPath();x.moveTo(8,30);x.lineTo(28,14);x.lineTo(48,30);x.closePath();x.fill();x.fillRect(12,30,32,24);x.fillRect(50,18,8,36);x.beginPath();x.arc(54,18,4,Math.PI,0);x.fill()},1));
+  css.push(icon('factory',x=>{x.beginPath();x.moveTo(6,56);x.lineTo(6,30);x.lineTo(20,22);x.lineTo(20,30);x.lineTo(34,22);x.lineTo(34,30);x.lineTo(48,22);x.lineTo(48,56);x.closePath();x.fill();x.fillRect(50,10,7,46)},1));
+  css.push(icon('power',x=>{for(const cx of [20,44]){x.beginPath();x.moveTo(cx-10,56);x.quadraticCurveTo(cx-4,34,cx-8,14);x.lineTo(cx+8,14);x.quadraticCurveTo(cx+4,34,cx+10,56);x.closePath();x.fill()}},1));
+  css.push(icon('sawmill',x=>{x.beginPath();x.moveTo(18,8);x.lineTo(30,30);x.lineTo(6,30);x.closePath();x.fill();x.fillRect(16,30,4,10);x.beginPath();x.arc(42,40,14,0,P2);x.stroke();for(let i=0;i<12;i++){const a=i*P2/12;x.beginPath();x.moveTo(42+Math.cos(a)*14,40+Math.sin(a)*14);x.lineTo(42+Math.cos(a+0.25)*19,40+Math.sin(a+0.25)*19);x.lineTo(42+Math.cos(a+0.5)*14,40+Math.sin(a+0.5)*14);x.fill()}},1));
+  css.push(icon('oil',x=>{x.beginPath();x.moveTo(10,56);x.lineTo(32,10);x.lineTo(54,56);x.stroke();x.beginPath();x.moveTo(17,42);x.lineTo(47,42);x.moveTo(22,30);x.lineTo(42,30);x.stroke();x.fillRect(28,6,8,6)},1));
+  css.push(icon('refinery',x=>{x.fillRect(8,26,10,30);x.fillRect(22,14,8,42);x.fillRect(34,32,22,24);x.beginPath();x.arc(45,30,10,Math.PI,0);x.fill();x.fillRect(24,6,4,8)},1));
+  css.push(icon('port',x=>{x.beginPath();x.arc(32,14,6,0,P2);x.stroke();x.beginPath();x.moveTo(32,20);x.lineTo(32,56);x.moveTo(20,30);x.lineTo(44,30);x.stroke();x.beginPath();x.moveTo(10,40);x.quadraticCurveTo(14,56,32,56);x.quadraticCurveTo(50,56,54,40);x.stroke()},1));
+  css.push(icon('barracks',x=>{x.beginPath();x.moveTo(32,6);x.lineTo(54,14);x.lineTo(54,32);x.quadraticCurveTo(52,50,32,58);x.quadraticCurveTo(12,50,10,32);x.lineTo(10,14);x.closePath();x.fill();x.globalCompositeOperation='destination-out';
+    x.beginPath();for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,r=i%2?5:12;x.lineTo(32+Math.cos(a)*r,32+Math.sin(a)*r)}x.closePath();x.fill()},1));
+  css.push(icon('sam',x=>{x.fillRect(8,46,48,8);x.save();x.translate(30,44);x.rotate(-0.7);for(let i=0;i<2;i++)x.fillRect(-4,-8-i*9,34,7);x.restore();x.beginPath();x.arc(50,14,5,0,P2);x.fill();x.lineWidth=2.5;x.beginPath();x.arc(50,14,10,-2.4,-0.6);x.stroke()},1));
   // logo: globe in a sight, with a wheat ear — «World Starvation»
   {const N=136,c=document.createElement('canvas');c.width=c.height=N;const x=c.getContext('2d');x.translate(N/2,N/2);
     const g=x.createRadialGradient(-12,-14,6,0,0,54);g.addColorStop(0,'#3a7ab8');g.addColorStop(1,'#0c2440');x.fillStyle=g;x.beginPath();x.arc(0,0,46,0,P2);x.fill();

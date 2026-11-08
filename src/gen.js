@@ -165,7 +165,7 @@ function cityF(c,x,y){const dx=x-c.x,dy=y-c.y;return M.sqrt(dx*dx+dy*dy)/c.R+0.2
     cand.push({x,y,R:Rr,type,seed:hh(cx,cy,12)})}
   cand.sort((a,b)=>b.type-a.type||b.R-a.R);
   // capitals of the states (game): placed first, exactly where they were founded; towns in their way give room
-  const capC=CAPS.map((q,i)=>({x:q.x,y:q.y,R:q.R||2900,type:3,seed:hh(q.x|0,q.y|0,1201+i),cap:q.st,capName:q.name,fl:q.fl}));if(capC.length)cand.unshift(...capC);
+  const capC=CAPS.map((q,i)=>({x:q.x,y:q.y,R:q.R||2900,type:3,seed:hh(q.x|0,q.y|0,1201+i),cap:q.st,st:q.st,capName:q.name,fl:q.fl}));if(capC.length)cand.unshift(...capC);
   for(const c of cand){let ok=true;for(const k of cities){const d=M.hypot(c.x-k.x,c.y-k.y);if(d<(c.R+k.R)*1.12+(c.type+k.type>1?900:250)){ok=false;break}}if(ok)cities.push(c)}
   cities.forEach((c,i)=>{c.id=i;const R=rng(c.seed^0x777);c.name=mkName(R,c.type);if(c.capName)c.name=c.capName;c.bb=[c.x-c.R*1.4,c.y-c.R*1.4,c.x+c.R*1.4,c.y+c.R*1.4];c.kind='city'});
 }
@@ -317,7 +317,7 @@ for(const c of bigs){if(c.type!==3)continue;const n=96,pts=[],wat=[];
 
 // ---------------------------------------------------------------- zones
 const zones=[],emitters=[],airports=[],farms=[];
-const ZS={ind:[1300,850],ref:[1500,1050],pow:[760,560],port:[820,900],air:[4300,1500],solar:[620,420],agro:[520,340],farm:[300,200],dacha:[760,520],cem:[380,260],quarry:[700,520],mil:[940,660]};const OLDK=['ind','ref','pow','port','air','solar'];
+const ZS={ind:[1300,850],ref:[1500,1050],pow:[760,560],port:[820,900],air:[4300,1500],solar:[620,420],agro:[520,340],farm:[300,200],dacha:[760,520],cem:[380,260],quarry:[700,520],mil:[940,660],saw:[360,260],oil:[240,190],sam:[260,260]};const OLDK=['ind','ref','pow','port','air','solar'];
 function zoneFree(x,y,rad,self){
   for(const c of live){if(c===self)continue;const d=M.hypot(c.x-x,c.y-y);if(d<c.R*1.1+rad)return false}
   if(self&&M.hypot(self.x-x,self.y-y)<self.R*1.02+rad*0.6)return false;
@@ -362,17 +362,17 @@ function mkZone(c,kind,x,y,a,W,H,rad){const z={kind:'zone',zk:kind,id:zones.leng
     if(M.hypot(ex-sx,ey-sy)>60){let pp=null,pr=1e9;for(const o of [40,-40,140,-140,260,-260]){const q=trimAlong([sx,sy,(sx+ex)/2+(-uy)*o,(sy+ey)/2+ux*o,ex,ey],kk,true,false);if(!q||!waterRunOK(q,kk===4?150:450,0.15))continue;const sr=sideRun(q,kk,pr);if(sr<pr){pp=q;pr=sr}if(sr<=40)break}
     const r=pp&&pr<=60&&mkRoad(kk,chaikin(pp,2));if(r){z.acc=r;if(z.city)r.gz=z.city.id;bridgesOf(r)}}}
   return z}
-for(const c of live){if(c.type<1)continue;const R=rng(c.seed^0x3131);
+for(const c of live){if(c.type<1||EMPTY)continue;const R=rng(c.seed^0x3131); // game worlds: every building is placed by the players
   if(c.type===3){placeZone(c,'air');placeZone(c,'port');placeZone(c,'ind');placeZone(c,'ind');if(R()<0.6)placeZone(c,'ref');placeZone(c,'pow');if(R()<0.5)placeZone(c,'solar')}
   else if(c.type===2){placeZone(c,'ind');if(R()<0.5)placeZone(c,'port');if(R()<0.35)placeZone(c,'ref');if(R()<0.45)placeZone(c,'pow');if(R()<0.3)placeZone(c,'solar')}
   else{if(R()<0.6)placeZone(c,'ind');else if(R()<0.25)placeZone(c,'solar')}}
 
 // extra zones (countryside & suburbs)
-for(const c of live){const R=rng(c.seed^0x5151);
+for(const c of live){if(EMPTY)break;const R=rng(c.seed^0x5151);
   if(c.type>=1){if(R()<(c.type>=2?0.85:0.3))placeZone(c,'dacha');if(R()<0.55)placeZone(c,'cem');if(R()<0.3)placeZone(c,'agro');if(baseH(c.x,c.y,6)>0.18&&R()<0.45)placeZone(c,'quarry')}
   else if(R()<0.32)placeZone(c,'farm')}
 // military bases of the capitals (stage 5) go last: no later access road may cut through them
-for(const c of live)if(c.cap!==undefined&&!placeZone(c,'mil')){ZS.mil=[720,520];placeZone(c,'mil');ZS.mil=[940,660]} // a smaller base if the full one does not fit
+for(const c of live)if(!EMPTY&&c.cap!==undefined&&!placeZone(c,'mil')){ZS.mil=[720,520];placeZone(c,'mil');ZS.mil=[940,660]} // a smaller base if the full one does not fit
 // interchanges -------------------------------------------------------------
 function addClover(Jx,Jy,tx,ty,nx,ny,half,RA,RB){const rl=46,D=17,E=RW[0]/2-2.5;
   // ramp ends sit on the real carriageway (the roads bend away from the crossing tangents)
@@ -456,15 +456,16 @@ for(const z of zones.slice()){if(z.zk!=='pow')continue;const targets=[z.city].co
   for(const c of targets){const dx=c.x-z.x,dy=c.y-z.y,L=M.hypot(dx,dy);const ex=c.x-dx/L*c.R*0.92,ey=c.y-dy/L*c.R*0.92;const sx=z.x+dx/L*z.rad*0.6,sy=z.y+dy/L*z.rad*0.6;const LL=M.hypot(ex-sx,ey-sy);if(LL<400)continue;
     const n=M.ceil(LL/330);const pts=[];const ph=hr(z.id,c.id,3)*50;for(let q=0;q<=n;q++){const t=q/n;const o=M.sin(PI*t)*noise(t*3+ph,ph)*LL*0.06;pts.push(sx+(ex-sx)*t+(-(ey-sy)/LL)*o,sy+(ey-sy)*t+((ex-sx)/LL)*o)}mkRoad(8,pts)}}
 // city blocks never sit on through-roads (highways, trunk roads, railways, ramps, access roads)
-for(const r of roads){if(r.city!==undefined||r.k===8)continue;const hw=RW[r.k]/2+7;
-  for(const c of queryF(r.bb[0],r.bb[1],r.bb[2],r.bb[3])){if(c.kind!=='city'||c.type<1)continue;const BD=c.D-1,bl=c.blocks;
+function throughClear(r,c){const hw=RW[r.k]/2+7;const BD=c.D-1,bl=c.blocks;
     for(let i=0;i<r.n-1;i++){const ax=r.pts[i*2],ay=r.pts[i*2+1],bx=r.pts[i*2+2],by=r.pts[i*2+3];if(M.max(ax,bx)<c.bb[0]||M.min(ax,bx)>c.bb[2]||M.max(ay,by)<c.bb[1]||M.min(ay,by)>c.bb[3])continue;
       const L=M.hypot(bx-ax,by-ay)||1,nx=-(by-ay)/L,ny=(bx-ax)/L;
       if(r.k===0&&cityF(c,(ax+bx)/2,(ay+by)/2)<1.05){const U=r.urb||(r.urb=[]);const a=r.cum[i],b=r.cum[i+1];if(U.length&&U[U.length-1][1]>=a-1)U[U.length-1][1]=b;else U.push([a,b])}
       for(let t=0;t<=L;t+=6)for(const o of [-hw,-hw/2,0,hw/2,hw]){const x=ax+(bx-ax)*t/L+nx*o-c.x,y=ay+(by-ay)*t/L+ny*o-c.y;const u=x*c.ca+y*c.sa,v=-x*c.sa+y*c.ca;
         const bi=bsr(c.us,u),bj=bsr(c.vs,v);if(bi>=0&&bj>=0&&bi<BD&&bj<BD&&bl[bj*BD+bi])bl[bj*BD+bi]=20}}
     for(const e of [0,r.n-1])for(let q=0;q<16;q++){const a=q/16*TAU;for(const rr of [hw*0.6,hw]){const x=r.pts[e*2]+M.cos(a)*rr-c.x,y=r.pts[e*2+1]+M.sin(a)*rr-c.y;const u=x*c.ca+y*c.sa,v=-x*c.sa+y*c.ca;
-      const bi=bsr(c.us,u),bj=bsr(c.vs,v);if(bi>=0&&bj>=0&&bi<BD&&bj<BD&&bl[bj*BD+bi])bl[bj*BD+bi]=20}}}}
+      const bi=bsr(c.us,u),bj=bsr(c.vs,v);if(bi>=0&&bj>=0&&bi<BD&&bj<BD&&bl[bj*BD+bi])bl[bj*BD+bi]=20}}}
+for(const r of roads){if(r.city!==undefined||r.k===8)continue;
+  for(const c of queryF(r.bb[0],r.bb[1],r.bb[2],r.bb[3])){if(c.kind!=='city'||c.type<1)continue;throughClear(r,c)}}
 // every road over water gets its bridges (also connectors, ramps and avenues added late)
 for(const r of roads)if(!r._b&&r.k!==8)bridgesOf(r);
 // boulevards: where another road crosses, the median strip and its trees are interrupted (r.xs = [s, half gap])
@@ -638,6 +639,22 @@ function genZone(z){
     for(let q=0;q<3;q++){const y=-22+q*15.2+3.8;G(P,-W*0.36,y-2,W*0.72,4,[178,176,170]);B(P,-W*0.32,y-1.6,W*0.64,3.2,5,[150,160,168],'co',{nd:1})}
     B(P,-40,24,80,18,15,[96,128,96],'h',{fc:[232,220,190]});B(P,-10,24,20,18,22,[96,128,96],'h',{fc:[232,220,190],lvl:1});
     PK(P,-120,30,60,14,0.75,R()*1e9|0);PK(P,60,30,60,14,0.7,R()*1e9|0);G(P,-W/2,42,W,6,[110,138,80]);for(let q=0;q<14;q++)TR(P,-W/2+10+q*35,45,6,0);
+  }else if(z.zk==='saw'){ // sawmill (stage 5.5): log yard, saw hall, drying sheds, stacks of boards, timber trucks
+    G(P,-W/2,-H/2,W,H,[128,116,92]);P.push({k:'gc',x:-W*0.25,y:H*0.1,r:M.min(W,H)*0.2,c:[110,92,66]});
+    for(let q=0;q<9;q++)P.push({k:'pile',x:-W/2+30+(q%3)*34,y:-H/2+30+(q/3|0)*34,r:12+R()*5,c:[132,96,62]});
+    B(P,-W*0.05,-H/2+16,W*0.36,H*0.3,11,[150,150,146],'co',{fac:1,gate:2});B(P,-W*0.05,H*0.05,W*0.22,H*0.22,7,[118,88,62],'g');
+    for(let q=0;q<4;q++)B(P,W*0.36,-H/2+16+q*(H-40)/4,W*0.1,(H-40)/4-10,5,[160,128,90],'f');
+    CY(P,W*0.18,H*0.32,2.4,24,[170,70,60],'chim');zemit(z,W*0.18,H*0.32,'smoke',0.4,24);PK(P,-W/2+14,H/2-30,W*0.5,14,0.6,R()*1e9|0,1);
+    for(let q=0;q<18;q++)TR(P,(R()-0.5)*W,(R()<0.5?-1:1)*(H/2-4),5+R()*3,[3,5][R()*2|0]);
+  }else if(z.zk==='oil'){ // oil wells (stage 5.5): pump jacks on pads, tank battery, separator
+    G(P,-W/2,-H/2,W,H,[150,140,118]);for(let q=0;q<4;q++){const x=-W/2+30+(q%2)*(W-60),y=-H/2+30+(q/2|0)*(H-60);G(P,x-14,y-10,28,20,[170,166,156]);B(P,x-9,y-2,14,4,4,[60,62,66],'f');B(P,x+4,y-3,4,6,6,[220,180,50],'f')}
+    for(let q=0;q<3;q++)CY(P,-12+q*14,0,5.5,9,[200,200,194],'tank');P.push({k:'bund',x:-24,y:-10,w:46,h:20});B(P,24,-6,16,12,5,[180,180,176],'f');
+    P.push({k:'pipe',pts:[-W/2+30,-H/2+30,-12,0],n:1,w:0.8,gr:1},{k:'pipe',pts:[W/2-30,H/2-30,16,0],n:1,w:0.8,gr:1});CY(P,W/2-20,-H/2+18,1.5,22,[200,60,50],'chim');zemit(z,W/2-20,-H/2+18,'flare',0.6,22);
+  }else if(z.zk==='sam'){ // air defence site (stage 5.5): radar, four launchers in earth revetments, command post
+    const cam=R()*3|0;G(P,-W/2,-H/2,W,H,[118,124,96]);P.push({k:'fence',x:-W/2+4,y:-H/2+4,w:W-8,h:H-8});
+    P.push({k:'dome',x:0,y:0,r:7,c:[236,236,232],H:12,lvl:3,drum:[176,178,172]});B(P,-W/2+16,-H/2+16,22,14,5,[120,126,110],'f');
+    for(let q=0;q<4;q++){const a=q*PI/2+PI/4,x=M.cos(a)*W*0.3,y=M.sin(a)*H*0.3;P.push({k:'gc',x,y,r:13,c:[132,118,90]});P.push({k:'veh',x,y,a:a+PI,v:3,c:cam})}
+    P.push({k:'veh',x:W*0.3,y:0,a:PI/2,v:4,c:cam});
   }else if(z.zk==='mil'){ // military base of a capital (stage 5): HQ with the state flags, barracks, motor pool, helipads, air defence, range
     const fl=z.city&&z.city.fl,cam=R()*3|0,X0=-W/2,Y0=-H/2;const cx1=-W*0.18,cx2=W*0.2;
     G(P,X0,Y0,W,H,[110,122,82]);P.push({k:'mow',x:X0,y:Y0,w:W,h:H});
@@ -710,6 +727,30 @@ const flights=[];
    const pts=[A.ax,A.ay,A.bx,A.by,A.bx+A.ux*9000+nx*sd*(5000+k*1500),A.by+A.uy*9000+ny*sd*(5000+k*1500),A.ax-A.ux*16000,A.ay-A.uy*16000,A.ax,A.ay,A.ax+A.ux*2400,A.ay+A.uy*2400];
    const f={pts,v:78,ph:R()*5000,alt:2600+R()*1400,kind:0,c:R()*5|0,city:A.z.city.id};prepPath(f);flights.push(f)}}
 function prepPath(f){const n=f.pts.length/2,cum=[0];let L=0;for(let i=1;i<n;i++){L+=M.hypot(f.pts[i*2]-f.pts[i*2-2],f.pts[i*2+1]-f.pts[i*2-1]);cum.push(L)}f.cum=cum;f.L=L;f.n=n}
+
+
+// ================================================================= DYNAMIC WORLD (stage 5.5)
+// Settlements and buildings placed during the game. The same calls run in the main thread and in every worker in the
+// same order (the engine sends them as an op log), so ids and geometry match everywhere.
+const stOf=o=>o.cap!==undefined?o.cap:o.st;
+function addPlace(q){const city=q.k==='city';const c={x:q.x,y:q.y,R:q.R||(city?1500:320),type:city?2:0,seed:hh(q.x|0,q.y|0,2701),dyn:1,st:q.st,kind:'city'};
+  c.id=cities.length;cities.push(c);c.name=q.name||mkName(rng(c.seed),c.type);c.bb=[c.x-c.R*1.4,c.y-c.R*1.4,c.x+c.R*1.4,c.y+c.R*1.4];
+  const r0=roads.length;if(city)buildCity(c);else buildVillage(c);if(!city&&!c.vst.length)c.vst=[];live.push(c);addF(c,c.bb[0],c.bb[1],c.bb[2],c.bb[3]);
+  // road to the nearest settlements of the same state (a second one for towns)
+  const mine=live.filter(o=>o!==c&&stOf(o)===q.st).sort((a,b)=>M.hypot(a.x-c.x,a.y-c.y)-M.hypot(b.x-c.x,b.y-c.y));
+  for(const o of mine.slice(0,city?2:1))connect(c,o,city?1:4);
+  for(let i=r0;i<roads.length;i++){const r=roads[i];if(!r._b&&r.k!==8)bridgesOf(r);if(r.city!==undefined)continue;for(const o of queryF(r.bb[0],r.bb[1],r.bb[2],r.bb[3]))if(o.kind==='city'&&o.type>=1)throughClear(r,o)}
+  if(city)for(const r of queryRoads(c.bb[0],c.bb[1],c.bb[2],c.bb[3]))if(r.city===undefined&&r.k!==8)throughClear(r,c);
+  return c.id}
+// a port faces the open water next to (x,y): nearest coast within 1.6 km, axis along the coast normal
+function portAt(x,y,W,H){let best=null;for(let k=0;k<24;k++){const a=k*TAU/24,ca=M.cos(a),sa=M.sin(a);for(let d=100;d<1600;d+=50){if(baseH(x+ca*d,y+sa*d,7)<-0.01){if(!best||d<best[0])best=[d,ca,sa];break}}}
+  if(!best)return null;const fx=x+best[1]*best[0],fy=y+best[2]*best[0],gx=baseH(fx+60,fy,7)-baseH(fx-60,fy,7),gy=baseH(fx,fy+60,7)-baseH(fx,fy-60,7);if(M.hypot(gx,gy)<1e-6)return null;
+  const pa=M.atan2(-gy,-gx),pc=M.cos(pa),ps=M.sin(pa);return [fx-pc*260,fy-ps*260,pa]}
+function addZone(q){const c=cities[q.city];if(!c)return -1;let x=q.x,y=q.y,a=q.a||0;const [W,H]=q.W?[q.W,q.H]:ZS[q.zk];
+  if(q.zk==='port'){const p=portAt(x,y,W,H);if(!p)return -1;[x,y,a]=p}
+  const z=mkZone(c,q.zk,x,y,a,W,H,M.hypot(W,H)/2);z.dyn=1;z.st=q.st;if(z.acc){delete z.acc.gz;z.acc.dyn=1}return z.id}
+// forest density 0..1 at a point (the same field the terrain raster uses for woods)
+function forestAt(x,y){const e=baseH(x,y,6);if(e<0.004)return 0;const mo=moist(x,y),fn=noise(x/1900+3.3,y/1900-7.1)*0.6+noise(x/520+1.7,y/520+9.9)*0.4;return smooth(0.06,0.13,mo*0.75+fn*0.6)*smooth(0.55,0.44,e)}
 
 // ================================================================= RENDERING
 let SPR=null;
@@ -1985,11 +2026,13 @@ function blkF(f,bi,bj){const BD=f.D-1;let a=f._bf;if(!a){a=f._bf=new Float32Arra
 function growT(f,bi,bj,t){if(!t||!GROW.size||t===21)return t;const g=GROW.get(f.id);if(g===undefined)return t;const d=blkF(f,bi,bj);return d>g+0.1?0:d>g?11:t}
 function growFields(c){const g=GROW.get(c.id);return g===undefined?1:M.min(1,g*1.4)}
 function growShift(c){const g=GROW.get(c.id);return g===undefined?0:1-M.min(1,g+0.1)}
-function featOn(f){if(f.kind!=='zone'||!f.city)return true;const g=GROW.get(f.city.id);return g===undefined||g>=0.95}
+function featOn(f){if(f.kind!=='zone'||!f.city||f.dyn)return true;const g=GROW.get(f.city.id);return g===undefined||g>=0.95}
 // visible intervals of a town street: sampled every 25 m (cached per growth value)
 function streetIv(r,g){if(r._gv===g)return r._gi;const c=cities[r.city],out=[];let a=-1;const n=M.max(1,M.ceil(r.L/25));
   for(let q=0;q<=n;q++){const sd=r.L*q/n,p=posAt(r,sd),on=cityF(c,p[0],p[1])<g+0.13;if(on&&a<0)a=sd;if((!on||q===n)&&a>=0){const b=on?r.L:sd;if(b-a>12)out.push([a,b]);a=-1}}
   r._gv=g;r._gi=out;return out}
+// a road is fully shown (traffic runs only on such roads)
+function roadShown(r){if(!GROW.size)return true;const id=r.city!==undefined?r.city:r.gz;const g=id===undefined?undefined:GROW.get(id);if(g===undefined)return true;if(r.city===undefined)return g>=0.95;const iv=streetIv(r,g);return iv.length===1&&iv[0][0]===0&&iv[0][1]===r.L}
 function growRoads(rl,whole){const out=[];for(const r of rl){const id=r.city!==undefined?r.city:r.gz;const g=id===undefined?undefined:GROW.get(id);if(g===undefined){out.push(r);continue}
     if(r.city===undefined){if(g>=0.95)out.push(r);continue}const iv=streetIv(r,g);if(!iv.length)continue;
     if(iv.length===1&&iv[0][0]===0&&iv[0][1]===r.L){out.push(r);continue}if(whole)continue;for(const [a,b] of iv)out.push({r,a,b})}return out}
@@ -2061,6 +2104,6 @@ function drawFeat(ctx,f,pass,x0,y0,s,mpp,qx0,qy0,qx1,qy1){
 // zone cylinder shadows need stroke not fill: patch drawPrims pass1 for cyl via stroke
 const _dp=drawPrims;
 
-return {setGrow,growOf:id=>GROW.has(id)?GROW.get(id):1,opt:OPT,setSeason,season:()=>SEASON,renderLights,WORLD,TS,SUNX,SUNY,WDX,WDY,LEANX,LEANY,cities:live,roads,zones,farms,ships,flights,emitters,airports,queryRoads,queryF,posAt,renderTile,sprites,drawShip,drawPlane,baseH,landE,rng,hh,noise,genTime:Date.now()-T0,mkCanvas,_dbg:{genVillage,genBlock,RW,riverV,riverW}};
+return {roadShown,addPlace,addZone,forestAt,portAt:(x,y)=>portAt(x,y,820,900),setGrow,growOf:id=>GROW.has(id)?GROW.get(id):1,opt:OPT,setSeason,season:()=>SEASON,renderLights,WORLD,TS,SUNX,SUNY,WDX,WDY,LEANX,LEANY,cities:live,roads,zones,farms,ships,flights,emitters,airports,queryRoads,queryF,posAt,renderTile,sprites,drawShip,drawPlane,baseH,landE,rng,hh,noise,genTime:Date.now()-T0,mkCanvas,_dbg:{genVillage,genBlock,RW,riverV,riverW}};
 }
 

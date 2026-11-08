@@ -63,7 +63,7 @@ test('суда и самолёты появляются только у порт
   for (const f of W.flights) assert.ok(capC.some((c) => c.id === f.city), 'рейс без аэропорта');
 });
 
-test('столицы стоят ровно там, где основаны, с именами и правительственным кварталом', () => {
+test('столицы стоят ровно там, где основаны, с именами и правительственным кварталом; своих зон у них нет', () => {
   assert.equal(caps.length, 4);
   assert.equal(capC.length, 4);
   for (const q of caps) {
@@ -71,7 +71,7 @@ test('столицы стоят ровно там, где основаны, с �
     assert.ok(c, 'столица ' + q.name);
     assert.equal(c.name, q.name); assert.equal(c.x, q.x); assert.equal(c.y, q.y); assert.equal(c.type, 3);
     assert.equal([...c.blocks].filter((t) => t === 21).length, 1, 'один правительственный квартал');
-    assert.ok(W.zones.some((z) => z.zk === 'mil' && z.city === c), 'у столицы есть военная база');
+    assert.ok(!W.zones.some((z) => z.city === c && !z.dyn), 'заводы и базы ставят игроки, а не генератор');
   }
 });
 
@@ -83,29 +83,53 @@ test('столицы соединены магистралями', () => {
   }
 });
 
-test('военные базы: техника стоит на земле базы, ничего не налезает на дороги и постройки', () => {
-  const mil = W.zones.filter((z) => z.zk === 'mil');
-  const veh = mil.reduce((a, z) => a + z.prims.filter((p) => p.k === 'veh').length, 0);
-  assert.ok(veh > 100, 'на базах есть техника: ' + veh);
-  for (const z of mil) for (const p of z.prims) if (p.k === 'veh' || p.k === 'flag') assert.ok(Math.abs(p.x) < z.W / 2 && Math.abs(p.y) < z.H / 2, 'техника за оградой');
-  // техника не стоит на дорогах (подъезд к базе и проезды внутри — тоже дороги)
-  const RW = W._dbg.RW, bad = [];
-  for (const z of mil) for (const p of z.prims) {
+// игра ставит сёла, города и постройки по ходу партии — те же вызовы идут в каждый worker
+const D = world(1337, Object.assign({ caps }, OPT));
+const dyn = { places: [], zones: [] };
+{
+  const c0 = D.cities.find((c) => c.cap === 0);
+  const dry = (x, y, r) => { for (let a = 0; a <= 4; a++) for (let b = 0; b <= 4; b++) if (D.landE(x + (a / 4 - 0.5) * r * 1.5, y + (b / 4 - 0.5) * r * 1.5, 0.002) < 0) return false; return true; };
+  const free = (x, y, r) => dry(x, y, r) && D.cities.every((c) => Math.hypot(c.x - x, c.y - y) > c.R * 1.2 + r + 400) && D.zones.every((z) => Math.hypot(z.x - x, z.y - y) > z.rad + r);
+  const spot = (cx, cy, r0, r1, r) => { for (let d = r0; d < r1; d += 250) for (let a = 0; a < 6.28; a += 0.3) { const x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d; if (free(x, y, r)) return [x, y]; } return null; };
+  const v = spot(c0.x, c0.y, 5000, 12000, 400); if (v) dyn.places.push(D.addPlace({ k: 'village', x: v[0], y: v[1], st: 0, name: 'Село' }));
+  const t = spot(c0.x, c0.y, 9000, 20000, 2000); if (t) dyn.places.push(D.addPlace({ k: 'city', x: t[0], y: t[1], st: 0, name: 'Новгород', R: 1500 }));
+  const vill = D.cities[dyn.places[0]];
+  for (const [zk, w, h, home] of [['farm', 300, 200, vill], ['ind', 640, 420, c0], ['pow', 760, 560, c0], ['saw', 360, 260, c0], ['oil', 240, 190, c0], ['ref', 900, 640, c0], ['mil', 720, 520, c0], ['sam', 260, 260, c0]]) {
+    const q = spot(home.x, home.y, home.R * 1.3 + 600, home.R * 1.3 + 6000, Math.hypot(w, h) / 2); if (q) dyn.zones.push([zk, D.addZone({ zk, x: q[0], y: q[1], city: home.id, st: 0, W: w, H: h })]);
+  }
+}
+
+test('новые сёла, города и постройки появляются в мире и соединяются дорогами', () => {
+  assert.equal(dyn.places.length, 2, 'село и город поставлены');
+  for (const id of dyn.places) { const c = D.cities[id]; assert.ok(c && c.dyn, 'поселение в мире'); assert.ok(D.roads.some((r) => r.city === undefined && [0, r.n - 1].some((i) => Math.hypot(r.pts[i * 2] - c.x, r.pts[i * 2 + 1] - c.y) < c.R * 1.6 + 300)), c.name + ': есть дорога'); }
+  assert.ok(D.cities[dyn.places[1]].nblocks > 50, 'у нового города есть кварталы');
+  assert.equal(dyn.zones.length, 8, 'все 8 построек встали: ' + dyn.zones.map((z) => z[0]).join(','));
+  for (const [zk, id] of dyn.zones) { assert.ok(id >= 0, zk); const z = D.zones.find((q) => q.id === id); assert.ok(z.dyn && z.prims.length > 5, zk + ': есть содержимое'); }
+  assert.ok(D.forestAt(0, 0) === 0 && D.forestAt(65536, 65536) >= 0);
+});
+
+test('мир с постройками игроков проходит общий аудит геометрии', () => {
+  const RW = D._dbg.RW, bad = [];
+  for (const z of D.zones) for (const p of z.prims) {
     if (p.k !== 'veh') continue;
     const x = z.x + p.x * z.ca - p.y * z.sa, y = z.y + p.x * z.sa + p.y * z.ca;
-    for (const r of W.queryRoads(x - 40, y - 40, x + 40, y + 40)) {
-      if (r.k === 8) continue;
+    for (const r of D.queryRoads(x - 40, y - 40, x + 40, y + 40)) { if (r.k === 8) continue;
       for (let i = 0; i < r.n - 1; i++) { const ax = r.pts[i * 2], ay = r.pts[i * 2 + 1], ex = r.pts[i * 2 + 2] - ax, ey = r.pts[i * 2 + 3] - ay, l2 = ex * ex + ey * ey || 1;
-        const t = Math.max(0, Math.min(1, ((x - ax) * ex + (y - ay) * ey) / l2)); if (Math.hypot(ax + ex * t - x, ay + ey * t - y) < RW[r.k] / 2 + 2) { bad.push(`техника v=${p.v} на дороге k=${r.k} @${Math.round(x)},${Math.round(y)}`); break; } }
-    }
+        const t = Math.max(0, Math.min(1, ((x - ax) * ex + (y - ay) * ey) / l2)); if (Math.hypot(ax + ex * t - x, ay + ey * t - y) < RW[r.k] / 2 + 2) { bad.push(`техника на дороге k=${r.k}`); break; } } }
   }
   assert.deepEqual(bad.slice(0, 8), []);
-  // весь мир с государствами проходит те же проверки, что и классические миры
+  const A = audit(D);
+  const list = (xs, f) => xs.slice(0, 8).map(f);
+  assert.deepEqual(list(A.overlap, (it) => `${label(it.a)} | ${label(it.b)} @${where(it.a)}`), []);
+  assert.deepEqual(list(A.overlapSame, (it) => `${label(it.a)} @${where(it.a)}`), []);
+  assert.deepEqual(list(inWater(D), (o) => `${label(o)} @${where(o)}`), []);
+});
+
+test('мир со столицами проходит общий аудит геометрии', () => {
   const A = audit(W);
   const list = (xs, f) => xs.slice(0, 8).map(f);
   assert.deepEqual(list(A.onRoad, (it) => `${label(it.o)} на дороге k=${it.r.k} @${where(it.o)}`), []);
   assert.deepEqual(list(A.overlap, (it) => `${label(it.a)} | ${label(it.b)} @${where(it.a)}`), []);
-  assert.deepEqual(list(A.overlapSame, (it) => `${label(it.a)} @${where(it.a)}`), []);
   assert.deepEqual(list(inWater(W), (o) => `${label(o)} @${where(o)}`), []);
   assert.deepEqual(groundClash(W).slice(0, 8), []);
 });

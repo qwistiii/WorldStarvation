@@ -19,6 +19,7 @@ addEventListener('resize',resize,SIG);resize();
 
 let season=clamp(hv(/,s(\d)/,0)|0,0,2);
 const W=WorldGen(SEED,cfg.opt),WORLD=W.WORLD,S0=W.sprites();W.setSeason(season);
+const OPS=[];for(const o of cfg.ops||[]){W[o.f](o.q);OPS.push(o)} // settlements and buildings placed in the game (replayed on load)
 const GROWS=new Map(cfg.grow||[]);for(const [id,g] of GROWS)W.setGrow(id,g);
 // main-thread copies of sprites as regular canvases (faster to draw than OffscreenCanvas sources in some browsers)
 const toC=c=>{const d=document.createElement('canvas');d.width=c.width;d.height=c.height;d.getContext('2d').drawImage(c,0,0);return d};
@@ -33,9 +34,10 @@ const NW=M.max(2,M.min(5,(navigator.hardwareConcurrency||4)-2));
 const wsrc=(typeof FlagArt==='function'?FlagArt.toString():'')+WorldGen.toString()+`
 let G=null;
 onmessage=function(e){const m=e.data;
- if(m.t==='init'){try{const t=new OffscreenCanvas(2,2).getContext('2d');if(!t)throw new Error('no2d');G=WorldGen(m.seed,m.opt);G.setSeason(m.season);for(const q of m.grow||[])G.setGrow(q[0],q[1]);postMessage({t:'ready',ok:true})}catch(err){postMessage({t:'ready',ok:false,err:String(err)})}}
+ if(m.t==='init'){try{const t=new OffscreenCanvas(2,2).getContext('2d');if(!t)throw new Error('no2d');G=WorldGen(m.seed,m.opt);G.setSeason(m.season);for(const o of m.ops||[])G[o.f](o.q);for(const q of m.grow||[])G.setGrow(q[0],q[1]);postMessage({t:'ready',ok:true})}catch(err){postMessage({t:'ready',ok:false,err:String(err)})}}
  else if(m.t==='season'){G.setSeason(m.s)}
  else if(m.t==='grow'){G.setGrow(m.id,m.g)}
+ else if(m.t==='op'){G[m.op.f](m.op.q)}
  else if(m.t==='tile'){if(m.L){const c=G.renderLights(m.z,m.x,m.y,m.hb);if(!c){postMessage({t:'tile',key:m.key,L:m.L,b:null,gv:m.gv});return}const b=c.transferToImageBitmap();postMessage({t:'tile',key:m.key,L:m.L,b,gv:m.gv},[b]);return}
    const c=G.renderTile(m.z,m.x,m.y);const b=c.transferToImageBitmap();postMessage({t:'tile',key:m.key,b,s:G.season(),gv:m.gv},[b])}};`;
 let wurl=null;try{if(HS.indexOf('cpu')>=0)throw 0;const url=URL.createObjectURL(new Blob([wsrc],{type:'text/javascript'}));
@@ -45,7 +47,7 @@ let wurl=null;try{if(HS.indexOf('cpu')>=0)throw 0;const url=URL.createObjectURL(
       if(m.t==='tile'){w.busy--;if(!alive){if(m.b&&m.b.close)m.b.close();return}
         if(m.L){LPS[m.L].delete(m.key);if(outdated(m.key,m.gv)){if(m.b&&m.b.close)m.b.close();return}LCS[m.L].set(m.key,{b:m.b,f:frameNo});return}
         pending.delete(m.key);if(m.s!==season||outdated(m.key,m.gv)){if(m.b&&m.b.close)m.b.close();return}cache.set(m.key,{b:m.b,f:frameNo})}};
-    w.onerror=()=>{w.dead=true;if(workers.every(q=>q.dead))mainRender=true};w.postMessage({t:'init',seed:SEED,season,opt:cfg.opt,grow:[...GROWS]});workers.push(w)}wurl=url}
+    w.onerror=()=>{w.dead=true;if(workers.every(q=>q.dead))mainRender=true};w.postMessage({t:'init',seed:SEED,season,opt:cfg.opt,grow:[...GROWS],ops:OPS});workers.push(w)}wurl=url}
 catch(e){mainRender=true}
 setTimeout(()=>{if(alive&&!workers.some(w=>w.ready))mainRender=true},4000+(cfg.opt?3000:0));
 const tkey=(z,x,y)=>z*16777216+y*4096+x;
@@ -71,14 +73,21 @@ let GV=0;const INV=[];
 const tileBB=k=>{const z=M.floor(k/16777216),r=k-z*16777216,y=M.floor(r/4096),x=r-y*4096,ts=WORLD/(1<<z);return [x*ts,y*ts,(x+1)*ts,(y+1)*ts]};
 const hitBB=(a,b)=>a[0]<b[2]&&b[0]<a[2]&&a[1]<b[3]&&b[1]<a[3];
 const tileZ0=k=>M.floor(k/16777216);
-function outdated(k,gv){if(gv===undefined||gv>=GV)return false;const bb=tileBB(k),z=tileZ0(k);for(const e of INV)if(e.gv>gv&&z>=e.zmin&&hitBB(bb,e.bb))return true;return false}
+function outdated(k,gv){if(gv===undefined||gv>=GV)return false;const bb=tileBB(k),z=tileZ0(k);for(const e of INV)if(e.gv>gv&&z>=e.zmin&&z<=e.zmax&&hitBB(bb,e.bb))return true;return false}
 // zmin: coarse levels (whole regions per tile) are refreshed only on big growth steps — a town is a few pixels there
-function invalidate(bb,zmin){zmin=zmin||0;GV++;INV.push({gv:GV,bb,zmin});if(INV.length>64)INV.shift();
-  for(const [k,v] of cache){if(tileZ0(k)<zmin||!hitBB(tileBB(k),bb))continue;const o=stale.get(k);if(o&&o.b&&o.b.close&&o!==v)o.b.close();stale.set(k,v);cache.delete(k)}staleT=0;
-  for(let L=1;L<=3;L++)for(const [k,v] of LCS[L])if(tileZ0(k)>=zmin&&hitBB(tileBB(k),bb)){if(v.b&&v.b.close)v.b.close();LCS[L].delete(k)}}
+function invalidate(bb,zmin,zmax){zmin=zmin||0;zmax=zmax==null?99:zmax;GV++;INV.push({gv:GV,bb,zmin,zmax});if(INV.length>64)INV.shift();
+  for(const [k,v] of cache){const tz=tileZ0(k);if(tz<zmin||tz>zmax||!hitBB(tileBB(k),bb))continue;const o=stale.get(k);if(o&&o.b&&o.b.close&&o!==v)o.b.close();stale.set(k,v);cache.delete(k)}staleT=0;
+  for(let L=1;L<=3;L++)for(const [k,v] of LCS[L])if(tileZ0(k)>=zmin&&tileZ0(k)<=zmax&&hitBB(tileBB(k),bb)){if(v.b&&v.b.close)v.b.close();LCS[L].delete(k)}}
 function setGrow(id,g){g=g>=1?1:g;const g0=GROWS.has(id)?GROWS.get(id):1;if(g0===g)return;const coarse=g>=1||M.floor(g*4)!==M.floor(g0*4);if(g>=1)GROWS.delete(id);else GROWS.set(id,g);W.setGrow(id,g);for(const w of workers)w.postMessage({t:'grow',id,g});
   const c=W.cities.find(q=>q.id===id);if(c){let bb=c.bb.slice();for(const z of W.zones)if(z.city===c)bb=[M.min(bb[0],z.bb[0]),M.min(bb[1],z.bb[1]),M.max(bb[2],z.bb[2]),M.max(bb[3],z.bb[3])];invalidate([bb[0]-300,bb[1]-300,bb[2]+300,bb[3]+300],coarse?0:6)}}
-const zoneOn=z=>!z.city||W.growOf(z.city.id)>=0.95;
+const zoneOn=z=>z.dyn||!z.city||W.growOf(z.city.id)>=0.95;
+// a settlement or building placed during the game: same call here and in every worker, then the tiles over it are redrawn
+function op(f,q){const r0=W.roads.length,id=W[f](q);if(id<0)return id;const o={f,q};OPS.push(o);for(const w of workers)w.postMessage({t:'op',op:o});
+  const f0=f==='addPlace'?W.cities.find(c=>c.id===id):W.zones.find(z=>z.id===id);let bb=f0?f0.bb.slice():[q.x-500,q.y-500,q.x+500,q.y+500];
+  for(let i=r0;i<W.roads.length;i++){const r=W.roads[i];bb=[M.min(bb[0],r.bb[0]),M.min(bb[1],r.bb[1]),M.max(bb[2],r.bb[2]),M.max(bb[3],r.bb[3])]}
+  // detailed levels at once; the coarse ones (a whole region per tile) are refreshed in batches every 12 s
+  const b2=[bb[0]-200,bb[1]-200,bb[2]+200,bb[3]+200];invalidate(b2,4);LOWB=LOWB?[M.min(LOWB[0],b2[0]),M.min(LOWB[1],b2[1]),M.max(LOWB[2],b2[2]),M.max(LOWB[3],b2[3])]:b2;return id}
+let LOWB=null;const lowT=setInterval(()=>{if(alive&&LOWB){invalidate(LOWB,0,3);LOWB=null}},12000);
 // game hooks must never stop the render loop: errors are reported once per hook
 const hkErr={};function hk(n,a,b){try{HK[n](a,b)}catch(e){if(!hkErr[n]){hkErr[n]=1;console.error('hook '+n+':',e)}ctx.setTransform(DPR,0,0,DPR,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}}
 // ------------------------------------------------------------ camera
@@ -246,13 +255,14 @@ const LANES={0:[[3.6,1,27,52],[7.1,1,31,64],[10.6,1,23,85],[-3.6,-1,27,52],[-7.1
 const DOTC=['#eee','#ccc','#333','#a22','#36c','#888','#454','#eb3'],DOTS=[[],[],[],[],[],[],[],[],[],[]];
 function hsh(a,b,c){return W.hh(a,b,c)/4294967296}
 let carCount=0;const CB=new Float32Array(5*40000);let cbn=0;
+const DENS=MODE==='game'?2.6:1; // the game shows lighter traffic (and none on streets that are not built yet)
 function drawTraffic(roads){const m=cam.m,k=1/m,dots=m>1.5;carCount=0;cbn=0;
   for(const a of DOTS)a.length=0;
   for(const r of roads){const LN=LANES[r.k];if(!LN)continue;const iv=[];
     for(let i=0;i<r.n-1;i++){const ax=r.pts[i*2],ay=r.pts[i*2+1],bx=r.pts[i*2+2],by=r.pts[i*2+3];if(M.max(ax,bx)<vx0-30||M.min(ax,bx)>vx1+30||M.max(ay,by)<vy0-30||M.min(ay,by)>vy1+30)continue;
       const a=r.cum[i],b=r.cum[i+1];if(iv.length&&iv[iv.length-1][1]>=a-1)iv[iv.length-1][1]=b;else iv.push([a,b])}
     if(!iv.length)continue;
-    for(let li=0;li<LN.length;li++){const [off,dir,v0,sp0]=LN[li];const v=v0*(0.9+hsh(r.id,li,3)*0.2);const K=M.max(1,M.round(r.L/sp0)),sp=r.L/K;const base=((T*v+hsh(r.id,li,7)*r.L)%r.L);
+    for(let li=0;li<LN.length;li++){const [off,dir,v0,sp0]=LN[li];const v=v0*(0.9+hsh(r.id,li,3)*0.2);const K=M.max(1,M.round(r.L/(sp0*DENS))),sp=r.L/K;const base=((T*v+hsh(r.id,li,7)*r.L)%r.L);
       for(const [a0,b0] of iv){const a=dir>0?a0:r.L-b0,b=dir>0?b0:r.L-a0;const k0=M.ceil((a-base-sp*0.45)/sp),k1=M.floor((b-base)/sp);
         for(let q=k0;q<=k1;q++){const kk=((q%K)+K)%K;const hq=W.hh(r.id,li*7919+kk,11);if((hq&7)===0)continue;const j=((hq>>>3)&255)/255*sp*0.45;let s=q*sp+base+j;if(s<a||s>b)continue;
           const sd=dir>0?s:r.L-s;const p=W.posAt(r,sd);let hx=p[2]*dir,hy=p[3]*dir;const x=p[0]-p[3]*off,y=p[1]+p[2]*off;const X=sxw(x),Y=syw(y);
@@ -351,7 +361,7 @@ function drawFlightLights(a){if(a<0.02||!FLB.length)return;ctx.globalCompositeOp
 // clouds and their shadows are soft, so they are drawn into a quarter-size layer and scaled up: the big translucent
 // sprites overlap a lot, and at full resolution their fill cost dominated the frame
 const CLO=mk(4,4),cxl=CLO.getContext('2d');const CLK=0.25;
-function drawClouds(shadowPass){const H=camH();const cloudFar=MODE==='game'?1-smooth(9000,26000,H):1;if(cloudFar<0.02)return; // strategic view of the game: a clear map
+function drawClouds(shadowPass){const H=camH();const cloudFar=1; // clouds are seen from orbit too (stage 5.5); near the cloud layer they dissolve (game)
   const span=WORLD*1.3;
   if(shadowPass&&LG.day<0.03)return;
   const lw=M.max(4,M.ceil(VW*CLK)),lh=M.max(4,M.ceil(VH*CLK));if(CLO.width!==lw||CLO.height!==lh){CLO.width=lw;CLO.height=lh}else{cxl.setTransform(1,0,0,1,0,0);cxl.clearRect(0,0,lw,lh)} // clear in pixels: the layer keeps the scale transform of the last frame
@@ -360,9 +370,9 @@ function drawClouds(shadowPass){const H=camH();const cloudFar=MODE==='game'?1-sm
     let x=((c.x+T*9+WORLD*0.15)%span+span)%span-WORLD*0.15,y=c.y;
     if((LITE||(MODE==='game'&&VQ.dpr<2))&&ci%2)continue;
     if(shadowPass){if(cam.m<0.12)continue;const sx=x+W.SUNX*c.alt,sy=y+W.SUNY*c.alt;if(!inView(sx,sy,c.s))continue;const sz=c.s/cam.m;const sa=0.2*vis*LG.day*(1-0.45*smooth(0.6,1,wcur.cover))*cloudFar;if(sa<0.02)continue;x2.globalAlpha=sa;x2.drawImage(CLS[c.v][1],sxw(sx)-sz/2,syw(sy)-sz/2,sz,sz);n++;continue}
-    if(H<c.alt*1.12)continue;const kk=H/(H-c.alt);const a=smooth(c.alt*1.12,c.alt*2.6,H)*(MODE==='game'?smooth(c.alt*1.7,c.alt*3.2,H):1);if(a<=0.01)continue; // game: no white-out when the camera comes down through the cloud layer
+    if(H<c.alt*1.12)continue;const kk=H/(H-c.alt);let a=smooth(c.alt*1.12,c.alt*2.6,H)*(MODE==='game'?smooth(c.alt*3,c.alt*6,H)*0.85:1);if(a<=0.01)continue; // game: no white-out when the camera comes down through the cloud layer
     const X=VW/2+(x-cam.x)/cam.m*kk,Y=VH/2+(y-cam.y)/cam.m*kk,sz=c.s/cam.m*kk;if(X+sz/2<0||Y+sz/2<0||X-sz/2>VW||Y-sz/2>VH)continue;
-    const ca=a*0.95*vis*cloudFar;if(ca<0.02)continue;x2.globalAlpha=ca;x2.drawImage(CLS[c.v][2],X-sz/2,Y-sz/2,sz,sz);n++}
+    const ca=a*0.95*vis*cloudFar*(MODE==='game'?smooth(VW*2.4,VW*1.3,sz):1);if(ca<0.02)continue;/* game: no screen-filling cloud sprites */x2.globalAlpha=ca;x2.drawImage(CLS[c.v][2],X-sz/2,Y-sz/2,sz,sz);n++}
   x2.globalAlpha=1;if(!n)return;ctx.setTransform(DPR,0,0,DPR,0,0);ctx.imageSmoothingEnabled=true;ctx.drawImage(CLO,0,0,lw/CLK,lh/CLK)}
 function drawFog(){const f=wcur.fog;if(f<0.01)return;ctx.setTransform(DPR,0,0,DPR,0,0);
   for(let l=0;l<2;l++){const P=l?1700:5200,sc=P/256/cam.m;const ox=VW/2-(cam.x-T*(l?9:5))/cam.m,oy=VH/2-(cam.y+T*(l?3:-2))/cam.m;
@@ -383,14 +393,15 @@ function drawPrecip(dt){const rain=wcur.rain,snow=wcur.snow,H=camH();const vis=s
     if(isSnow){const s=clamp(1.6/p.q,1.2,9);ctx.globalAlpha=vis*clamp(0.95-p.q*0.5,0.3,0.9)*br;ctx.drawImage(FLAKE,X-s/2,Y-s/2,s,s)}
     else{const qb=p.q*0.93;const X0=VW/2+(p.dx-wx*0.03*p.q)/(m*qb),Y0=VH/2+(p.dy-wy*0.03*p.q)/(m*qb);ctx.moveTo(X0,Y0);ctx.lineTo(X,Y)}}
   if(!isSnow)ctx.stroke();ctx.globalAlpha=1}
-const ZNAME={mil:'Военная база',air:'Аэропорт',ref:'НПЗ',pow:'ТЭЦ',port:'Порт',ind:'Промзона',solar:'Солнечная электростанция',agro:'Тепличный комбинат',farm:'Ферма',dacha:'СНТ',cem:'Кладбище',quarry:'Карьер',gas:'АЗС',stn:'Вокзал'};const ZLIM={mil:12,gas:2.5,farm:5,cem:5,dacha:6,stn:5};
+const ZDYN={farm:'Колхоз',ind:'Завод товаров',pow:'ТЭЦ',saw:'Лесопилка',oil:'Нефтевышка',ref:'НПЗ',port:'Порт',mil:'Военная часть',sam:'ПВО'};
+const ZNAME={saw:'Лесопилка',oil:'Нефтевышка',sam:'ПВО',mil:'Военная база',air:'Аэропорт',ref:'НПЗ',pow:'ТЭЦ',port:'Порт',ind:'Промзона',solar:'Солнечная электростанция',agro:'Тепличный комбинат',farm:'Ферма',dacha:'СНТ',cem:'Кладбище',quarry:'Карьер',gas:'АЗС',stn:'Вокзал'};const ZLIM={mil:12,gas:2.5,farm:5,cem:5,dacha:6,stn:5};
 function drawLabels(){ctx.setTransform(DPR,0,0,DPR,0,0);const m=cam.m;const boxes=[];ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineJoin='round';
   const lim=[9,32,95,380],fs=[11,12.5,15,19];const nl=LG.night;
   for(const c of W.cities){if(m>lim[c.type])continue;const X=sxw(c.x),Y=syw(c.y);if(X<-100||Y<-30||X>VW+100||Y>VH+30||(HK.seen&&!HK.seen(c.x,c.y)))continue;
     const a=M.min(1,(lim[c.type]-m)/(lim[c.type]*0.3))*(m<0.6?0.55:1);ctx.font=`${c.type>=2?600:500} ${fs[c.type]}px system-ui,Segoe UI,Roboto,sans-serif`;const w=c._lw||(c._lw=ctx.measureText(c.name).width+8),h=fs[c.type]+4;
     let hit=false;for(const b of boxes){if(M.abs(b[0]-X)<(b[2]+w)/2&&M.abs(b[1]-Y)<(b[3]+h)/2){hit=true;break}}if(hit)continue;boxes.push([X,Y,w,h]);
     ctx.globalAlpha=a*(1-nl*0.15);ctx.strokeStyle='rgba(10,20,30,0.75)';ctx.lineWidth=3.5;ctx.strokeText(c.name,X,Y);ctx.fillStyle=c.type===3?'#fff6dc':'#ffffff';ctx.fillText(c.name,X,Y)}
-  if(m<12){ctx.font='500 11px system-ui,sans-serif';for(const z of W.zones){const lim=ZLIM[z.zk]||9;if(m>lim||!zoneOn(z))continue;const X=sxw(z.x),Y=syw(z.y);if(X<-80||Y<-20||X>VW+80||Y>VH+20)continue;const t=ZNAME[z.zk];ctx.globalAlpha=M.min(1,(lim-m)/(lim/3))*0.9;
+  if(m<12){ctx.font='500 11px system-ui,sans-serif';for(const z of W.zones){const lim=ZLIM[z.zk]||9;if(m>lim||!zoneOn(z))continue;const X=sxw(z.x),Y=syw(z.y);if(X<-80||Y<-20||X>VW+80||Y>VH+20)continue;const t=(z.dyn&&ZDYN[z.zk])||ZNAME[z.zk];ctx.globalAlpha=M.min(1,(lim-m)/(lim/3))*0.9;
     ctx.strokeStyle='rgba(10,20,30,0.7)';ctx.lineWidth=3;ctx.strokeText(t,X,Y);ctx.fillStyle='#ffe9a8';ctx.fillText(t,X,Y)}}
   ctx.globalAlpha=1}
 
@@ -462,7 +473,7 @@ function frameBody(now){const dt=M.min(0.06,(now-last)/1000);last=now;T+=dt;fram
   {ctx.setTransform(DPR,0,0,DPR,0,0);ctx.fillStyle='rgba(14,46,82,0.8)';const X0=sxw(0),Y0=syw(0),X1=sxw(WORLD),Y1=syw(WORLD);if(X0>0||Y0>0||X1<VW||Y1<VH){ctx.beginPath();ctx.rect(-5,-5,VW+10,VH+10);ctx.rect(X0,Y0,X1-X0,Y1-Y0);ctx.fill('evenodd')}}
   if(opt.clouds)drawClouds(true);
   let rs=[];const trafficOn=opt.traffic&&cam.m<30;
-  if(trafficOn){rs=cam.m<8?W.queryRoads(vx0,vy0,vx1,vy1):[];if(cam.m<3.2)drawTraffic(rs);else cbn=0;if(cam.m<8)drawTrains(rs,0);drawShips(0)}else cbn=0;
+  if(trafficOn){rs=cam.m<8?W.queryRoads(vx0,vy0,vx1,vy1).filter(W.roadShown):[];if(cam.m<3.2)drawTraffic(rs);else cbn=0;if(cam.m<8)drawTrains(rs,0);drawShips(0)}else cbn=0;
   pf('traffic');drawEmitters();drawTurbines(0);pf('emit');
   if(opt.traffic)drawFlights();else FLB.length=0;
   pf('flights');drawFog();
@@ -507,9 +518,9 @@ let introOff=false,introT=0;
 const bgC=W.cities.filter(c=>c.type===3).sort((a,b)=>b.R-a.R)[0]||W.cities[0];let bgA=hsh(SEED,1,1)*TAU;
 function bgCam(dt){bgA+=dt*0.02;const r=bgC.R*0.5;cam.x=bgC.x+M.cos(bgA)*r;cam.y=bgC.y+M.sin(bgA*0.8)*r*0.6;cam.m=2.6+1.6*M.sin(bgA*0.55);fly=null;zoomT=null}
 if(MODE==='bg')bgCam(0);
-function destroy(){if(!alive)return;alive=false;AC.abort();clearTimeout(introT);clearTimeout(clickT);for(const w of workers)w.terminate();if(wurl)URL.revokeObjectURL(wurl);
+function destroy(){if(!alive)return;alive=false;AC.abort();clearInterval(lowT);clearTimeout(introT);clearTimeout(clickT);for(const w of workers)w.terminate();if(wurl)URL.revokeObjectURL(wurl);
   for(const mp of [cache,stale,LCS[1],LCS[2],LCS[3]])for(const v of mp.values())if(v.b&&v.b.close)v.b.close();closeInsp();if(window.__world&&window.__world.W===W)window.__world=null}
-const API={W,cam,flyTo,zoomAt,maxM,opt,LG,wcur,hover,setGrow,invalidate,setTod,setSpeed,setSeason,destroy,closeInsp,pick,
+const API={get ops(){return OPS},op,W,cam,flyTo,zoomAt,maxM,opt,LG,wcur,hover,setGrow,invalidate,setTod,setSpeed,setSeason,destroy,closeInsp,pick,
   get VW(){return VW},get VH(){return VH},get DPR(){return DPR},get T(){return T},get tod(){return tod},get fps(){return fpsA},get ready(){return readyFired},
   sxw,syw,toWorld:(sx,sy)=>[cam.x+(sx-VW/2)*cam.m,cam.y+(sy-VH/2)*cam.m],setTodRate:r=>{todRate=r},isNight,
   showCity:c=>{sel={k:'city',o:c};showInsp()},
