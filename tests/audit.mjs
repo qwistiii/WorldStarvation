@@ -362,3 +362,17 @@ export function minorOnHighway(W) {
   }
   return out;
 }
+
+// крюки: поворот больше 75° на участке 80 м (у загородных дорог и проспектов-продолжений)
+export function hooks(W, deg = 75, win = 80) {
+  const out = [], lim = deg * Math.PI / 180;
+  for (const r of W.roads) {
+    if (r.city !== undefined || r.k === 8 || r.k === 6 || r.k === 5 || r.ring || r.L < win) continue;
+    for (let s = 0; s + win <= r.L; s += 10) {
+      const a = W.posAt(r, s), b = W.posAt(r, s + win);
+      let d = Math.abs(Math.atan2(a[2] * b[3] - a[3] * b[2], a[2] * b[2] + a[3] * b[3]));
+      if (d > lim) { const m = W.posAt(r, s + win / 2); out.push({ r, x: m[0], y: m[1] }); break; }
+    }
+  }
+  return out;
+}
