@@ -16,7 +16,7 @@ let season=clamp(hv(/,s(\d)/,0)|0,0,2);
 const W=WorldGen(SEED),WORLD=W.WORLD,S0=W.sprites();W.setSeason(season);
 // main-thread copies of sprites as regular canvases (faster to draw than OffscreenCanvas sources in some browsers)
 const toC=c=>{const d=document.createElement('canvas');d.width=c.width;d.height=c.height;d.getContext('2d').drawImage(c,0,0);return d};
-const S={car:S0.car.map(toC),truck:S0.truck.map(toC),bus:toC(S0.bus),tree:S0.tree.map(toC)};
+const S={car:S0.car.map(toC),carLo:S0.carLo.map(toC),truck:S0.truck.map(toC),bus:toC(S0.bus),tree:S0.tree.map(toC)};
 const opt={clouds:true,labels:true,traffic:true};
 
 // ------------------------------------------------------------ workers / tile caches
@@ -224,7 +224,7 @@ function drawTraffic(roads){const m=cam.m,k=1/m,dots=m>1.5;carCount=0;cbn=0;
           if(cbn<40000){const o=cbn*5;CB[o]=X;CB[o+1]=Y;CB[o+2]=hx;CB[o+3]=hy;CB[o+4]=truck?8.5:bus?6.25:2.5;cbn++}
           if(dots){const ci=truck?8:bus?9:(hq>>>17)&7;DOTS[ci].push(X,Y,M.max(1.2,(truck?9:4.5)*k));continue}
           setRot(X,Y,hx,hy,k);
-          if(truck){ctx.drawImage(S.truck[(hq>>>17)%5],-8.5,-2.1,17,4.25)}else if(bus){ctx.drawImage(S.bus,-6.25,-1.5,12.5,3)}else ctx.drawImage(S.car[(hq>>>17)%S.car.length],-2.5,-1.25,5,2.5)}}}
+          if(truck){ctx.drawImage(S.truck[(hq>>>17)%5],-8.5,-2.1,17,4.25)}else if(bus){ctx.drawImage(S.bus,-6.25,-1.5,12.5,3)}else ctx.drawImage((k>7?S.car:S.carLo)[(hq>>>17)%S.car.length],-2.5,-1.25,5,2.5)}}}
     if(r.tram&&!dots){const nT=M.max(1,M.round(r.L/450));for(const dir of [1,-1]){for(let q=0;q<nT;q++){const v=9;const s=((T*v+hsh(r.id,q,dir>0?31:32)*r.L+q*r.L/nT)%r.L);const sd=dir>0?s:r.L-s;const p=W.posAt(r,sd);
         const x=p[0]-p[3]*1.75*dir,y=p[1]+p[2]*1.75*dir;const X=sxw(x),Y=syw(y);if(X<-40||Y<-40||X>VW+40||Y>VH+40)continue;setRot(X,Y,p[2]*dir,p[3]*dir,k);ctx.drawImage(TRAM,-15.5,-1.5,31,3);if(cbn<40000){const o=cbn*5;CB[o]=X;CB[o+1]=Y;CB[o+2]=p[2]*dir;CB[o+3]=p[3]*dir;CB[o+4]=15.5;cbn++}carCount++}}}}
   if(dots){ctx.setTransform(DPR,0,0,DPR,0,0);for(let ci=0;ci<10;ci++){const A=DOTS[ci];if(!A.length)continue;ctx.fillStyle=ci===8?'#ddd':ci===9?'#e8c040':DOTC[ci];ctx.beginPath();for(let i=0;i<A.length;i+=3){const sz=A[i+2];ctx.rect(A[i]-sz/2,A[i+1]-sz/2,sz,sz)}ctx.fill()}}}

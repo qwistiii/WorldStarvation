@@ -374,6 +374,12 @@ for(const r of roads){if(r.city!==undefined||r.k===8)continue;const hw=RW[r.k]/2
         const bi=bsr(c.us,u),bj=bsr(c.vs,v);if(bi>=0&&bj>=0&&bi<BD&&bj<BD&&bl[bj*BD+bi])bl[bj*BD+bi]=20}}
     for(const e of [0,r.n-1])for(let q=0;q<16;q++){const a=q/16*TAU;for(const rr of [hw*0.6,hw]){const x=r.pts[e*2]+M.cos(a)*rr-c.x,y=r.pts[e*2+1]+M.sin(a)*rr-c.y;const u=x*c.ca+y*c.sa,v=-x*c.sa+y*c.ca;
       const bi=bsr(c.us,u),bj=bsr(c.vs,v);if(bi>=0&&bj>=0&&bi<BD&&bj<BD&&bl[bj*BD+bi])bl[bj*BD+bi]=20}}}}
+// boulevards: where another road crosses, the median strip and its trees are interrupted (r.xs = [s, half gap])
+for(const r of roads){if(r.k!==7)continue;const xs=[];for(const o of queryRoads(r.bb[0]-5,r.bb[1]-5,r.bb[2]+5,r.bb[3]+5)){if(o===r||o.k===8||o.k===5)continue;
+  for(let i=0;i<r.n-1;i++){const ax=r.pts[i*2],ay=r.pts[i*2+1],ex=r.pts[i*2+2]-ax,ey=r.pts[i*2+3]-ay,li=M.hypot(ex,ey);for(let j=0;j<o.n-1;j++){const cx=o.pts[j*2],cy=o.pts[j*2+1],fx=o.pts[j*2+2]-cx,fy=o.pts[j*2+3]-cy;
+    const den=ex*fy-ey*fx;if(M.abs(den)<1e-9)continue;const t=((cx-ax)*fy-(cy-ay)*fx)/den,u=((cx-ax)*ey-(cy-ay)*ex)/den;if(t<-0.01||t>1.01||u<-0.01||u>1.01)continue;
+    const sin=M.abs(den)/(li*M.hypot(fx,fy));xs.push([r.cum[i]+t*li,RW[o.k]/2/M.max(0.3,sin)+7])}}}
+  if(xs.length){xs.sort((a,b)=>a[0]-b[0]);r.xs=xs}}
 // zone objects never stand on roads that cross the zone (fallback placement, later access roads): drop them
 for(const z of zones){const P=z.prims;if(!P||z.zk==='air')continue;const keep=[];let cut=0;
   for(const p of P){let w=0,h=0,cx=0,cy=0;const k=p.k;
@@ -561,7 +567,9 @@ function prepPath(f){const n=f.pts.length/2,cum=[0];let L=0;for(let i=1;i<n;i++)
 let SPR=null;
 function sprites(){if(SPR)return SPR;SPR={tree:[],treeS:[[],[],[]],car:[],truck:[],bus:null};
   for(let s=0;s<3;s++)for(let v=0;v<7;v++)SPR.treeS[s].push(mkTree(v,s));SPR.tree=SPR.treeS[0];
-  for(let v=0;v<CARC.length;v++)SPR.car.push(mkCar(CARC[v]));
+  for(let v=0;v<CARC.length;v++)for(let t=0;t<3;t++)SPR.car.push(mkCar(CARC[v],(v+t)%3));
+  // 10 px/m copies (box-filtered down) for parked cars in tiles and for traffic seen from afar: no sparkle when minified
+  SPR.carLo=SPR.car.map(c=>{let src=c;for(const w of [100,50]){const d=mkCanvas(w,w/2),x=d.getContext('2d');x.imageSmoothingEnabled=true;x.imageSmoothingQuality='high';x.drawImage(src,0,0,w,w/2);src=d}return src});
   for(let v=0;v<5;v++)SPR.truck.push(mkTruck(v));SPR.bus=mkBus();return SPR}
 const CARC=[[235,235,232],[200,202,206],[40,42,46],[170,30,30],[40,70,140],[120,122,126],[50,80,60],[230,190,40],[190,170,140],[90,30,40],[230,230,230],[30,30,32]];
 // tree sprite (128 px, crown centre at 0.44): per-pixel crown height field from leaf clusters, lit from the sun,
@@ -601,22 +609,40 @@ function mkTree(v,se){const N=128,C=56,cv=mkCanvas(N,N),x=cv.getContext('2d');co
   return cv}
 function rr(x,X,Y,W,H,r){x.beginPath();x.moveTo(X+r,Y);x.lineTo(X+W-r,Y);x.quadraticCurveTo(X+W,Y,X+W,Y+r);x.lineTo(X+W,Y+H-r);x.quadraticCurveTo(X+W,Y+H,X+W-r,Y+H);x.lineTo(X+r,Y+H);x.quadraticCurveTo(X,Y+H,X,Y+H-r);x.lineTo(X,Y+r);x.quadraticCurveTo(X,Y,X+r,Y);x.closePath()}
 function cs(c,k){return 'rgb('+M.min(255,c[0]*k|0)+','+M.min(255,c[1]*k|0)+','+M.min(255,c[2]*k|0)+')'}
-function mkCar(c){ // 5 x 2.5 m at 10px/m
-  const cv=mkCanvas(50,25),x=cv.getContext('2d');
-  x.fillStyle='rgba(0,0,0,0.28)';rr(x,4,3.5,44,20,6);x.fill();
-  let g=x.createLinearGradient(0,3,0,22);g.addColorStop(0,cs(c,0.75));g.addColorStop(0.5,cs(c,1.15));g.addColorStop(1,cs(c,0.7));x.fillStyle=g;rr(x,3,3.5,44,18,6);x.fill();
-  x.fillStyle='rgba(25,35,45,0.92)';x.beginPath();x.moveTo(32,5.5);x.lineTo(37,7);x.lineTo(37,18);x.lineTo(32,19.5);x.closePath();x.fill();
-  x.beginPath();x.moveTo(11,6.5);x.lineTo(14,7.5);x.lineTo(14,17.5);x.lineTo(11,18.5);x.closePath();x.fill();
-  x.fillStyle=cs(c,1.05);rr(x,14.5,6.5,17,12,2);x.fill();x.fillStyle='rgba(255,255,255,0.18)';x.fillRect(16,8,14,2);
-  x.fillStyle='rgba(255,250,220,0.95)';x.fillRect(45,5,2,3);x.fillRect(45,17,2,3);x.fillStyle='rgba(200,20,20,0.95)';x.fillRect(3,5,1.6,3);x.fillRect(3,17,1.6,3);
+function mkCar(c,v){ // 5 x 2.5 m; drawn at 40 px/m so it stays sharp at the closest zoom. v: 0 sedan, 1 hatchback, 2 SUV
+  const K=4,cv=mkCanvas(50*K,25*K),x=cv.getContext('2d');x.scale(K,K);v=v||0;
+  const L0=3,L1=47,T=3.6,B=21.4,W=B-T,cy=(T+B)/2,rear=v===1?11.5:v===2?9:11,fwd=v===2?35.5:33,roofA=rear+(v===1?1.5:3.2),roofB=fwd-(v===2?3:4.5);
+  // soft shadow
+  x.fillStyle='rgba(0,0,0,0.16)';rr(x,L0+1.6,T+1.4,L1-L0,W+0.6,6.5);x.fill();x.fillStyle='rgba(0,0,0,0.18)';rr(x,L0+0.8,T+0.7,L1-L0,W,6);x.fill();
+  // tyres peeking out at the corners
+  x.fillStyle='#161616';for(const wx of [L0+6.5,L1-8.5])for(const wy of [T-0.35,B-1.65])rr(x,wx,wy,5,2,0.8),x.fill();
+  // body: rounded box shaded across the width (sides darker, crown lit)
+  let g=x.createLinearGradient(0,T,0,B);g.addColorStop(0,cs(c,0.62));g.addColorStop(0.18,cs(c,1.0));g.addColorStop(0.5,cs(c,1.16));g.addColorStop(0.82,cs(c,0.96));g.addColorStop(1,cs(c,0.58));
+  x.fillStyle=g;rr(x,L0,T,L1-L0,W,v===2?4.5:6);x.fill();
+  // bonnet and boot panel lines, bumpers
+  x.strokeStyle=cs(c,0.7);x.lineWidth=0.25;x.beginPath();x.moveTo(fwd+1.2,T+2.2);x.quadraticCurveTo(fwd+6,cy,fwd+1.2,B-2.2);x.moveTo(rear-1,T+2.4);x.quadraticCurveTo(rear-4.5,cy,rear-1,B-2.4);x.stroke();
+  x.fillStyle='rgba(30,30,30,0.55)';rr(x,L1-1.6,T+2.5,1.6,W-5,0.6);x.fill();rr(x,L0,T+2.5,1.4,W-5,0.6);x.fill();
+  // glasshouse: windscreen, rear window, side windows; roof panel with a sheen
+  x.fillStyle='rgba(22,32,44,0.94)';x.beginPath();x.moveTo(roofB,T+2.6);x.lineTo(fwd,T+1.6);x.quadraticCurveTo(fwd+1.4,cy,fwd,B-1.6);x.lineTo(roofB,B-2.6);x.closePath();x.fill();
+  x.beginPath();x.moveTo(roofA,T+2.6);x.lineTo(rear,T+1.9);x.quadraticCurveTo(rear-1.2,cy,rear,B-1.9);x.lineTo(roofA,B-2.6);x.closePath();x.fill();
+  x.fillRect(roofA,T+1.0,roofB-roofA,1.5);x.fillRect(roofA,B-2.5,roofB-roofA,1.5);
+  x.fillStyle='rgba(190,215,235,0.32)';x.beginPath();x.moveTo(roofB+0.4,T+3);x.lineTo(fwd-0.6,T+2.4);x.lineTo(fwd-0.2,T+5.5);x.lineTo(roofB+0.6,T+5.8);x.closePath();x.fill();
+  x.strokeStyle=cs(c,0.75);x.lineWidth=0.3;x.beginPath();const pil=(roofA+roofB)/2;x.moveTo(pil,T+1);x.lineTo(pil,T+2.6);x.moveTo(pil,B-1);x.lineTo(pil,B-2.6);x.stroke();
+  g=x.createLinearGradient(0,T+2.6,0,B-2.6);g.addColorStop(0,cs(c,0.92));g.addColorStop(0.45,cs(c,1.22));g.addColorStop(1,cs(c,0.88));x.fillStyle=g;rr(x,roofA,T+2.6,roofB-roofA,W-5.2,1.6);x.fill();
+  x.fillStyle='rgba(255,255,255,0.16)';x.fillRect(roofA+1,T+3.6,roofB-roofA-2,1.1);
+  if(v===2){x.strokeStyle='rgba(30,30,30,0.6)';x.lineWidth=0.35;x.beginPath();x.moveTo(roofA+1,T+3.4);x.lineTo(roofB-1,T+3.4);x.moveTo(roofA+1,B-3.4);x.lineTo(roofB-1,B-3.4);x.stroke()}
+  // mirrors, head and tail lights
+  x.fillStyle=cs(c,0.8);x.fillRect(roofB+0.5,T-0.9,1.4,1.1);x.fillRect(roofB+0.5,B-0.2,1.4,1.1);
+  x.fillStyle='rgba(255,250,225,0.98)';rr(x,L1-2.4,T+0.9,1.9,3,0.8);x.fill();rr(x,L1-2.4,B-3.9,1.9,3,0.8);x.fill();
+  x.fillStyle='rgba(200,24,20,0.96)';rr(x,L0+0.2,T+1,1.5,3.2,0.6);x.fill();rr(x,L0+0.2,B-4.2,1.5,3.2,0.6);x.fill();
   return cv}
-function mkTruck(v){const cv=mkCanvas(170,34),x=cv.getContext('2d');const tc=[[235,235,235],[200,60,40],[40,90,160],[220,200,60],[90,100,90]][v];
+function mkTruck(v){const cv=mkCanvas(340,68),x=cv.getContext('2d');x.scale(2,2);const tc=[[235,235,235],[200,60,40],[40,90,160],[220,200,60],[90,100,90]][v];
   x.fillStyle='rgba(0,0,0,0.3)';x.fillRect(6,7,162,25);
   x.fillStyle=cs(tc,1);x.fillRect(3,4,128,25);x.fillStyle='rgba(0,0,0,0.12)';for(let k=8;k<128;k+=10)x.fillRect(3+k,4,1,25);
   x.fillStyle='rgba(255,255,255,0.15)';x.fillRect(3,4,128,4);
   const cc=[[200,30,30],[240,240,240],[40,40,40],[30,80,150],[230,120,30]][(v+2)%5];x.fillStyle='#222';x.fillRect(131,9,6,15);
   x.fillStyle=cs(cc,1);rr(x,137,5,26,24,3);x.fill();x.fillStyle='rgba(25,35,45,0.9)';x.fillRect(158,7,4,20);x.fillStyle=cs(cc,1.2);x.fillRect(140,8,14,18);return cv}
-function mkBus(){const cv=mkCanvas(125,30),x=cv.getContext('2d');x.fillStyle='rgba(0,0,0,0.3)';x.fillRect(5,6,118,23);
+function mkBus(){const cv=mkCanvas(250,60),x=cv.getContext('2d');x.scale(2,2);x.fillStyle='rgba(0,0,0,0.3)';x.fillRect(5,6,118,23);
   x.fillStyle='#e8e6dc';rr(x,2,3,120,24,4);x.fill();x.fillStyle='#d8a020';x.fillRect(2,3,120,4);x.fillRect(2,23,120,4);
   x.fillStyle='rgba(30,40,50,0.6)';x.fillRect(8,9,100,12);x.fillStyle='#ccc';x.fillRect(30,11,10,8);x.fillRect(70,11,10,8);x.fillStyle='rgba(25,35,45,0.95)';x.fillRect(114,6,6,18);return cv}
 
@@ -1473,7 +1499,7 @@ function drawParked(ctx,p,s){const S=sprites();const r=rng(p.seed);const hor=p.w
   if(p.truck){const n=hor?M.floor(p.w/4.2):M.floor(p.h/4.2);for(let q=0;q<n;q++){if(r()>p.fill)continue;const spr=S.truck[r()*5|0];ctx.save();if(hor){ctx.translate(p.x+q*4.2+2.1,p.y+p.h/2);ctx.rotate(PI/2)}else{ctx.translate(p.x+p.w/2,p.y+q*4.2+2.1)}
       const L=M.min(17,hor?p.h:p.w);ctx.drawImage(spr,-L/2,-2.1,L,4.2);ctx.restore()}return}
   const rows=M.max(1,M.floor((hor?p.h:p.w)/5.4));
-  for(let rw=0;rw<rows;rw++){const L=hor?p.w:p.h;for(let a=0;a+2.6<=L;a+=2.6){if(r()>p.fill)continue;const spr=S.car[r()*S.car.length|0];const fl=r()<0.5;
+  for(let rw=0;rw<rows;rw++){const L=hor?p.w:p.h;for(let a=0;a+2.6<=L;a+=2.6){if(r()>p.fill)continue;const spr=S.carLo[r()*S.carLo.length|0];const fl=r()<0.5;
     ctx.save();if(hor){ctx.translate(p.x+a+1.3,p.y+rw*5.4+2.5);ctx.rotate(fl?PI/2:-PI/2)}else{ctx.translate(p.x+rw*5.4+2.5,p.y+a+1.3);if(fl)ctx.rotate(PI)}
     ctx.drawImage(spr,-2.5,-1.25,5,2.5);ctx.restore()}}}
 
@@ -1487,6 +1513,10 @@ function PT(ctx,it,off){if(it.r)offsetRange(ctx,it.r,off,it.a,it.b);else offsetP
 function subPath(ctx,r,s0,s1){offsetRange(ctx,r,0,s0,s1)}
 function isDirt(r){return r.k===4&&(r.id*2654435761>>>0)%100<55}
 const ORDER=[5,4,3,6,2,7,1,0];
+// the median of a boulevard, interrupted at the crossings
+function inGap(r,s,m){if(!r.xs)return false;for(const [c,g] of r.xs)if(M.abs(s-c)<g+m)return true;return false}
+function medStroke(ctx,L){ctx.beginPath();for(const it of L){const r=it.r||it,a=it.r?it.a:0,b=it.r?it.b:r.L;let cur=a;
+    for(const [c,g] of r.xs||[]){if(c+g<cur||c-g>b)continue;if(c-g>cur+0.5)offsetRange(ctx,r,0,cur,c-g);cur=M.max(cur,c+g)}if(cur<b-0.5)offsetRange(ctx,r,0,cur,b)}ctx.stroke()}
 function strokeAll(ctx,L,off){ctx.beginPath();for(const it of L)PT(ctx,it,off);ctx.stroke()}
 function strokeSym(ctx,L,offs){ctx.beginPath();for(const it of L)for(const o of offs){PT(ctx,it,o);PT(ctx,it,-o)}ctx.stroke()}
 function drawRoads(ctx,list,mpp,over){const s=1/mpp;
@@ -1512,8 +1542,8 @@ function drawRoads(ctx,list,mpp,over){const s=1/mpp;
     const tex=(m,wd,offs,LL)=>{if(s<0.4)return;for(let l=0;l<2;l++){const P=l?matP(ctx,m,s,0.73,13.1,7.7,2.618):matP(ctx,m,s,0,0,0);if(!P)continue;ctx.globalAlpha=alpha*(m==='asph'?0.4:0.45);ctx.strokeStyle=P;ctx.lineWidth=wd;if(offs)strokeSym(ctx,LL||L,offs);else strokeAll(ctx,LL||L,0)}ctx.globalAlpha=alpha};
     if(k===0&&px>4){ctx.strokeStyle='#8a8880';ctx.lineWidth=w;strokeAll(ctx,L,0);tex('conc',w);ctx.strokeStyle=fc;ctx.lineWidth=12;ctx.lineCap='butt';strokeSym(ctx,L,[7.6]);tex('asph',12,[7.6]);ctx.lineCap='butt';
       ctx.strokeStyle='#b8b6ae';ctx.lineWidth=0.8;strokeAll(ctx,L,0)}
-    else if(k===7&&px>4){ctx.strokeStyle=fc;ctx.lineWidth=w-1;strokeAll(ctx,L,0);tex('asph',w-1);ctx.strokeStyle='#b0aea6';ctx.lineWidth=6;strokeAll(ctx,L,0);ctx.strokeStyle=SEASON===2?'#dde2e6':SEASON===1?'#8a8a46':'#628a48';ctx.lineWidth=5;strokeAll(ctx,L,0);
-      if(s>0.35&&!over){for(const r of L){const n=M.floor(r.L/9);for(let q=1;q<n;q++){const p=posAt(r,q*9);TREEQ.push((p[0]-TX0)*s,(p[1]-TY0)*s,(6+((q*7+r.id)%3))*s,(q+r.id)%3===0?4:0)}}}}
+    else if(k===7&&px>4){ctx.strokeStyle=fc;ctx.lineWidth=w-1;strokeAll(ctx,L,0);tex('asph',w-1);ctx.strokeStyle='#b0aea6';ctx.lineWidth=6;medStroke(ctx,L);ctx.strokeStyle=SEASON===2?'#dde2e6':SEASON===1?'#8a8a46':'#628a48';ctx.lineWidth=5;medStroke(ctx,L);
+      if(s>0.35&&!over){for(const r of L){const n=M.floor(r.L/9);for(let q=1;q<n;q++){if(inGap(r,q*9,4))continue;const p=posAt(r,q*9);TREEQ.push((p[0]-TX0)*s,(p[1]-TY0)*s,(6+((q*7+r.id)%3))*s,(q+r.id)%3===0?4:0)}}}}
     else if(k===4&&px>2){
       if(dirt.length){ctx.strokeStyle='#8c7a5c';ctx.lineWidth=lw;strokeAll(ctx,dirt,0);tex('soil',lw,null,dirt);if(s>0.9){const lc=ctx.lineCap;ctx.lineCap='butt';ctx.strokeStyle='rgba(70,56,40,0.45)';ctx.lineWidth=0.7;strokeSym(ctx,dirt,[1.15]);ctx.strokeStyle='rgba(96,120,64,0.55)';ctx.lineWidth=0.6;strokeAll(ctx,dirt,0);ctx.lineCap=lc}}
       if(paved.length){ctx.strokeStyle='#6c6a66';ctx.lineWidth=lw;strokeAll(ctx,paved,0);tex('asph',lw,null,paved)}}
