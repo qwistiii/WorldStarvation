@@ -53,6 +53,7 @@
 | `mkRoad`, `connect`, `routePts`, `bridgesOf`, `posAt` | Дороги, spatial grid 1024 м |
 | `placeZone`, `genZone`, `emitters` | Промзоны, НПЗ, ТЭЦ, порт, аэропорт, СЭС, АЗС, вокзалы, фермы и т.д. |
 | `genBlock`, `genVillage`, `drawPrims`, `roof`, `cylDraw` | Примитивы кварталов и их отрисовка |
+| `gfUnits`, `gfGround`, `gfFacade`, `gfCanopies` | Первые этажи (`p.gf`) и доки складов (`p.dk`): витрины, подъезды, лобби, навесы, фуры |
 | `raster`, `grain`, `renderTile`, `renderLights`, `drawFeat` | Генерация тайлов |
 | `sprites`, `drawShip`, `drawPlane` | Спрайты |
 

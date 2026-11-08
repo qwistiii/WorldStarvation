@@ -90,3 +90,22 @@ test('съезды развязок у кольцевых не заходят в
   }
   assert.deepEqual(bad.slice(0, 10), []);
 });
+
+test('постройки и резервуары промзон не стоят на дорогах', () => {
+  let n = 0; const bad = [];
+  for (const z of W.zones) {
+    if (z.zk === 'air' || !z.prims) continue;
+    for (const p of z.prims) {
+      let w, h, cx, cy;
+      if (p.k === 'b') { w = p.w; h = p.h; cx = p.x + w / 2; cy = p.y + h / 2; }
+      else if (p.k === 'cyl') { w = h = p.r * 2; cx = p.x; cy = p.y; }
+      else continue;
+      n++;
+      const x = z.x + cx * z.ca - cy * z.sa, y = z.y + cx * z.sa + cy * z.ca;
+      const r = hits(x, y, z.ang + (p.a || 0), w, h, (r) => r !== z.acc && r.k !== 8);
+      if (r) bad.push(`зона ${z.zk}#${z.id}: объект на дороге k=${r.k}`);
+    }
+  }
+  assert.ok(n > 2000, 'проверено мало объектов');
+  assert.deepEqual(bad.slice(0, 10), []);
+});
