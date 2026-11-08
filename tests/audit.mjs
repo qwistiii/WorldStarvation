@@ -76,13 +76,13 @@ export function collect(W, { trees = false } = {}) {
       const BD = c.D - 1;
       for (let bj = 0; bj < BD; bj++) for (let bi = 0; bi < BD; bi++) {
         const t = c.blocks[bj * BD + bi]; if (!t) continue;
-        const u = (c.us[bi] + c.us[bi + 1]) / 2, v = (c.vs[bj] + c.vs[bj + 1]) / 2;
-        const ox = c.x + u * c.ca - v * c.sa, oy = c.y + u * c.sa + v * c.ca;
+        // the block's own frame (game towns may have a bent street grid: each block has its own centre and angle)
+        const [ox, oy, ca, sa] = W.blkFrame(c, bi, bj);
         const blk = { city: c, bi, bj, t };
         for (const p of genBlock(c, bi, bj, t)) {
-          if (p.k === 'b') out.push(Object.assign(wrect(p, ox, oy, c.ca, c.sa, 'city'), { blk }));
-          else if (p.k === 'cyl') out.push(Object.assign(wcirc(p, ox, oy, c.ca, c.sa, p.r, 'city'), { blk }));
-          else if (trees && p.k === 't') out.push(Object.assign(wcirc(p, ox, oy, c.ca, c.sa, p.d * 0.4, 'tree'), { blk }));
+          if (p.k === 'b') out.push(Object.assign(wrect(p, ox, oy, ca, sa, 'city'), { blk }));
+          else if (p.k === 'cyl') out.push(Object.assign(wcirc(p, ox, oy, ca, sa, p.r, 'city'), { blk }));
+          else if (trees && p.k === 't') out.push(Object.assign(wcirc(p, ox, oy, ca, sa, p.d * 0.4, 'tree'), { blk }));
         }
       }
     } else {

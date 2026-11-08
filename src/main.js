@@ -21,6 +21,7 @@ let season=clamp(hv(/,s(\d)/,0)|0,0,2);
 const W=WorldGen(SEED,cfg.opt),WORLD=W.WORLD,S0=W.sprites();W.setSeason(season);
 const OPS=[];for(const o of cfg.ops||[]){W[o.f](o.q);OPS.push(o)} // settlements and buildings placed in the game (replayed on load)
 const GROWS=new Map(cfg.grow||[]);for(const [id,g] of GROWS)W.setGrow(id,g);
+let HIDL=[];
 // main-thread copies of sprites as regular canvases (faster to draw than OffscreenCanvas sources in some browsers)
 const toC=c=>{const d=document.createElement('canvas');d.width=c.width;d.height=c.height;d.getContext('2d').drawImage(c,0,0);return d};
 const S={car:S0.car.map(toC),carLo:S0.carLo.map(toC),truck:S0.truck.map(toC),bus:toC(S0.bus),tree:S0.tree.map(toC)};
@@ -37,6 +38,7 @@ onmessage=function(e){const m=e.data;
  if(m.t==='init'){try{const t=new OffscreenCanvas(2,2).getContext('2d');if(!t)throw new Error('no2d');G=WorldGen(m.seed,m.opt);G.setSeason(m.season);for(const o of m.ops||[])G[o.f](o.q);for(const q of m.grow||[])G.setGrow(q[0],q[1]);postMessage({t:'ready',ok:true})}catch(err){postMessage({t:'ready',ok:false,err:String(err)})}}
  else if(m.t==='season'){G.setSeason(m.s)}
  else if(m.t==='grow'){G.setGrow(m.id,m.g)}
+ else if(m.t==='hid'){G.setHidden(m.ids)}
  else if(m.t==='op'){G[m.op.f](m.op.q)}
  else if(m.t==='tile'){if(m.L){const c=G.renderLights(m.z,m.x,m.y,m.hb);if(!c){postMessage({t:'tile',key:m.key,L:m.L,b:null,gv:m.gv});return}const b=c.transferToImageBitmap();postMessage({t:'tile',key:m.key,L:m.L,b,gv:m.gv},[b]);return}
    const c=G.renderTile(m.z,m.x,m.y);const b=c.transferToImageBitmap();postMessage({t:'tile',key:m.key,b,s:G.season(),gv:m.gv},[b])}};`;
@@ -47,7 +49,7 @@ let wurl=null;try{if(HS.indexOf('cpu')>=0)throw 0;const url=URL.createObjectURL(
       if(m.t==='tile'){w.busy--;if(!alive){if(m.b&&m.b.close)m.b.close();return}
         if(m.L){LPS[m.L].delete(m.key);if(outdated(m.key,m.gv)){if(m.b&&m.b.close)m.b.close();return}LCS[m.L].set(m.key,{b:m.b,f:frameNo});return}
         pending.delete(m.key);if(m.s!==season||outdated(m.key,m.gv)){if(m.b&&m.b.close)m.b.close();return}cache.set(m.key,{b:m.b,f:frameNo})}};
-    w.onerror=()=>{w.dead=true;if(workers.every(q=>q.dead))mainRender=true};w.postMessage({t:'init',seed:SEED,season,opt:cfg.opt,grow:[...GROWS],ops:OPS});workers.push(w)}wurl=url}
+    w.onerror=()=>{w.dead=true;if(workers.every(q=>q.dead))mainRender=true};w.postMessage({t:'init',seed:SEED,season,opt:cfg.opt,grow:[...GROWS],ops:OPS});if(HIDL.length)w.postMessage({t:'hid',ids:HIDL});workers.push(w)}wurl=url}
 catch(e){mainRender=true}
 setTimeout(()=>{if(alive&&!workers.some(w=>w.ready))mainRender=true},4000+(cfg.opt?3000:0));
 const tkey=(z,x,y)=>z*16777216+y*4096+x;
@@ -79,13 +81,21 @@ function invalidate(bb,zmin,zmax){zmin=zmin||0;zmax=zmax==null?99:zmax;GV++;INV.
   for(const [k,v] of cache){const tz=tileZ0(k);if(tz<zmin||tz>zmax||!hitBB(tileBB(k),bb))continue;const o=stale.get(k);if(o&&o.b&&o.b.close&&o!==v)o.b.close();stale.set(k,v);cache.delete(k)}staleT=0;
   for(let L=1;L<=3;L++)for(const [k,v] of LCS[L])if(tileZ0(k)>=zmin&&tileZ0(k)<=zmax&&hitBB(tileBB(k),bb)){if(v.b&&v.b.close)v.b.close();LCS[L].delete(k)}}
 function setGrow(id,g){g=g>=1?1:g;const g0=GROWS.has(id)?GROWS.get(id):1;if(g0===g)return;const coarse=g>=1||M.floor(g*4)!==M.floor(g0*4);if(g>=1)GROWS.delete(id);else GROWS.set(id,g);W.setGrow(id,g);for(const w of workers)w.postMessage({t:'grow',id,g});
-  const c=W.cities.find(q=>q.id===id);if(c){const rf=c.R+4700;let bb=[c.x-rf,c.y-rf,c.x+rf,c.y+rf];for(const z of W.zones)if(z.city===c)bb=[M.min(bb[0],z.bb[0]),M.min(bb[1],z.bb[1]),M.max(bb[2],z.bb[2]),M.max(bb[3],z.bb[3])];invalidate([bb[0]-300,bb[1]-300,bb[2]+300,bb[3]+300],coarse?0:6)}}
-const zoneOn=z=>z.dyn||!z.city||W.growOf(z.city.id)>=0.95;
+  const c=W.cities.find(q=>q.id===id);if(c){const rf=W.fieldReach(c)+200;let bb=[c.x-rf,c.y-rf,c.x+rf,c.y+rf];for(const z of W.zones)if(z.city===c)bb=[M.min(bb[0],z.bb[0]),M.min(bb[1],z.bb[1]),M.max(bb[2],z.bb[2]),M.max(bb[3],z.bb[3])];invalidate([bb[0]-300,bb[1]-300,bb[2]+300,bb[3]+300],coarse?0:6)}}
+const zoneOn=z=>!W.isHid(z.id)&&(z.dyn||!z.city||W.growOf(z.city.id)>=0.95);
+// fog of war (stage 5.7): the game hides buildings of other states that the player has not seen; tiles over the zones
+// that changed are redrawn
+function setHidden(ids){ids=[...ids].sort((a,b)=>a-b);const old=new Set(HIDL),now=new Set(ids);let bb=null;
+  for(const id of new Set([...old,...now])){if(old.has(id)&&now.has(id))continue;const z=W.zones[id];if(!z)continue;let b=z.bb;if(z.link)b=[M.min(b[0],z.link.bb[0]),M.min(b[1],z.link.bb[1]),M.max(b[2],z.link.bb[2]),M.max(b[3],z.link.bb[3])];
+    bb=bb?[M.min(bb[0],b[0]),M.min(bb[1],b[1]),M.max(bb[2],b[2]),M.max(bb[3],b[3])]:b.slice()}
+  if(!bb)return;HIDL=ids;W.setHidden(ids);for(const w of workers)w.postMessage({t:'hid',ids});invalidate([bb[0]-100,bb[1]-100,bb[2]+100,bb[3]+100],4);LOWB=LOWB?[M.min(LOWB[0],bb[0]),M.min(LOWB[1],bb[1]),M.max(LOWB[2],bb[2]),M.max(LOWB[3],bb[3])]:bb}
 // a settlement or building placed during the game: same call here and in every worker, then the tiles over it are redrawn
 function op(f,q){const r0=W.roads.length,id=W[f](q);if(id<0)return id;const o={f,q};OPS.push(o);for(const w of workers)w.postMessage({t:'op',op:o});
   const f0=f==='addPlace'?W.cities.find(c=>c.id===id):f==='addZone'||f==='removeZone'?W.zones.find(z=>z.id===id):null;let bb=f0?f0.bb.slice():q&&q.x!=null?[q.x-500,q.y-500,q.x+500,q.y+500]:null;
   // a town also changes the farmland around it (fields reach R + 4.5 km): redraw that ring too, or tiles meet with seams
-  if(f==='addPlace'&&f0){const r=f0.R+4700;bb=[f0.x-r,f0.y-r,f0.x+r,f0.y+r]}if(f==='addDeposits'){bb=[0,0,WORLD,WORLD]}if(!bb)return id;
+  if(f==='addPlace'&&f0){const r=W.fieldReach(f0)+200;bb=[f0.x-r,f0.y-r,f0.x+r,f0.y+r]}if(f==='addDeposits'){bb=[0,0,WORLD,WORLD]}
+  if(f==='zoneUp'){const z=W.zones[id];bb=z.bb.slice()}if(f==='addRail'||f==='removeRail'){bb=W.roads[id].bb.slice()}
+  if(f==='moveDeposit'){const d=W.deps[id],o=q.length>4?[q[3],q[4]]:[d.x,d.y];bb=[M.min(o[0],d.x)-400,M.min(o[1],d.y)-400,M.max(o[0],d.x)+400,M.max(o[1],d.y)+400]}if(!bb)return id;
   for(let i=r0;i<W.roads.length;i++){const r=W.roads[i];bb=[M.min(bb[0],r.bb[0]),M.min(bb[1],r.bb[1]),M.max(bb[2],r.bb[2]),M.max(bb[3],r.bb[3])]}
   // detailed levels at once; the coarse ones (a whole region per tile) are refreshed in batches every 12 s
   const b2=[bb[0]-200,bb[1]-200,bb[2]+200,bb[3]+200];invalidate(b2,4);LOWB=LOWB?[M.min(LOWB[0],b2[0]),M.min(LOWB[1],b2[1]),M.max(LOWB[2],b2[2]),M.max(LOWB[3],b2[3])]:b2;return id}
@@ -111,16 +121,21 @@ function updateCam(dt){
 const ptr=new Map();let drag=false,lastMove=0,pinch=null,downAt=null;const keys={};
 const hover={x:-1,y:-1,on:false};
 cv.addEventListener('pointerleave',()=>{hover.on=false},SIG);
-cv.addEventListener('pointerdown',e=>{if(MODE==='bg')return;cv.setPointerCapture(e.pointerId);ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});drag=true;fly=null;vel.x=vel.y=0;if(ptr.size===2)pinch=null;
+let hold=null; // a game tool that holds the pointer (press on a station and drag a railway)
+cv.addEventListener('pointerdown',e=>{if(MODE==='bg')return;cv.setPointerCapture(e.pointerId);
+  if(HK.pdown&&ptr.size===0&&e.button===0){const w=[cam.x+(e.clientX-VW/2)*cam.m,cam.y+(e.clientY-VH/2)*cam.m];let r=false;try{r=HK.pdown(w[0],w[1],e.clientX,e.clientY)}catch(err){console.error(err)}if(r){hold=e.pointerId;fly=null;vel.x=vel.y=0;return}}
+  ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});drag=true;fly=null;vel.x=vel.y=0;if(ptr.size===2)pinch=null;
   downAt=ptr.size===1?{x:e.clientX,y:e.clientY,t:performance.now(),moved:0}:null},SIG);
-cv.addEventListener('pointermove',e=>{hover.x=e.clientX;hover.y=e.clientY;hover.on=true;const p=ptr.get(e.pointerId);if(!p)return;
+cv.addEventListener('pointermove',e=>{hover.x=e.clientX;hover.y=e.clientY;hover.on=true;
+  if(hold===e.pointerId){if(HK.pmove)try{HK.pmove(cam.x+(e.clientX-VW/2)*cam.m,cam.y+(e.clientY-VH/2)*cam.m,e.clientX,e.clientY)}catch(err){console.error(err)}return}const p=ptr.get(e.pointerId);if(!p)return;
   if(ptr.size===1){const dx=e.clientX-p.x,dy=e.clientY-p.y;if(downAt)downAt.moved+=M.abs(dx)+M.abs(dy);cam.x-=dx*cam.m;cam.y-=dy*cam.m;const now=performance.now(),dtm=M.max(1,now-lastMove)/1000;lastMove=now;
     vel.x=-dx*cam.m/dtm*0.6+vel.x*0.4;vel.y=-dy*cam.m/dtm*0.6+vel.y*0.4;zoomT=null}
   p.x=e.clientX;p.y=e.clientY;
   if(ptr.size===2){downAt=null;const [a,b]=[...ptr.values()];const d=M.hypot(a.x-b.x,a.y-b.y),mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
     if(pinch){const f=pinch.d/d;const wx=cam.x+(pinch.mx-VW/2)*cam.m,wy=cam.y+(pinch.my-VH/2)*cam.m;cam.m=clamp(cam.m*f,MINM,maxM());cam.x=wx-(mx-VW/2)*cam.m;cam.y=wy-(my-VH/2)*cam.m}
     pinch={d,mx,my};vel.x=vel.y=0}},SIG);
-const up=e=>{ptr.delete(e.pointerId);if(ptr.size<2)pinch=null;
+const up=e=>{if(hold===e.pointerId){hold=null;if(HK.pup)try{HK.pup(cam.x+(e.clientX-VW/2)*cam.m,cam.y+(e.clientY-VH/2)*cam.m,e.clientX,e.clientY,e.type==='pointercancel')}catch(err){console.error(err)}return}
+  ptr.delete(e.pointerId);if(ptr.size<2)pinch=null;
   if(ptr.size===0){drag=false;if(performance.now()-lastMove>90)vel.x=vel.y=0;
     if(downAt&&downAt.moved<6&&performance.now()-downAt.t<450&&e.type==='pointerup'){vel.x=vel.y=0;const sx=e.clientX,sy=e.clientY;clickT=setTimeout(()=>pick(sx,sy),230)}downAt=null}};
 let clickT=0;
@@ -312,14 +327,14 @@ function drawShips(lp){const m=cam.m,k=1/m;if(m>(lp?120:30))return;if(lp)ctx.glo
     W.drawShip(ctx,L,sh.st,sh.c)}
   ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}
 function drawEmitters(){const m=cam.m;if(m>28)return;ctx.setTransform(DPR,0,0,DPR,0,0);const k=1/m;const px=-W.WDY,py=W.WDX;
-  for(const e of W.emitters){if(!inView(e.x,e.y,e.k==='steam'?1500:700)||(e.city>=0&&W.growOf(e.city)<0.95))continue;
+  for(const e of W.emitters){if(!inView(e.x,e.y,e.k==='steam'?1500:700)||(e.city>=0&&W.growOf(e.city)<0.95)||W.isHid(e.zid))continue;
     const n=e.k==='steam'?16:e.k==='flare'?6:18,rate=e.k==='steam'?0.035:0.055,len=(e.k==='steam'?650:420)*e.s;
     for(let i=0;i<n;i++){const age=((T*rate+i/n+e.ph)%1);const wob=M.sin(age*5+e.ph*20+i)*age*40;
       const x=e.x+W.WDX*age*len+px*wob,y=e.y+W.WDY*age*len+py*wob;const X=sxw(x),Y=syw(y);
       let r,a,spr;if(e.k==='steam'){r=(30+age*150)*e.s;a=0.8*M.pow(1-age,1.2)*M.min(1,age*10+0.3);spr=PUFF_W}else if(e.k==='flare'){r=6+age*30;a=0.25*(1-age);spr=PUFF_D}else{r=(6+age*50)*e.s;a=0.6*(1-age)*M.min(1,age*12+0.2);spr=PUFF_G}
       const sz=r*2*k;if(sz<1||X+sz<0||Y+sz<0||X-sz>VW||Y-sz>VH)continue;ctx.globalAlpha=a;ctx.drawImage(spr,X-sz/2,Y-sz/2,sz,sz)}}ctx.globalAlpha=1}
 function drawFlares(nl){const m=cam.m;if(m>(nl>0.05?200:28))return;ctx.setTransform(DPR,0,0,DPR,0,0);const k=1/m;ctx.globalCompositeOperation='lighter';
-  for(const e of W.emitters){if(e.k!=='flare'||!inView(e.x,e.y,700)||(e.city>=0&&W.growOf(e.city)<0.95))continue;const X=sxw(e.x),Y=syw(e.y);const f=1+0.25*M.sin(T*13+e.ph*50)+0.15*M.sin(T*31+e.ph*9);
+  for(const e of W.emitters){if(e.k!=='flare'||!inView(e.x,e.y,700)||(e.city>=0&&W.growOf(e.city)<0.95)||W.isHid(e.zid))continue;const X=sxw(e.x),Y=syw(e.y);const f=1+0.25*M.sin(T*13+e.ph*50)+0.15*M.sin(T*31+e.ph*9);
     if(nl>0.02){const g=M.max(6,520*f*k);ctx.globalAlpha=nl*0.42;ctx.drawImage(GL_S,X-g/2,Y-g/2,g,g)}
     if(m>28)continue;const sz=M.max(4,26*f*k);ctx.globalAlpha=0.85;ctx.drawImage(FLAME,X-sz/2+3*k,Y-sz/2-2*k,sz,sz);ctx.globalAlpha=0.9;const s2=sz*0.45;ctx.drawImage(FLAME2,X-s2/2,Y-s2/2,s2,s2)}
   ctx.globalCompositeOperation='source-over';ctx.globalAlpha=1}
@@ -395,8 +410,10 @@ function drawPrecip(dt){const rain=wcur.rain,snow=wcur.snow,H=camH();const vis=s
     if(isSnow){const s=clamp(1.6/p.q,1.2,9);ctx.globalAlpha=vis*clamp(0.95-p.q*0.5,0.3,0.9)*br;ctx.drawImage(FLAKE,X-s/2,Y-s/2,s,s)}
     else{const qb=p.q*0.93;const X0=VW/2+(p.dx-wx*0.03*p.q)/(m*qb),Y0=VH/2+(p.dy-wy*0.03*p.q)/(m*qb);ctx.moveTo(X0,Y0);ctx.lineTo(X,Y)}}
   if(!isSnow)ctx.stroke();ctx.globalAlpha=1}
-const ZDYN={ref2:'НПЗ',farm:'Колхоз',ind:'Завод товаров',pow:'ТЭЦ',saw:'Лесопилка',oil:'Нефтевышка',ref:'НПЗ',port:'Порт',mil:'Военная часть',sam:'ПВО'};
-const ZNAME={ref2:'НПЗ',saw:'Лесопилка',oil:'Нефтевышка',sam:'ПВО',mil:'Военная база',air:'Аэропорт',ref:'НПЗ',pow:'ТЭЦ',port:'Порт',ind:'Промзона',solar:'Солнечная электростанция',agro:'Тепличный комбинат',farm:'Ферма',dacha:'СНТ',cem:'Кладбище',quarry:'Карьер',gas:'АЗС',stn:'Вокзал'};const ZLIM={mil:12,gas:2.5,farm:5,cem:5,dacha:6,stn:5};
+const ZDYN={ref2:'НПЗ',farm:'Колхоз',ind:'Завод товаров',pow:'ТЭЦ',saw:'Лесопилка',oil:'Нефтевышка',ref:'НПЗ',port:'Порт',mil:'Военная часть',sam:'ПВО',
+  sol2:'Солнечные панели',mine:'Рудник',gasw:'Газовая скважина',rst:'Вокзал',dport:'Дронопорт',dramp:'Пусковая рампа',drwy:'ВПП',dstore:'Склад БПЛА',dfab:'Цех БПЛА'};
+const ZNAME={ref2:'НПЗ',saw:'Лесопилка',oil:'Нефтевышка',sam:'ПВО',mil:'Военная база',air:'Аэропорт',ref:'НПЗ',pow:'ТЭЦ',port:'Порт',ind:'Промзона',solar:'Солнечная электростанция',agro:'Тепличный комбинат',farm:'Ферма',dacha:'СНТ',cem:'Кладбище',quarry:'Карьер',gas:'АЗС',stn:'Вокзал',sol2:'Солнечные панели',mine:'Рудник',gasw:'Газовая скважина',rst:'Вокзал',dport:'Дронопорт',dramp:'Пусковая рампа',drwy:'ВПП',dstore:'Склад БПЛА',dfab:'Цех БПЛА'};
+const ZLIM={mil:12,gas:2.5,farm:5,cem:5,dacha:6,stn:5,sol2:2.5,dramp:2,gasw:4,dstore:4,drwy:5};
 function drawLabels(){ctx.setTransform(DPR,0,0,DPR,0,0);const m=cam.m;const boxes=[];ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineJoin='round';
   const lim=[9,32,95,380],fs=[11,12.5,15,19];const nl=LG.night;
   for(const c of W.cities){if(m>lim[c.type])continue;const X=sxw(c.x),Y=syw(c.y);if(X<-100||Y<-30||X>VW+100||Y>VH+30||(HK.seen&&!HK.seen(c.x,c.y)))continue;
@@ -522,7 +539,7 @@ function bgCam(dt){bgA+=dt*0.02;const r=bgC.R*0.5;cam.x=bgC.x+M.cos(bgA)*r;cam.y
 if(MODE==='bg')bgCam(0);
 function destroy(){if(!alive)return;alive=false;AC.abort();clearInterval(lowT);clearTimeout(introT);clearTimeout(clickT);for(const w of workers)w.terminate();if(wurl)URL.revokeObjectURL(wurl);
   for(const mp of [cache,stale,LCS[1],LCS[2],LCS[3]])for(const v of mp.values())if(v.b&&v.b.close)v.b.close();closeInsp();if(window.__world&&window.__world.W===W)window.__world=null}
-const API={get ops(){return OPS},op,W,cam,flyTo,zoomAt,maxM,opt,LG,wcur,hover,setGrow,invalidate,setTod,setSpeed,setSeason,destroy,closeInsp,pick,
+const API={get ops(){return OPS},op,W,cam,setHidden,flyTo,zoomAt,maxM,opt,LG,wcur,hover,setGrow,invalidate,setTod,setSpeed,setSeason,destroy,closeInsp,pick,
   get VW(){return VW},get VH(){return VH},get DPR(){return DPR},get T(){return T},get tod(){return tod},get fps(){return fpsA},get ready(){return readyFired},
   sxw,syw,toWorld:(sx,sy)=>[cam.x+(sx-VW/2)*cam.m,cam.y+(sy-VH/2)*cam.m],setTodRate:r=>{todRate=r},isNight,
   showCity:c=>{sel={k:'city',o:c};showInsp()},
