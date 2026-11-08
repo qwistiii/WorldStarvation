@@ -235,7 +235,7 @@ export function deadEnds(W) {
     return false;
   };
   for (const r of W.roads) {
-    if (r.k === 8 || r.k === 5 || vst.has(r)) continue;
+    if (r.k === 8 || r.k === 5 || vst.has(r) || r.stub) continue; // stub: отведена от магистрали и кончается у её обочины
     if (Math.hypot(r.pts[0] - r.pts[r.n * 2 - 2], r.pts[1] - r.pts[r.n * 2 - 1]) < 1) continue;
     for (const e of [0, r.n - 1]) {
       const x = r.pts[e * 2], y = r.pts[e * 2 + 1];
@@ -327,6 +327,37 @@ export function railEnds(W) {
       const st = W.zones.some((z) => z.zk === 'stn' && Math.hypot(z.x - x, z.y - y) < 270);
       const other = W.queryRoads(x - 10, y - 10, x + 10, y + 10).some((o) => o !== r && o.k === 5);
       if (!st && !other) out.push({ r, x, y });
+    }
+  }
+  return out;
+}
+
+// изломы: у загородных дорог (и проспектов-продолжений) нет поворота круче 60° на одной вершине
+export function sharpBends(W, maxDeg = 60) {
+  const out = [], c = Math.cos(maxDeg * Math.PI / 180);
+  for (const r of W.roads) {
+    if (r.city !== undefined || r.k === 8 || r.k === 6 || r.k === 5 || r.ring) continue;
+    for (let i = 1; i < r.n - 1; i++) {
+      const ax = r.pts[i * 2] - r.pts[i * 2 - 2], ay = r.pts[i * 2 + 1] - r.pts[i * 2 - 1], bx = r.pts[i * 2 + 2] - r.pts[i * 2], by = r.pts[i * 2 + 3] - r.pts[i * 2 + 1];
+      const la = Math.hypot(ax, ay), lb = Math.hypot(bx, by); if (la < 0.5 || lb < 0.5) continue;
+      if ((ax * bx + ay * by) / (la * lb) < c) { out.push({ r, x: r.pts[i * 2], y: r.pts[i * 2 + 1] }); break; }
+    }
+  }
+  return out;
+}
+
+// второстепенная дорога не примыкает к магистрали в одном уровне
+export function minorOnHighway(W) {
+  const RW = W._dbg.RW, out = [];
+  for (const r of W.roads) {
+    if (r.city !== undefined || ![3, 4].includes(r.k)) continue; // трасса (k=1) может вливаться в магистраль по касательной
+    for (const e of [0, 1]) {
+      const x = e ? r.pts[r.n * 2 - 2] : r.pts[0], y = e ? r.pts[r.n * 2 - 1] : r.pts[1];
+      for (const o of W.queryRoads(x - 20, y - 20, x + 20, y + 20)) {
+        if (o.k !== 0 || o.ring) continue;
+        let d = 1e9; for (let i = 0; i < o.n - 1; i++) { const ax = o.pts[i * 2], ay = o.pts[i * 2 + 1], dx = o.pts[i * 2 + 2] - ax, dy = o.pts[i * 2 + 3] - ay, l2 = dx * dx + dy * dy || 1; const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / l2)); d = Math.min(d, Math.hypot(ax + dx * t - x, ay + dy * t - y)); }
+        if (d < RW[0] / 2 + RW[r.k] / 2) { out.push({ r, x, y }); break; }
+      }
     }
   }
   return out;
