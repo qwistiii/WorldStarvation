@@ -3,7 +3,7 @@
 <meta http-equiv="Cache-Control" content="no-cache">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>World Starvation — стратегия</title>
-<link rel="stylesheet" href="src/style.css?v=5.7">
+<link rel="stylesheet" href="src/style.css?v=5.8">
 </head>
 <body class="m-menu">
 <canvas id="c"></canvas>
@@ -132,41 +132,55 @@
  </div>
 </div>
 
-<!-- ======================================================= game HUD -->
-<div id="hud" class="gm">
- <div class="hb-l"><canvas id="hflag" width="72" height="48"></canvas><div class="hb-n"><b id="hname">—</b><small id="hgov">—</small></div></div>
- <div class="hb-time"><button class="bb-btn" id="bpause" title="Пауза — пробел или P"></button><button class="bb-btn bb-sp" id="bspeed" title="Скорость — F или Tab">×1</button><div class="clk"><b id="gclock">День 1 · 08:00</b><small id="glimit"></small></div></div>
- <div class="hb-res">
-  <div class="res wide" title="Казна и доход в секунду"><span class="ri ri-money"></span><b id="rmoney-v">0</b><small id="rinc-v"></small></div>
-  <div class="res" title="Еда: запас и изменение в секунду"><span class="ri ri-food"></span><b id="rfood-v">0</b><small id="rfood-f"></small></div>
-  <div class="res" title="Товары"><span class="ri ri-goods"></span><b id="rgoods-v">0</b><small id="rgoods-f"></small></div>
-  <div class="res" title="Энергия: производство / потребность"><span class="ri ri-energy"></span><b id="renergy-v">0</b><small id="renergy-f"></small></div>
-  <div class="res" title="Древесина"><span class="ri ri-wood"></span><b id="rwood-v">0</b><small id="rwood-f"></small></div>
-  <div class="res" title="Нефть"><span class="ri ri-oil"></span><b id="roil-v">0</b><small id="roil-f"></small></div>
-  <div class="res" title="Топливо"><span class="ri ri-fuel"></span><b id="rfuel-v">0</b><small id="rfuel-f"></small></div>
-  <div class="res" title="Металл: рудники на железе, меди, литии — для дронов"><span class="ri ri-metal"></span><b id="rmetal-v">0</b><small id="rmetal-f"></small></div>
-  <div class="res" title="Население"><span class="ri ri-pop"></span><b id="rpop-v">0</b></div>
- </div>
- <div class="hb-r"><button class="btn hbtn" id="bmenu" title="Меню (Esc)">☰</button></div>
+<!-- ======================================================= game HUD (stage 5.8, laid out as in DroneFlames)
+ top bar: flag and country (opens the state) · score and the race to victory · clock · menu. Under it, in the middle:
+ the resources pill (opens the store), the guide and the news. Bottom: the tabs over the panel — pause and speed, then the
+ keys of the open tab; a selected building or army shows its card in place of the panel -->
+<div id="hud" class="gm ol">
+ <button class="hb-l" id="hstate" title="Ваше государство"><canvas id="hflag" width="72" height="48"></canvas><span class="hb-n"><b id="hname">—</b><small id="hgov">—</small></span></button>
+ <div class="hb-sc" title="Очки: население, заработанное и земли"><span class="ri ri-score"></span><span><b id="hscore">0</b><small id="hrace"></small></span></div>
+ <div class="clk"><b id="gclock">08:00</b><small id="glimit"></small></div>
+ <button class="sl hb-menu" id="bmenu" title="Меню (Esc)"><span class="ic ic-menu"></span></button>
 </div>
-<!-- bottom dock (stage 5.7, as in DroneFlames): the tab bar across the whole screen, the tray of the open tab above it -->
-<div id="bbar" class="gm">
- <div class="bb-tray" id="bb-tray"><div class="bb-th"><b id="bb-title">Города</b><small id="bb-sub"></small><button class="bb-hide" id="bb-hide" title="Свернуть (повторный клик по вкладке)">▾</button></div>
-  <div class="bb-row"><button class="bb-arr" id="bb-l" title="Назад">‹</button><div id="bb-cat"></div><button class="bb-arr" id="bb-r" title="Дальше">›</button></div></div>
+<div id="topcol" class="gm ol">
+ <button id="hres" title="Склад: запасы и их изменение">
+  <span class="res" id="rmoney" title="Казна и доход в секунду"><span class="ri ri-money"></span><b id="rmoney-v">0</b><small id="rinc-v"></small></span>
+  <span class="res" id="renergy"><span class="ri ri-energy"></span><b id="renergy-v">0</b></span>
+  <span class="res" id="rfood"><span class="ri ri-food"></span><b id="rfood-v">0</b></span>
+  <span class="res" id="rgoods"><span class="ri ri-goods"></span><b id="rgoods-v">0</b></span>
+  <span class="res" id="rwood"><span class="ri ri-wood"></span><b id="rwood-v">0</b></span>
+  <span class="res" id="roil"><span class="ri ri-oil"></span><b id="roil-v">0</b></span>
+  <span class="res" id="rfuel"><span class="ri ri-fuel"></span><b id="rfuel-v">0</b></span>
+  <span class="res" id="rmetal"><span class="ri ri-metal"></span><b id="rmetal-v">0</b></span>
+  <span class="res" id="rpop" title="Население"><span class="ri ri-pop"></span><b id="rpop-v">0</b></span>
+  <span class="res st"><span class="ri ri-store"></span><b id="rstore">Склад</b></span>
+ </button>
+ <div id="hint"><span class="hint-i"><span class="ic ic-hint"></span></span><div class="hint-c"><small id="hintn">План развития</small><div class="hint-t" id="hintt"></div></div><button class="xb st" id="hintx" title="Скрыть — вернуть: «План развития» слева">✕</button></div>
+ <div id="toasts"></div>
+</div>
+<button id="plan" class="gm ol" title="План развития: подсказки по шагам — показать или скрыть"><b>План развития</b><span id="plann"></span><i>▸</i></button>
+<div id="found" class="gm ol"><button class="bcat" id="a-found" data-tn="Основать столицу" data-td="Кликните по карте, где стоять столице. Хорошее место: равнина у реки или моря, подальше от края мира. Боты выберут свои столицы одновременно с вами"><span class="sl"><span class="ic ic-capital"></span></span><b>Основать<br>столицу</b></button><button class="xb" id="a-found-x" title="Отмена (Esc)">✕</button></div>
+<div id="bbar" class="gm ol">
+ <div id="gpanel"></div>
  <div class="bb-tabs" id="bb-tabs"></div>
+ <div class="bb-tray" id="bb-tray">
+  <div class="bb-keys"><button class="bcat" id="bpause" data-tn="Пауза" data-td="Пробел или P"><span class="sl"><span class="ic ic-pause"></span></span><b>Пауза</b></button><button class="bcat" id="bspeed" data-tn="Скорость: ×1 → ×2 → ×4" data-td="F или Tab"><span class="sl"><span class="ic ic-speed"></span><i id="bspd">x1</i></span><b>Скорость</b></button></div>
+  <span class="bb-div"></span>
+  <button class="bb-arr" id="bb-l" title="Назад">‹</button><div id="bb-cat"></div><button class="bb-arr" id="bb-r" title="Дальше">›</button>
+ </div>
 </div>
-<div id="hint" class="gm"><div class="hint-n" id="hintn">1</div><div class="hint-t" id="hintt"></div><button class="x" id="hintx">✕</button></div>
-<div id="gpanel" class="gm pn2"></div>
-<div id="toasts" class="gm"></div>
-<div id="confirm" class="gm"><div class="cf-t" id="cft">Основать столицу здесь?</div><div class="cf-s" id="cfs"></div><div class="cf-b"><button class="btn primary" id="cfy">Да</button><button class="btn sq" id="cfn">✕</button></div></div>
-<div id="dip" class="gm win side-win"><div class="win-h"><h3>Дипломатия</h3><button class="x" id="dipx">✕</button></div><div class="win-b" id="dipb"></div></div>
-<div id="pause" class="screen dim"><div class="win pause-win"><h2>Пауза</h2><div class="pv" id="pinfo"></div>
+<div id="ktip" class="gm ol"></div>
+<div id="mystate" class="gm ol win side-win"><div class="win-h"><canvas id="msf" width="54" height="36"></canvas><h3 id="msh">Государство</h3><button class="xb" id="msx" title="Закрыть">✕</button></div><div class="win-b" id="msb"></div></div>
+<div id="store" class="gm ol win side-win"><div class="win-h"><span class="ri ri-store"></span><h3>Склад</h3><button class="xb" id="stx" title="Закрыть">✕</button></div><div class="win-b" id="stb"></div></div>
+<div id="confirm" class="gm ol"><div class="cf-t" id="cft">Основать столицу здесь?</div><div class="cf-s" id="cfs"></div><div class="cf-b"><button class="btn primary" id="cfy">Да</button><button class="btn danger sq" id="cfn" title="Отмена">✕</button></div></div>
+<div id="dip" class="gm ol win side-win"><div class="win-h"><span class="ri ri-dip"></span><h3>Дипломатия</h3><button class="xb" id="dipx" title="Закрыть">✕</button></div><div class="win-b" id="dipb"></div></div>
+<div id="pause" class="screen dim"><div class="win pause-win ol"><h2>Пауза</h2><div class="pv" id="pinfo"></div>
  <button class="btn big" id="presume">Продолжить</button><button class="btn big" id="psave">Сохранить</button><button class="btn big" id="pset">Настройки</button><button class="btn big danger" id="pexit">Выйти в главное меню</button></div></div>
-<div id="over" class="screen dim"><div class="win over-win"><div id="overc"></div><button class="btn primary big" id="overm">В главное меню</button><button class="btn big" id="overk">Продолжить смотреть</button></div></div>
+<div id="over" class="screen dim"><div class="win over-win ol"><div id="overc"></div><button class="btn primary big" id="overm">В главное меню</button><button class="btn big" id="overk">Продолжить смотреть</button></div></div>
 
-<script src="src/flag.js?v=5.7"></script>
-<script src="src/gen.js?v=5.7"></script>
-<script src="src/main.js?v=5.7"></script>
-<script src="src/game.js?v=5.7"></script>
-<script src="src/ui.js?v=5.7"></script>
+<script src="src/flag.js?v=5.8"></script>
+<script src="src/gen.js?v=5.8"></script>
+<script src="src/main.js?v=5.8"></script>
+<script src="src/game.js?v=5.8"></script>
+<script src="src/ui.js?v=5.8"></script>
 </body></html>
