@@ -174,73 +174,182 @@ function buildCity(c){
   const R=rng(c.seed^0x55);c.ang=R()*PI;c.ca=M.cos(c.ang);c.sa=M.sin(c.ang);
   if(c.type===3){c.bu=140+R()*40;c.bv=110+R()*30}else if(c.type===2){c.bu=118+R()*30;c.bv=95+R()*25}else{c.bu=92+R()*25;c.bv=78+R()*20}
   if(EMPTY&&c.type>=2)cityLayout(c);
-  const N=c.N=M.ceil(c.R*1.3/M.min(c.bu,c.bv)),D=c.D=2*N+1;const ok=new Uint8Array(D*D);
-  const us=c.us=new Float64Array(D),vs=c.vs=new Float64Array(D);for(let k=1;k<=N;k++){us[N+k]=us[N+k-1]+c.bu*(0.7+0.6*R());us[N-k]=us[N-k+1]-c.bu*(0.7+0.6*R());vs[N+k]=vs[N+k-1]+c.bv*(0.7+0.6*R());vs[N-k]=vs[N-k+1]-c.bv*(0.7+0.6*R())}
-  for(let j=0;j<D;j++)for(let i=0;i<D;i++){const u=us[i],v=vs[j];let x,y;if(c.wp)[x,y]=cW(c,u,v);else{x=c.x+u*c.ca-v*c.sa;y=c.y+u*c.sa+v*c.ca}
+  if(c.pol){buildPolar(c);return}
+  const N=c.N=M.ceil(c.R*1.3/M.min(c.bu,c.bv)),D=c.D=2*N+1;const ok=new Uint8Array(D*D);const j0=c.jit?0.6:0.7,jw=c.jit?0.85:0.6;if(c.lay)lineKinds(c);
+  const us=c.us=new Float64Array(D),vs=c.vs=new Float64Array(D);for(let k=1;k<=N;k++){us[N+k]=us[N+k-1]+c.bu*(j0+jw*R());us[N-k]=us[N-k+1]-c.bu*(j0+jw*R());vs[N+k]=vs[N+k-1]+c.bv*(j0+jw*R());vs[N-k]=vs[N-k+1]-c.bv*(j0+jw*R())}
+  for(let j=0;j<D;j++)for(let i=0;i<D;i++){const u=us[i],v=vs[j];let x,y;if(c.cv)[x,y]=cW(c,u,v);else{x=c.x+u*c.ca-v*c.sa;y=c.y+u*c.sa+v*c.ca}
     if(cityF(c,x,y)<1){const e=landE(x,y,0.0025);if(e>=0&&e<0.42)ok[j*D+i]=1}}
   const BD=D-1;const bl=c.blocks=new Uint8Array(BD*BD);let stad=false,cnt=0;
   for(let j=0;j<BD;j++)for(let i=0;i<BD;i++){if(!(ok[j*D+i]&&ok[j*D+i+1]&&ok[(j+1)*D+i]&&ok[(j+1)*D+i+1]))continue;
-    if(c.wp){const f=blkFrame(c,i,j);if(wetArea(f[0],f[1],f[2],f[3],-f[4],-f[5],f[4],f[5],28,0.0015))continue}
+    if(c.cv){const f=blkFrame(c,i,j);if(wetArea(f[0],f[1],f[2],f[3],-f[4],-f[5],f[4],f[5],c.lay?18:28,0.0015,!!c.lay))continue}
     else if(wetArea(c.x,c.y,c.ca,c.sa,us[i],vs[j],us[i+1],vs[j+1],28,0.0015))continue; // a river between the corners: no block over it
-    const u=(us[i]+us[i+1])/2,v=(vs[j]+vs[j+1])/2;let x,y;if(c.wp)[x,y]=cW(c,u,v);else{x=c.x+u*c.ca-v*c.sa;y=c.y+u*c.sa+v*c.ca}
-    const Rb=rng(hh(c.id,i*977+j,51));let t=pickType(c,cityF(c,x,y),Rb);if(t===9){if(stad)t=5;else stad=true}bl[j*BD+i]=t;cnt++}
+    const u=(us[i]+us[i+1])/2,v=(vs[j]+vs[j+1])/2;let x,y;if(c.cv)[x,y]=cW(c,u,v);else{x=c.x+u*c.ca-v*c.sa;y=c.y+u*c.sa+v*c.ca}
+    const Rb=rng(hh(c.id,i*977+j,51));let t=pickType(c,cityF(c,x,y),Rb);if(t===9){if(stad)t=5;else stad=true}
+    if(c.lay){const f=blkFrame(c,i,j);if(M.min(f[4],f[5])<34)t=Rb()<0.6?5:23} // a narrow block of a bent grid: a garden or a small square
+    bl[j*BD+i]=t;cnt++}
   c.nblocks=cnt;
-  if(c.cap!==undefined){let bd=1e18,bk=-1;for(let j=0;j<BD;j++)for(let i=0;i<BD;i++){if(!bl[j*BD+i])continue;const d=((us[i]+us[i+1])/2)**2+((vs[j]+vs[j+1])/2)**2;if(d<bd){bd=d;bk=j*BD+i}}if(bk>=0)bl[bk]=21}
+  if(c.diag)addDiag(c);
+  if(c.cap!==undefined){let bd=1e18,bk=-1;for(let j=0;j<BD;j++)for(let i=0;i<BD;i++){if(!bl[j*BD+i]||(c.diag&&bl[j*BD+i]===20))continue;const d=((us[i]+us[i+1])/2)**2+((vs[j]+vs[j+1])/2)**2;if(d<bd){bd=d;bk=j*BD+i}}if(bk>=0)bl[bk]=21}
+  if(c.mrg)mergeBlocks(c);
+  if(c.kU){gridStreets(c,ok);if(c.dgl)for(const p of c.dgl){const r=mkRoad(7,p,{city:c.id,dg:1});if(r)bridgesOf(r)}return}
   const blk=(i,j)=>i>=0&&j>=0&&i<BD&&j<BD&&bl[j*BD+i]>0;
   // streets along U (fixed j)
   const eU=c.eU=new Uint8Array(D*D),eV=c.eV=new Uint8Array(D*D);
-  const bridgeGap=(k,a0,a1,b0,b1)=>{if(k!==2&&k!==7)return;const A=cpt(c,a0,a1),B=cpt(c,b0,b1);const L=M.hypot(B[0]-A[0],B[1]-A[1]);if(L>520||L<20)return;let w=0;for(let q=1;q<6;q++){if(landE(A[0]+(B[0]-A[0])*q/6,A[1]+(B[1]-A[1])*q/6,0)<0)w++}if(w<2)return;const r=mkRoad(k,c.wp?gridLine(c,a0,a1,b0,b1):[A[0],A[1],B[0],B[1]],{city:c.id});if(r)bridgesOf(r)};
   // an edge with blocks on both sides is dry (blocks are checked for water), only open edges may cross a river
   for(let j=0;j<D;j++){let s=-1,le=-1,op=0;for(let i=0;i<=D;i++){const e=i<D-1&&ok[j*D+i]&&ok[j*D+i+1]&&(blk(i,j-1)||blk(i,j));if(e){eU[j*D+i]=1;if(!(blk(i,j-1)&&blk(i,j)))op=1}
-      if(e&&s<0){s=i;if(le>=0)bridgeGap(lineKind(j-N),le-N,j-N,i-N,j-N)}if(!e&&s>=0){addStreet(c,s-N,j-N,i-N,j-N,lineKind(j-N),op);le=i;s=-1;op=0}}}
+      if(e&&s<0){s=i;if(le>=0)bridgeGap(c,lineKind(j-N),le-N,j-N,i-N,j-N)}if(!e&&s>=0){addStreet(c,s-N,j-N,i-N,j-N,lineKind(j-N),op);le=i;s=-1;op=0}}}
   for(let i=0;i<D;i++){let s=-1,le=-1,op=0;for(let j=0;j<=D;j++){const e=j<D-1&&ok[j*D+i]&&ok[(j+1)*D+i]&&(blk(i-1,j)||blk(i,j));if(e){eV[j*D+i]=1;if(!(blk(i-1,j)&&blk(i,j)))op=1}
-      if(e&&s<0){s=j;if(le>=0)bridgeGap(lineKind(i-N),i-N,le-N,i-N,j-N)}if(!e&&s>=0){addStreet(c,i-N,s-N,i-N,j-N,lineKind(i-N),op);le=j;s=-1;op=0}}}
+      if(e&&s<0){s=j;if(le>=0)bridgeGap(c,lineKind(i-N),i-N,le-N,i-N,j-N)}if(!e&&s>=0){addStreet(c,i-N,s-N,i-N,j-N,lineKind(i-N),op);le=j;s=-1;op=0}}}
 }
+// an avenue or boulevard line broken by a short stretch of water gets a bridge over it
+function bridgeGap(c,k,a0,a1,b0,b1){if(k!==2&&k!==7)return;const A=cpt(c,a0,a1),B=cpt(c,b0,b1);const L=M.hypot(B[0]-A[0],B[1]-A[1]);if(L>520||L<20)return;let w=0;for(let q=1;q<6;q++){if(landE(A[0]+(B[0]-A[0])*q/6,A[1]+(B[1]-A[1])*q/6,0)<0)w++}if(w<2)return;const r=mkRoad(k,c.cv?gridLine(c,a0,a1,b0,b1):[A[0],A[1],B[0],B[1]],{city:c.id});if(r)bridgesOf(r)}
 // any water inside the rectangle [u0,u1]x[v0,v1] of a rotated frame (origin ox,oy), sampled every ~st metres
-function wetArea(ox,oy,ca,sa,u0,v0,u1,v1,st,mg){const nu=M.max(1,M.ceil((u1-u0)/st)),nv=M.max(1,M.ceil((v1-v0)/st));
+function wetArea(ox,oy,ca,sa,u0,v0,u1,v1,st,mg,exact){const nu=M.max(1,M.ceil((u1-u0)/st)),nv=M.max(1,M.ceil((v1-v0)/st));
   // fast path: far from any river channel (riverV changes by < 3e-4 per metre) only the sea can be inside
-  const um=(u0+u1)/2,vm=(v0+v1)/2,cx=ox+um*ca-vm*sa,cy=oy+um*sa+vm*ca;if(M.abs(riverV(cx,cy))>RWMAX+mg+M.hypot(u1-u0,v1-v0)*1.6e-4){
+  const um=(u0+u1)/2,vm=(v0+v1)/2,cx=ox+um*ca-vm*sa,cy=oy+um*sa+vm*ca;if(!exact&&M.abs(riverV(cx,cy))>RWMAX+mg+M.hypot(u1-u0,v1-v0)*1.6e-4){
     for(let a=0;a<=2;a++)for(let b=0;b<=2;b++){const u=u0+(u1-u0)*a/2,v=v0+(v1-v0)*b/2;if(baseH(ox+u*ca-v*sa,oy+u*sa+v*ca,7)<0.004)return true}return false}
   for(let a=0;a<=nu;a++)for(let b=0;b<=nv;b++){const u=u0+(u1-u0)*a/nu,v=v0+(v1-v0)*b/nv;if(landE(ox+u*ca-v*sa,oy+u*sa+v*ca,mg)<0)return true}return false}
 function bsr(a,v){let lo=0,hi=a.length-1;if(v<=a[0])return -1;if(v>=a[hi])return hi;while(hi-lo>1){const m=(lo+hi)>>1;if(a[m]>v)hi=m;else lo=m}return lo}
-function cpt(c,i,j){const u=c.us[i+c.N],v=c.vs[j+c.N];if(c.wp)return cW(c,u,v);return [c.x+u*c.ca-v*c.sa,c.y+u*c.sa+v*c.ca]}
-// ---------------------------------------------------------------- town layouts of the game (stage 5.7)
-// A game town may have a bent street grid: the grid frame z = u + iv is mapped by w = F(z) = z + a z^2/L + b z^3/L^2
-// (a, b complex, L ~ the town radius). F is conformal, so streets curve but still meet at right angles and every block
-// stays a rectangle in a frame rotated by arg F'(z) and scaled by |F'(z)|. Classic towns have no c.wp (plain grid).
-function cityLayout(c){const Q=rng(c.seed^0x4c41a7);const lay=Q();
+function cpt(c,i,j){const u=c.us[i+c.N],v=c.vs[j+c.N];if(c.cv)return cW(c,u,v);return [c.x+u*c.ca-v*c.sa,c.y+u*c.sa+v*c.ca]}
+// ---------------------------------------------------------------- town layouts of the game (stages 5.7, 5.11)
+// Families (c.lay): 'grid' — a straight grid with superblocks and, often, diagonal boulevards; 'bent' — the grid frame
+// z = u + iv mapped by the conformal w = F(z) = z + a z^2/L + b z^3/L^2 (streets curve but meet at right angles, every
+// block is a rectangle in a frame rotated by arg F' and scaled by |F'|); 'organic' — a strongly bent grid with uneven
+// spacing, many merged blocks and open squares; 'radial' — rings and rays around a round central square (u = distance
+// from the centre, v = angle · c.prr); 'fan' — rays and arcs fanning out from a square at one side of the town.
+// Superblocks: a block may span several grid cells (c.sp: (si-1) | (sj-1)<<4 at its first cell, c.ms: the first cell
+// for the others); the streets between its cells are left out, so the grid gets T-junctions and big courtyards.
+// Avenues and boulevards stand on their own lines in each town (c.kU / c.kV: road kind of every grid line).
+// Classic towns have none of this (plain grid, lineKind()).
+const FAMS=['radial','grid','fan','bent','organic'];
+function cityLayout(c){const Q=rng(c.seed^0x4c41a7);
+  // capitals of one game all differ (the family rotates with the state), other towns draw theirs
+  const fam=c.lay=c.cap!==undefined?FAMS[(hh(SS|0,7,91)%5+c.cap)%5]:FAMS[Q()*5|0];
+  if(fam==='radial'){c.pol={full:1,off:0,th:TAU,rin:120+Q()*60};c.cv=1;return}
+  if(fam==='fan'){c.pol={full:0,off:c.R*(0.42+Q()*0.2),th:PI*(1.1+Q()*0.3),rin:95+Q()*45};c.cv=1;return}
   // block proportions: square-ish, long slabs along one axis or the other
-  const asp=Q()<0.3?1:0.62+Q()*0.8;c.bu*=M.sqrt(asp);c.bv/=M.sqrt(asp);
-  if(lay<0.2)return; // a plain grid, but with its own proportions
-  const a=(0.13+Q()*0.11)*(lay<0.55?1.1:1),aa=Q()*TAU,b=lay<0.55?Q()*0.02:0.03+Q()*0.04,ba=Q()*TAU;
-  c.wp=[a*M.cos(aa),a*M.sin(aa),b*M.cos(ba),b*M.sin(ba)];c.wL=c.R*1.3}
+  const asp=Q()<0.3?1:0.62+Q()*0.8;c.bu*=M.sqrt(asp);c.bv/=M.sqrt(asp);c.mrg=fam==='organic'?0.3:0.16;c.opn=fam==='organic'?0.07:0.035;
+  if(fam==='grid'){c.diag=Q()<0.75?1+(Q()<0.55?1:0):0;return}
+  const s=fam==='organic'?1.25:1,a=(0.12+Q()*0.1)*s,aa=Q()*TAU,b=(0.015+Q()*0.035)*s,ba=Q()*TAU;
+  if(fam==='organic')c.jit=1;
+  c.wp=[a*M.cos(aa),a*M.sin(aa),b*M.cos(ba),b*M.sin(ba)];c.wL=c.R*1.3;c.cv=1}
+// avenues and boulevards of a game town: the central lines and then a major line every 3..6 lines (organic: 2..6)
+function lineKinds(c){const R=rng(c.seed^0x1b2c3),D=c.D,N=c.N,g0=c.lay==='organic'?2:3;
+  const mk=()=>{const a=new Uint8Array(D).fill(3);a[N]=R()<0.55?7:2;for(const dir of [1,-1]){let since=0,gap=g0+(R()*4|0);for(let q=1;q<=N;q++){if(++since>=gap){a[N+dir*q]=R()<0.3?7:2;since=0;gap=g0+(R()*4|0)}}}return a};
+  c.kU=mk();c.kV=mk()}
+function lkU(c,i){return c.kU?c.kU[i]:lineKind(i-c.N)}
+function lkV(c,j){return c.kV?c.kV[j]:lineKind(j-c.N)}
+function lineKind(n){n=((n%8)+8)%8;return n===0?7:n===4?2:3}
+function lineHalf(n){const k=lineKind(n);return k===7?14.5:k===2?10:5}
+const KH=k=>k===7?14.5:k===2?10:5;
 function wpF(c,u,v){const L=c.wL,w=c.wp,x=u/L,y=v/L,x2=x*x-y*y,y2=2*x*y,x3=x2*x-y2*y,y3=x2*y+y2*x;return [u+L*(w[0]*x2-w[1]*y2+w[2]*x3-w[3]*y3),v+L*(w[0]*y2+w[1]*x2+w[2]*y3+w[3]*x3)]}
 function wpD(c,u,v){const L=c.wL,w=c.wp,x=u/L,y=v/L,x2=x*x-y*y,y2=2*x*y;return [1+2*(w[0]*x-w[1]*y)+3*(w[2]*x2-w[3]*y2),2*(w[0]*y+w[1]*x)+3*(w[2]*y2+w[3]*x2)]}
+// polar towns: (u, v) = (distance from the origin c.px,c.py; angle from c.ang times c.prr)
+function plW(c,u,v){const a=c.ang+v/c.prr;return [c.px+u*M.cos(a),c.py+u*M.sin(a)]}
+function plU(c,x,y){const dx=x-c.px,dy=y-c.py;let a=M.atan2(dy,dx)-c.ang;const a0=c.pol.full?c.vs[0]/c.prr:-PI;a-=M.floor((a-a0)/TAU)*TAU;return [M.hypot(dx,dy),a*c.prr]}
 // town grid (u, v) → world, world → town grid (Newton on F)
-function cW(c,u,v){if(c.wp){const q=wpF(c,u,v);u=q[0];v=q[1]}return [c.x+u*c.ca-v*c.sa,c.y+u*c.sa+v*c.ca]}
-function cU(c,x,y){const dx=x-c.x,dy=y-c.y,wu=dx*c.ca+dy*c.sa,wv=-dx*c.sa+dy*c.ca;if(!c.wp)return [wu,wv];let u=wu,v=wv;
+function cW(c,u,v){if(c.pol)return plW(c,u,v);if(c.wp){const q=wpF(c,u,v);u=q[0];v=q[1]}return [c.x+u*c.ca-v*c.sa,c.y+u*c.sa+v*c.ca]}
+function cU(c,x,y){if(c.pol)return plU(c,x,y);const dx=x-c.x,dy=y-c.y,wu=dx*c.ca+dy*c.sa,wv=-dx*c.sa+dy*c.ca;if(!c.wp)return [wu,wv];let u=wu,v=wv;
   for(let it=0;it<8;it++){const f=wpF(c,u,v),fr=f[0]-wu,fi=f[1]-wv;if(fr*fr+fi*fi<1e-6)break;const d=wpD(c,u,v),dd=d[0]*d[0]+d[1]*d[1];u-=(fr*d[0]+fi*d[1])/dd;v-=(fi*d[0]-fr*d[1])/dd}return [u,v]}
+// grid cells covered by block (bi, bj): [si, sj]
+function blkSpan(c,bi,bj){if(!c.sp)return SP11;const q=c.sp[bj*(c.D-1)+bi];return q?[(q&15)+1,(q>>4)+1]:SP11}
+const SP11=[1,1];
 // frame of block (bi, bj): [centre x, centre y, axis cos, axis sin, half width, half height] in world metres
-function blkFrame(c,bi,bj){const u=(c.us[bi]+c.us[bi+1])/2,v=(c.vs[bj]+c.vs[bj+1])/2,hu=(c.us[bi+1]-c.us[bi])/2,hv=(c.vs[bj+1]-c.vs[bj])/2;
+function blkFrame(c,bi,bj){const sp=blkSpan(c,bi,bj),u0=c.us[bi],u1=c.us[bi+sp[0]],v0=c.vs[bj],v1=c.vs[bj+sp[1]];
+  if(c.pol){ // an annular sector: the largest rectangle (on the middle ray) that keeps clear of both rays and the outer arc
+    const h=(v1-v0)/2/c.prr,a=c.ang+(v0+v1)/2/c.prr,hv=u0*M.tan(h),r1=M.sqrt(M.max(u0*u0,u1*u1-hv*hv)),rc=(u0+r1)/2,ca=M.cos(a),sa=M.sin(a);
+    return [c.px+rc*ca,c.py+rc*sa,ca,sa,(r1-u0)/2,hv]}
+  const u=(u0+u1)/2,v=(v0+v1)/2,hu=(u1-u0)/2,hv=(v1-v0)/2;
   if(!c.wp)return [c.x+u*c.ca-v*c.sa,c.y+u*c.sa+v*c.ca,c.ca,c.sa,hu,hv];const p=cW(c,u,v),d=wpD(c,u,v),k=M.hypot(d[0],d[1]),a=c.ang+M.atan2(d[1],d[0]);
   return [p[0],p[1],M.cos(a),M.sin(a),hu*k,hv*k]}
 // frame of street node (i, j) (grid indices 0..D-1)
-function nodeFrame(c,i,j){const u=c.us[i],v=c.vs[j],p=cW(c,u,v);if(!c.wp)return [p[0],p[1],c.ca,c.sa,1];const d=wpD(c,u,v),a=c.ang+M.atan2(d[1],d[0]);return [p[0],p[1],M.cos(a),M.sin(a),M.hypot(d[0],d[1])]}
+function nodeFrame(c,i,j){const u=c.us[i],v=c.vs[j],p=cW(c,u,v);if(c.pol){const a=c.ang+v/c.prr;return [p[0],p[1],M.cos(a),M.sin(a),1]}if(!c.wp)return [p[0],p[1],c.ca,c.sa,1];const d=wpD(c,u,v),a=c.ang+M.atan2(d[1],d[0]);return [p[0],p[1],M.cos(a),M.sin(a),M.hypot(d[0],d[1])]}
 // a street along a grid line from node (i0,j0) to (i1,j1) (one index fixed): a polyline that follows the bent grid
-function gridLine(c,i0,j0,i1,j1){if(!c.wp){const a=cpt(c,i0,j0),b=cpt(c,i1,j1);return [a[0],a[1],b[0],b[1]]}
+function gridLine(c,i0,j0,i1,j1){if(!c.cv){const a=cpt(c,i0,j0),b=cpt(c,i1,j1);return [a[0],a[1],b[0],b[1]]}
   const P=[],fixU=i0===i1,a=fixU?j0:i0,b=fixU?j1:i1,N=c.N;
-  for(let q=a;q<b;q++){const t0=fixU?c.vs[q+N]:c.us[q+N],t1=fixU?c.vs[q+1+N]:c.us[q+1+N],n=M.max(1,M.ceil((t1-t0)/30));
+  for(let q=a;q<b;q++){const t0=fixU?c.vs[q+N]:c.us[q+N],t1=fixU?c.vs[q+1+N]:c.us[q+1+N],n=c.pol?(fixU?M.max(1,M.ceil((t1-t0)/c.prr*c.us[i0+N]/30)):1):M.max(1,M.ceil((t1-t0)/30));
     for(let s=0;s<n;s++){const t=t0+(t1-t0)*s/n,p=fixU?cW(c,c.us[i0+N],t):cW(c,t,c.vs[j0+N]);P.push(p[0],p[1])}}
   const e=cpt(c,i1,j1);P.push(e[0],e[1]);return P}
 // blocks of town f that may touch the world box [x0,y0]-[x1,y1]: [bi0, bi1, bj0, bj1]
 function blkRange(f,x0,y0,x1,y1,D){let i0=1e9,i1=-1e9,j0=1e9,j1=-1e9;
-  if(!f.wp){for(const [x,y] of [[x0,y0],[x1,y0],[x1,y1],[x0,y1]]){const dx=x-f.x,dy=y-f.y;const u=(dx*f.ca+dy*f.sa),v=(-dx*f.sa+dy*f.ca);i0=M.min(i0,u);i1=M.max(i1,u);j0=M.min(j0,v);j1=M.max(j1,v)}
+  if(!f.cv){for(const [x,y] of [[x0,y0],[x1,y0],[x1,y1],[x0,y1]]){const dx=x-f.x,dy=y-f.y;const u=(dx*f.ca+dy*f.sa),v=(-dx*f.sa+dy*f.ca);i0=M.min(i0,u);i1=M.max(i1,u);j0=M.min(j0,v);j1=M.max(j1,v)}
     return [i0,i1,j0,j1]}
   for(let a=0;a<=2;a++)for(let b=0;b<=2;b++){const q=cU(f,x0+(x1-x0)*a/2,y0+(y1-y0)*b/2);i0=M.min(i0,q[0]);i1=M.max(i1,q[0]);j0=M.min(j0,q[1]);j1=M.max(j1,q[1])}
-  const m=M.max(x1-x0,y1-y0)*0.2+(f.bu+f.bv);return [i0-m,i1+m,j0-m,j1+m]}
-function addStreet(c,i0,j0,i1,j1,k,open){const a=cpt(c,i0,j0),b=cpt(c,i1,j1);const r=mkRoad(k,c.wp?gridLine(c,i0,j0,i1,j1):[a[0],a[1],b[0],b[1]],{city:c.id});if(r){if(open)bridgesOf(r);else r._b=1}if(r&&k===2&&c.type>=2&&hr(c.id,i0===i1?i0*7+1:j0*7+2,88)<0.5)r.tram=1}
-function lineKind(n){n=((n%8)+8)%8;return n===0?7:n===4?2:3}
-function lineHalf(n){const k=lineKind(n);return k===7?14.5:k===2?10:5}
+  const m=M.max(x1-x0,y1-y0)*0.2+(f.bu+f.bv);
+  if(f.pol){const inB=f.px>=x0&&f.px<=x1&&f.py>=y0&&f.py<=y1,nx=clamp(f.px,x0,x1),ny=clamp(f.py,y0,y1);i0=M.min(i0,M.hypot(nx-f.px,ny-f.py));
+    if(inB||j1-j0>PI*f.prr)return [i0-m,i1+m,f.vs[0]-1,f.vs[f.D-1]+1];const ma=m/M.max(i0,60)*f.prr;return [i0-m,i1+m,j0-ma,j1+ma]}
+  return [i0-m,i1+m,j0-m,j1+m]}
+function addStreet(c,i0,j0,i1,j1,k,open){const a=cpt(c,i0,j0),b=cpt(c,i1,j1);const r=mkRoad(k,c.cv?gridLine(c,i0,j0,i1,j1):[a[0],a[1],b[0],b[1]],{city:c.id});if(r){if(open)bridgesOf(r);else r._b=1}if(r&&k===2&&c.type>=2&&hr(c.id,i0===i1?i0*7+1:j0*7+2,88)<0.5)r.tram=1}
+// block (or merged block) that covers grid cell (i, j): its first cell index, -1 when there is none
+function grpAt(c,i,j){const BD=c.D-1;if(c.pol&&c.pol.full){if(j<0)j+=c.nr;else if(j>=c.nr)j-=c.nr}if(i<0||j<0||i>=BD||j>=BD)return -1;const k=j*BD+i;return c.blocks[k]>0?k:c.ms&&c.ms[k]>=0?c.ms[k]:-1}
+// streets of a game town: a grid edge is a street where it separates two different blocks (or a block from open land);
+// inside a superblock there is none. The seam ray of a full radial town is laid once.
+function gridStreets(c,ok){const D=c.D,N=c.N,full=c.pol&&c.pol.full,NR=c.nr;const eU=c.eU=new Uint8Array(D*D),eV=c.eV=new Uint8Array(D*D);
+  for(let j=0;j<D;j++){if(full&&j>=NR)continue;let s=-1,le=-1,op=0;for(let i=0;i<=D;i++){let e=false;if(i<D-1&&ok[j*D+i]&&ok[j*D+i+1]){const a=grpAt(c,i,j-1),b=grpAt(c,i,j);e=(a>=0||b>=0)&&a!==b;if(e){eU[j*D+i]=1;if(a<0||b<0)op=1}}
+      if(e&&s<0){s=i;if(le>=0)bridgeGap(c,lkV(c,j),le-N,j-N,i-N,j-N)}if(!e&&s>=0){addStreet(c,s-N,j-N,i-N,j-N,lkV(c,j),op);le=i;s=-1;op=0}}}
+  for(let i=0;i<D;i++){let s=-1,le=-1,op=0;for(let j=0;j<=D;j++){let e=false;if(j<D-1&&ok[j*D+i]&&ok[(j+1)*D+i]){const a=grpAt(c,i-1,j),b=grpAt(c,i,j);e=(a>=0||b>=0)&&a!==b;if(e){eV[j*D+i]=1;if(a<0||b<0)op=1}}
+      if(e&&s<0){s=j;if(le>=0)bridgeGap(c,lkU(c,i),i-N,le-N,i-N,j-N)}if(!e&&s>=0){addStreet(c,i-N,s-N,i-N,j-N,lkU(c,i),op);le=j;s=-1;op=0}}}}
+// block types for superblocks: microdistricts, parks, squares, sport grounds, hospitals, offices in the centre
+function bigType(c,dn,R){const r=R(),core=c.type===3?0.26:0.16;
+  if(dn<core)return pickW(r,[19,22,1,14,23,16,5,14,6,8,2,12,14,5,10,4,22,6]);
+  if(dn<0.68)return pickW(r,[22,38,5,12,23,6,16,8,7,8,14,5,6,6,2,7,3,6]);
+  return pickW(r,[22,22,5,16,16,10,13,10,17,5,8,4,7,6])}
+function mergeBlocks(c){const R=rng(c.seed^0x3e61),BD=c.D-1,bl=c.blocks,sp=c.sp=new Uint8Array(BD*BD),ms=c.ms=new Int32Array(BD*BD).fill(-1);let mi=0,mj=0,n=0;
+  const SH=c.lay==='organic'?[2,1,3,1,2,3,2,2,2,3,1,1,1,3,1,3,2,1,2,3,1]:[2,1,3,1,2,3,2,2,2];const tw=[];for(let q=2;q<SH.length;q+=3)tw.push(q/3|0,SH[q]);
+  for(let j=0;j<BD;j++)for(let i=0;i<BD;i++){const k=j*BD+i;if(!bl[k]||ms[k]>=0||sp[k]||bl[k]===21||bl[k]===20)continue;
+    if(R()<c.opn){bl[k]=R()<0.55?23:5;continue} // an open square or a small park: the town is not built up wall to wall
+    if(R()>c.mrg)continue;const q=pickW(R(),tw),si=SH[q*3],sj=SH[q*3+1];if(i+si>BD||j+sj>BD)continue;let good=true;
+    for(let a=1;a<si;a++)if(c.kU[i+a]!==3)good=false;for(let b=1;b<sj;b++)if(c.kV[j+b]!==3)good=false; // avenues and boulevards run on through
+    for(let b=0;b<sj&&good;b++)for(let a=0;a<si;a++){const o=(j+b)*BD+i+a;if(!bl[o]||bl[o]===21||bl[o]===20||ms[o]>=0||(o!==k&&sp[o])){good=false;break}}
+    if(!good)continue;sp[k]=(si-1)|((sj-1)<<4);const f=blkFrame(c,i,j);if(!blkFits(c,i,j,si,sj,f)||wetArea(f[0],f[1],f[2],f[3],-f[4],-f[5],f[4],f[5],c.lay?18:28,0.0015,!!c.lay)){sp[k]=0;continue}
+    for(let b=0;b<sj;b++)for(let a=0;a<si;a++){const o=(j+b)*BD+i+a;if(o!==k){ms[o]=k;bl[o]=0;n++}}
+    let t=bigType(c,cityF(c,f[0],f[1]),R);if(t===9&&c._stad)t=22;if(t===9)c._stad=1;bl[k]=t;mi=M.max(mi,si-1);mj=M.max(mj,sj-1)}
+  c.msi=mi;c.msj=mj;c.nblocks-=n}
+// a merged block of a bent grid is one rectangle: its edges must stay within 2.5 m of the curved streets round it
+function blkFits(c,i,j,si,sj,f){if(!c.wp)return true;const u0=c.us[i],u1=c.us[i+si],v0=c.vs[j],v1=c.vs[j+sj];
+  for(let q=0;q<=4;q++){const t=q/4;for(const [u,v,lx,ly] of [[u0+(u1-u0)*t,v0,-f[4]+2*f[4]*t,-f[5]],[u0+(u1-u0)*t,v1,-f[4]+2*f[4]*t,f[5]],[u0,v0+(v1-v0)*t,-f[4],-f[5]+2*f[5]*t],[u1,v0+(v1-v0)*t,f[4],-f[5]+2*f[5]*t]]){
+    const g=cW(c,u,v),x=f[0]+lx*f[2]-ly*f[3],y=f[1]+lx*f[3]+ly*f[2];if(M.hypot(g[0]-x,g[1]-y)>2.5)return false}}return true}
+// diagonal boulevards across a straight grid (1 or 2, through the centre): the blocks they cut become green strips
+// (both ends on grid nodes inside the built-up area, so they meet streets; the road itself is laid after the streets)
+function addDiag(c){const R=rng(c.seed^0xd1a9),base=c.ang+PI/4+(R()-0.5)*0.35,BD=c.D-1,N=c.N,bl=c.blocks;c.dgl=[];
+  const inner=(i,j)=>i>0&&j>0&&i<BD&&j<BD&&bl[(j-1)*BD+i-1]&&bl[(j-1)*BD+i]&&bl[j*BD+i-1]&&bl[j*BD+i];
+  const snap=(x,y)=>{const q=cU(c,x,y),bi=bsr(c.us,q[0]),bj=bsr(c.vs,q[1]);let best=null,bd=1e18;for(let j=bj-3;j<=bj+4;j++)for(let i=bi-3;i<=bi+4;i++){if(!inner(i,j))continue;const p=cpt(c,i-N,j-N),d=(p[0]-x)**2+(p[1]-y)**2;if(d<bd){bd=d;best=p}}return best};
+  for(let q=0;q<c.diag;q++){const a=base+q*(PI/2+(R()-0.5)*0.5),ca=M.cos(a),sa=M.sin(a),off=(R()-0.5)*c.bu*0.6,ox=-sa*off,oy=ca*off,runs=[];let cur=null;
+    for(let t=-c.R*1.3;t<=c.R*1.3;t+=20){const x=c.x+ox+ca*t,y=c.y+oy+sa*t,on=cityF(c,x,y)<0.88&&landE(x,y,0.002)>=0;if(on){if(!cur)runs.push(cur=[]);cur.push(x,y)}else cur=null}
+    for(const p of runs){if(p.length<2*30)continue;const A=snap(p[0]+ca*60,p[1]+sa*60),B=snap(p[p.length-2]-ca*60,p[p.length-1]-sa*60);if(!A||!B||M.hypot(B[0]-A[0],B[1]-A[1])<600)continue;
+      const pts=[A[0],A[1],B[0],B[1]];if(!waterRunOK(pts,60,0.05))continue;throughClear({k:7,pts,n:2},c);c.dgl.push(pts)}}}
+// radial and fan towns: rings at growing steps, rays (a multiple of 16); near the centre neighbouring cells merge
+// along the ring (2, 4, 8, 16 of them) so blocks keep a sensible width
+function buildPolar(c){const P=c.pol,R=rng(c.seed^0x9a7e);c.N=0;
+  if(!P.full){let best=-1,ba=c.ang;for(let q=0;q<12;q++){const a=q/12*TAU;let s=0;for(let d=0.2;d<=1.21;d+=0.2)for(const da of [-0.6,0,0.6])if(landE(c.x+M.cos(a+da)*c.R*d,c.y+M.sin(a+da)*c.R*d,0)>=0)s++;if(s>best){best=s;ba=a}}c.ang=ba;c.ca=M.cos(ba);c.sa=M.sin(ba)}
+  c.px=c.x-c.ca*P.off;c.py=c.y-c.sa*P.off;
+  const rmax=P.off+c.R*1.32,bu=c.bu,bv=c.bv,rs=[P.rin];while(rs[rs.length-1]<rmax){const r=rs[rs.length-1];rs.push(r+M.min(bu*(0.8+0.4*R()),0.38*r+45))}
+  const NR=c.nr=M.max(32,M.round(P.th*0.72*rmax/(1.25*bv)/32)*32);c.prr=1000;const dv=P.th/NR*c.prr,v0=P.full?0:-P.th/2*c.prr;
+  const D=c.D=M.max(rs.length,NR+1)+1,us=c.us=new Float64Array(D),vs=c.vs=new Float64Array(D);
+  for(let i=0;i<D;i++){us[i]=i<rs.length?rs[i]:rs[rs.length-1]+(i-rs.length+1)*bu;vs[i]=v0+i*dv}
+  // ring 0 (round the central square) and two rings further out are boulevards, every 4th ring an avenue;
+  // rays: every 32nd a boulevard, every 8th an avenue
+  const kU=c.kU=new Uint8Array(D).fill(3),kV=c.kV=new Uint8Array(D).fill(3);kU[0]=7;for(let i=4;i<D;i+=4)kU[i]=2;
+  for(const f of [0.42,0.82]){let bi=1,bd=1e18;for(let i=1;i<rs.length;i++){const d=M.abs(rs[i]-(P.off+c.R*f));if(d<bd){bd=d;bi=i}}kU[bi]=7}
+  for(let j=0;j<D;j++)kV[j]=j%32===0?7:j%8===0?2:3;if(!P.full){kV[0]=2;kV[NR]=2}
+  const spanAt=i=>{const w=us[i]*dv/c.prr;let s=1;while(s<16&&w*s<0.62*bv)s*=2;return s};
+  for(let i=1;i<D;i++)if(spanAt(i-1)>=16&&spanAt(i)<16&&kU[i]===3)kU[i]=2; // avenue rays begin on an avenue ring
+  const ok=new Uint8Array(D*D);for(let j=0;j<=NR;j++)for(let i=0;i<D;i++){const p=plW(c,us[i],vs[j]);if(cityF(c,p[0],p[1])<1){const e=landE(p[0],p[1],0.0025);if(e>=0&&e<0.42)ok[j*D+i]=1}}
+  const BD=D-1,bl=c.blocks=new Uint8Array(BD*BD),sp=c.sp=new Uint8Array(BD*BD),ms=c.ms=new Int32Array(BD*BD).fill(-1);let stad=false,cnt=0,mj=0;
+  const cell=(i,j)=>ok[j*D+i]&&ok[j*D+i+1]&&ok[(j+1)*D+i]&&ok[(j+1)*D+i+1];
+  const put=(i,j,s)=>{let all=true;for(let q=0;q<s;q++)if(!cell(i,j+q)){all=false;break}
+    if(all){const k=j*BD+i;sp[k]=(s-1)<<4;const f=blkFrame(c,i,j);
+      if(us[i]*dv/c.prr*s>=bv*0.3&&f[4]>14&&f[5]>14&&!wetArea(f[0],f[1],f[2],f[3],-f[4],-f[5],f[4],f[5],c.lay?18:28,0.0015,!!c.lay)){
+        const Rb=rng(hh(c.id,i*977+j,51));let t=i===0?(Rb()<0.5?23:5):pickType(c,cityF(c,f[0],f[1]),Rb);if(t===9){if(stad)t=5;else stad=true}if(i>0&&(Rb()<0.05||M.min(f[4],f[5])<34))t=Rb()<0.5?23:5;
+        bl[k]=t;cnt++;for(let q=1;q<s;q++)ms[k+q*BD]=k;mj=M.max(mj,s-1);return}
+      sp[k]=0}
+    if(s>1){put(i,j,s/2);put(i,j+s/2,s/2)}};
+  for(let i=0;i<BD;i++){const s=spanAt(i);for(let j=0;j+s<=NR;j+=s)put(i,j,s)}
+  c.nblocks=cnt;c.msi=0;c.msj=mj;
+  // the government quarter of a capital faces the central square (fan: at its head, on the axis)
+  if(c.cap!==undefined){let bd=1e18,bk=-1;for(let j=0;j<NR;j++)for(let i=0;i<3;i++){const k=j*BD+i;if(!bl[k])continue;const f=blkFrame(c,i,j),d=i*1e7+M.abs(((M.atan2(f[3],f[2])-c.ang)%TAU+TAU*1.5)%TAU-PI);if(d<bd){bd=d;bk=k}}if(bk>=0)bl[bk]=21}
+  gridStreets(c,ok)}
+
 function pickW(r,T){let s=0;for(let i=1;i<T.length;i+=2)s+=T[i];r*=s;for(let i=1;i<T.length;i+=2){r-=T[i];if(r<=0)return T[i-1]}return T[T.length-2]}
 // 1 towers 2 perimeter 3 panel 4 houses 5 park 6 mall 7 school 8 garages 9 stadium 10 church 11 construction 12 shops
 // 13 cottages 14 hospital 15 market 16 sport 17 depot 19 offices
@@ -283,7 +392,7 @@ function routePts(ax,ay,bx,by,amp,det,ph,step){
   for(let k=0;k<=n;k++){const t=k/n;const env=M.sin(PI*t);
     const off=env*(noise(t*L/9000+ph,ph*1.37)*M.min(L*amp,2600)+noise(t*L/1300+ph*2.1,3.3+ph)*det);
     pts.push(ax+dx*t+nx*off,ay+dy*t+ny*off)}return pts}
-function snapNode(C,x,y){const N=C.N,D=C.D,BD=D-1,bl=C.blocks;const dx=x-C.x,dy=y-C.y;let u=dx*C.ca+dy*C.sa,v=-dx*C.sa+dy*C.ca;if(C.wp)[u,v]=cU(C,x,y);
+function snapNode(C,x,y){if(C.kU)return snapNodeG(C,x,y);const N=C.N,D=C.D,BD=D-1,bl=C.blocks;const dx=x-C.x,dy=y-C.y;let u=dx*C.ca+dy*C.sa,v=-dx*C.sa+dy*C.ca;if(C.wp)[u,v]=cU(C,x,y);
   const bi=bsr(C.us,u),bj=bsr(C.vs,v);let best=null,bd=1e18;
   for(let j=bj-2;j<=bj+3;j++)for(let i=bi-2;i<=bi+3;i++){if(i<0||j<0||i>=D||j>=D)continue;let adj=false;
     for(const [a,b] of [[i-1,j-1],[i,j-1],[i-1,j],[i,j]])if(a>=0&&b>=0&&a<BD&&b<BD&&bl[b*BD+a]>0)adj=true;if(!adj)continue;
@@ -291,6 +400,12 @@ function snapNode(C,x,y){const N=C.N,D=C.D,BD=D-1,bl=C.blocks;const dx=x-C.x,dy=
   if(!best)for(let j=0;j<D;j++)for(let i=0;i<D;i++){let adj=false; // no streets here (hills, water): nearest node that has a block
     for(const [a,b] of [[i-1,j-1],[i,j-1],[i-1,j],[i,j]])if(a>=0&&b>=0&&a<BD&&b<BD&&bl[b*BD+a]>0)adj=true;if(!adj)continue;const d=(C.us[i]-u)**2+(C.vs[j]-v)**2;if(d<bd){bd=d;best=[i,j]}}
   return best?cpt(C,best[0]-N,best[1]-N):[x,y]}
+// game towns: the nearest node on a street (merged blocks leave grid nodes without streets), avenues preferred
+function snapNodeG(C,x,y){const D=C.D,eU=C.eU,eV=C.eV,full=C.pol&&C.pol.full,NR=C.nr;const q=cU(C,x,y),bi=bsr(C.us,q[0]),bj=bsr(C.vs,q[1]);let best=null,bd=1e18;
+  const has=(i,j)=>eU[j*D+i]||(i>0&&eU[j*D+i-1])||eV[j*D+i]||(j>0&&eV[(j-1)*D+i]);
+  const tryN=(i,j)=>{if(full)j=((j%NR)+NR)%NR;if(i<0||j<0||i>=D||j>=D||!has(i,j))return;const p=cW(C,C.us[i],C.vs[j]);const d=((p[0]-x)**2+(p[1]-y)**2)*((C.kU[i]!==3||C.kV[j]!==3)?0.3:1);if(d<bd){bd=d;best=p}};
+  const w=C.pol?17:3;for(let j=bj-w;j<=bj+w+1;j++)for(let i=bi-3;i<=bi+4;i++)tryN(i,j);
+  if(!best)for(let j=0;j<D;j++)for(let i=0;i<D;i++)tryN(i,j);return best||[x,y]}
 const pairs=new Set();
 // a new route must not run on top of an existing road: ends that ride along a street / road are trimmed back to
 // where they leave it (a T-junction there), railways are rerouted away from long side-by-side runs
@@ -335,8 +450,8 @@ function connect(A,B,k){const key=A.id<B.id?A.id+'_'+B.id+'_'+k:B.id+'_'+A.id+'_
     if(DYNR&&k!==5){const q=avoidZ(pts,k,null);if(!q){if(a<NA)continue;return}pts=q} // game: around the buildings in the way
     // a highway does not run into a town's street grid: from the town edge on it continues as an avenue to the node
     if(k===0){const c=plCum(pts),L=c[c.length-1];const inn=(C,e)=>{if(C.type<1||(C.type===3&&!(e?wB:wA)))return 0;let d=0,last=-1;const BD=C.D-1;
-        while(d<L*0.45){const q=plAt(pts,c,e?L-d:d);if(cityF(C,q[0],q[1])>1.3)break;const x=q[0]-C.x,y=q[1]-C.y,uv=C.wp?cU(C,q[0],q[1]):[x*C.ca+y*C.sa,-x*C.sa+y*C.ca],bi=bsr(C.us,uv[0]),bj=bsr(C.vs,uv[1]);
-          if(bi>=0&&bj>=0&&bi<BD&&bj<BD&&C.blocks[bj*BD+bi])last=d;d+=10}return last>=0?last+25:70}; // at least a short avenue stub: a highway never meets a street head-on
+        while(d<L*0.45){const q=plAt(pts,c,e?L-d:d);if(cityF(C,q[0],q[1])>1.3)break;const x=q[0]-C.x,y=q[1]-C.y,uv=C.cv?cU(C,q[0],q[1]):[x*C.ca+y*C.sa,-x*C.sa+y*C.ca],bi=bsr(C.us,uv[0]),bj=bsr(C.vs,uv[1]);
+          if(bi>=0&&bj>=0&&bi<BD&&bj<BD&&(C.blocks[bj*BD+bi]||C.ms&&C.ms[bj*BD+bi]>=0))last=d;d+=10}return last>=0?last+25:70}; // at least a short avenue stub: a highway never meets a street head-on
       const dA=inn(A,0),dB=inn(B,1);if(dA||dB){const cut=(s0,s1)=>{const a=plAt(pts,c,s0),b=plAt(pts,c,s1),o=[a[0],a[1]];for(let i=a[4]+1;i<=b[4];i++)o.push(pts[i*2],pts[i*2+1]);o.push(b[0],b[1]);return o};
         if(dA){const q=mkRoad(2,cut(0,dA));if(q)bridgesOf(q)}if(dB){const q=mkRoad(2,cut(L-dB,L));if(q)bridgesOf(q)}pts=cut(dA,L-dB)}}
     {const r=mkRoad(k,pts);if(r&&stub)r.stub=1;if(r){bridgesOf(r);if(k===0){const p=r.pts,n=r.n;if(A.type===3&&!wA)JUNC.push([A,ax,ay,p[2]-p[0],p[3]-p[1],r]);if(B.type===3&&!wB)JUNC.push([B,bx,by,p[n*2-4]-p[n*2-2],p[n*2-3]-p[n*2-1],r])}}return}}}
@@ -364,7 +479,7 @@ for(const c of bigs){if(c.type!==3)continue;const n=96,pts=[],wat=[];
 
 // ---------------------------------------------------------------- zones
 const zones=[],emitters=[],airports=[],farms=[];
-const ZS={ind:[1300,850],ref:[1500,1050],pow:[760,560],port:[820,900],air:[4300,1500],solar:[620,420],agro:[520,340],farm:[300,200],dacha:[760,520],cem:[380,260],quarry:[700,520],mil:[940,660],saw:[360,260],oil:[130,95],sam:[150,150],ref2:[1000,700],sol2:[72,46],mine:[300,220],gasw:[150,110],rst:[300,64],dport:[240,180],dramp:[84,40],drwy:[460,56],dstore:[120,76],dfab:[400,280]};const OLDK=['ind','ref','pow','port','air','solar'];
+const ZS={ind:[1300,850],ref:[1500,1050],pow:[760,560],port:[820,900],air:[4300,1500],solar:[620,420],agro:[520,340],farm:[300,200],dacha:[760,520],cem:[380,260],quarry:[700,520],mil:[940,660],saw:[360,260],oil:[130,95],sam:[150,150],ref2:[1000,700],sol2:[72,46],mine:[300,220],gasw:[150,110],rst:[300,64],dport:[240,180],dramp:[84,40],drwy:[460,56],dstore:[120,76],dfab:[400,280],air2:[2000,440]};const OLDK=['ind','ref','pow','port','air','solar'];
 function zoneFree(x,y,rad,self){
   for(const c of live){if(c===self)continue;const d=M.hypot(c.x-x,c.y-y);if(d<c.R*1.1+rad)return false}
   if(self&&M.hypot(self.x-x,self.y-y)<self.R*1.02+rad*0.6)return false;
@@ -508,10 +623,10 @@ function throughClear(r,c){const hw=RW[r.k]/2+7;const BD=c.D-1,bl=c.blocks;
     for(let i=0;i<r.n-1;i++){const ax=r.pts[i*2],ay=r.pts[i*2+1],bx=r.pts[i*2+2],by=r.pts[i*2+3];if(M.max(ax,bx)<c.bb[0]||M.min(ax,bx)>c.bb[2]||M.max(ay,by)<c.bb[1]||M.min(ay,by)>c.bb[3])continue;
       const L=M.hypot(bx-ax,by-ay)||1,nx=-(by-ay)/L,ny=(bx-ax)/L;
       if(r.k===0&&cityF(c,(ax+bx)/2,(ay+by)/2)<1.05){const U=r.urb||(r.urb=[]);const a=r.cum[i],b=r.cum[i+1];if(U.length&&U[U.length-1][1]>=a-1)U[U.length-1][1]=b;else U.push([a,b])}
-      for(let t=0;t<=L;t+=6)for(const o of [-hw,-hw/2,0,hw/2,hw]){const x=ax+(bx-ax)*t/L+nx*o-c.x,y=ay+(by-ay)*t/L+ny*o-c.y;let u=x*c.ca+y*c.sa,v=-x*c.sa+y*c.ca;if(c.wp)[u,v]=cU(c,x+c.x,y+c.y);
-        const bi=bsr(c.us,u),bj=bsr(c.vs,v);if(bi>=0&&bj>=0&&bi<BD&&bj<BD&&bl[bj*BD+bi])bl[bj*BD+bi]=20}}
-    for(const e of [0,r.n-1])for(let q=0;q<16;q++){const a=q/16*TAU;for(const rr of [hw*0.6,hw]){const x=r.pts[e*2]+M.cos(a)*rr-c.x,y=r.pts[e*2+1]+M.sin(a)*rr-c.y;let u=x*c.ca+y*c.sa,v=-x*c.sa+y*c.ca;if(c.wp)[u,v]=cU(c,x+c.x,y+c.y);
-      const bi=bsr(c.us,u),bj=bsr(c.vs,v);if(bi>=0&&bj>=0&&bi<BD&&bj<BD&&bl[bj*BD+bi])bl[bj*BD+bi]=20}}}
+      for(let t=0;t<=L;t+=6)for(const o of [-hw,-hw/2,0,hw/2,hw]){const x=ax+(bx-ax)*t/L+nx*o-c.x,y=ay+(by-ay)*t/L+ny*o-c.y;let u=x*c.ca+y*c.sa,v=-x*c.sa+y*c.ca;if(c.cv)[u,v]=cU(c,x+c.x,y+c.y);
+        const bi=bsr(c.us,u),bj=bsr(c.vs,v);if(bi>=0&&bj>=0&&bi<BD&&bj<BD){let k=bj*BD+bi;if(c.ms&&c.ms[k]>=0)k=c.ms[k];if(bl[k])bl[k]=20}}}
+    for(const e of [0,r.n-1])for(let q=0;q<16;q++){const a=q/16*TAU;for(const rr of [hw*0.6,hw]){const x=r.pts[e*2]+M.cos(a)*rr-c.x,y=r.pts[e*2+1]+M.sin(a)*rr-c.y;let u=x*c.ca+y*c.sa,v=-x*c.sa+y*c.ca;if(c.cv)[u,v]=cU(c,x+c.x,y+c.y);
+      const bi=bsr(c.us,u),bj=bsr(c.vs,v);if(bi>=0&&bj>=0&&bi<BD&&bj<BD){let k=bj*BD+bi;if(c.ms&&c.ms[k]>=0)k=c.ms[k];if(bl[k])bl[k]=20}}}}
 for(const r of roads){if(r.city!==undefined||r.k===8)continue;
   for(const c of queryF(r.bb[0],r.bb[1],r.bb[2],r.bb[3])){if(c.kind!=='city'||c.type<1)continue;throughClear(r,c)}}
 // every road over water gets its bridges (also connectors, ramps and avenues added late)
@@ -826,12 +941,89 @@ function genZone(z){
     if(U.sol){for(let y=H/2-38;y<H/2-12;y+=6.4)P.push({k:'pv',x:-W/2+16,y,w:110,h:3.8});B(P,-W/2+132,H/2-36,12,6,2.7,[222,224,226],'f',{nd:1})}
     CY(P,-W/2+176,-H/2+26,1.8,22,[170,70,60],'chim');zemit(z,-W/2+176,-H/2+26,'smoke',0.3,22);
     P.push({k:'lflood',x:-W/2+14,y:-H/2+14,w:W-28,h:H-28,sp:60,r:22,c:'sod'});
+  }else if(z.zk==='air2'){ // airport of the game (stage 5.11): runway with a parallel taxiway and links, apron with stands,
+    // terminal with jet bridges, control tower, cargo terminal with a container yard, hangar, fuel farm, car park
+    const X0=-W/2,Y0=-H/2,TW=[96,96,98];G(P,X0,Y0,W,H,[118,140,86]);P.push({k:'mow',x:X0,y:Y0,w:W,h:H});P.push({k:'fence',x:X0+2,y:Y0+2,w:W-4,h:H-4});
+    const ry=AIR2RY,ty=ry+70,ay0=ty+10,ah=150;P.push({k:'rw',x:-900,y:ry-22,w:1800,h:44});
+    G(P,-860,ty-10,1720,20,TW);P.push({k:'ltaxi',x:-860,y:ty-10,w:1720,h:20});P.push({k:'gl',pts:[-860,ty,860,ty],w:0.35,c:[230,190,60]});
+    for(const x of [-850,-430,0,430,850])G(P,x-10,ry+22,20,ty-10-ry-22,TW);
+    G(P,-640,ay0,980,ah,[166,166,160]);P.push({k:'lflood',x:-640,y:ay0,w:980,h:ah,sp:70,r:30,c:'sod'});G(P,-80,ty+10,40,ay0-ty,TW);
+    for(let q=0;q<7;q++){const x=-590+q*130;P.push({k:'gl',pts:[x,ay0+4,x,ay0+ah-26],w:0.3,c:[230,190,60]});if(R()<0.55)P.push({k:'plane',x,y:ay0+70,a:-PI/2,s:q%3===0?1.15:0.9,c:R()*5|0})}
+    B(P,-640,ay0+ah+8,620,44,16,[150,170,186],'gl',{gf:[-1,-1,0]});for(let q=0;q<4;q++)B(P,-596+q*130,ay0+ah-18,5,24,6,[204,204,206],'f',{nd:1});
+    B(P,0,ay0+ah+10,22,22,8,[204,202,196],'f');CY(P,50,ay0+ah+30,5.5,44,[214,216,218],'tower');
+    B(P,380,ay0+8,300,66,13,[186,190,196],'co',{fac:1,gate:2});P.push({k:'cont',x:380,y:ay0+84,w:300,h:46,seed:R()*1e9|0});
+    B(P,720,ay0+8,130,88,18,[134,140,146],'arc');
+    P.push({k:'bund',x:740,y:ay0+120,w:110,h:44});for(let q=0;q<3;q++)CY(P,762+q*33,ay0+142,11,12,[222,222,218],'tank');
+    PK(P,-640,ay0+ah+64,620,24,0.7,R()*1e9|0);
+    for(let q=0;q<40;q++){const sd=q%2,t=R();TR(P,X0+20+t*(W-40),sd?H/2-8:Y0+8,5+R()*4,R()*6|0)}
   }else if(z.zk==='solar'){
     G(P,-W/2,-H/2,W,H,[146,150,112]);P.push({k:'solar',x:-W/2+15,y:-H/2+15,w:W-30,h:H-30});
     B(P,-W/2+4,-H/2+4,14,10,4,[200,200,200],'f');
   }
+  if(z.o)zoneFill(z);
   dedupeZone(z);z.prims=dropCrowns(fitGround(z.prims));
 }
+// ---------- detail of the game's buildings (stage 5.11): the empty parts of a pad get the yard clutter of its trade
+// (pallets, containers, pipe stacks, skips, drums, sheds, parked lorries, heaps; hay, herds, silage on a farm; ore heaps
+// and tyres at a mine; crates, tents, sandbag rings at military sites). A cell grid of the pad marks what is taken
+// (buildings, tanks, heaps, driveways, pipes, rails with a margin); clusters go into free rectangles of it.
+const AIR2RY=-130;
+const ZFILL={air2:['trk','trees','shed','trees','pal'],ind:['pal','cont','trk','pipe','skip','drum','shed','kiosk','pile','pal','cont','trees'],pow:['pile','pipe','kiosk','cont','trk','tankS','drum','shed','trees'],ref2:['pipe','drum','tankS','cont','trk','kiosk','pipe'],
+  saw:['logs','boards','trk','shed','dust','logs','trees'],farm:['bales','herd','silage','shed','manure','tankS','rows','herd','trees'],mine:['ore','cont','trk','tyre','drum','shed','ore','rock'],
+  mil:['crateM','tent','vehM','berm','contM','crateM'],dport:['crateM','contM','vehM','berm','mast','bladder','tent'],dfab:['crateM','contM','pal','trk','drum','shed','trees'],dstore:['crateM','contM'],
+  oil:['drum','pipe','tankS','skip'],gasw:['drum','pipe','skip'],port:['pal','cont','trk','drum','kiosk']};
+const FCC=[[180,60,48],[46,110,164],[224,160,48],[58,125,68],[136,136,136],[200,90,40],[96,70,130]];
+function zoneFill(z){const L=ZFILL[z.zk];if(!L)return;const P=z.prims,W=z.W,H=z.H,R=rng(z.seed^0x5f11),cam=R()*3|0;
+  const cs=8,m=11,nx=M.floor((W-2*m)/cs),ny=M.floor((H-2*m)/cs);if(nx<2||ny<2)return;const occ=new Uint8Array(nx*ny),x0=-W/2+m,y0=-H/2+m;
+  const mark=(ax,ay,bx,by,cl)=>{const i0=M.max(0,M.floor((ax-cl-x0)/cs)),i1=M.min(nx-1,M.floor((bx+cl-x0)/cs)),j0=M.max(0,M.floor((ay-cl-y0)/cs)),j1=M.min(ny-1,M.floor((by+cl-y0)/cs));for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++)occ[j*nx+i]=1};
+  const lmark=(pts,w)=>{for(let i=0;i+3<pts.length;i+=2){const ax=pts[i],ay=pts[i+1],bx=pts[i+2],by=pts[i+3],n=M.max(1,M.ceil(M.hypot(bx-ax,by-ay)/4));for(let q=0;q<=n;q++){const x=ax+(bx-ax)*q/n,y=ay+(by-ay)*q/n;mark(x,y,x,y,w/2+3)}}};
+  const apron=z.zk==='dport'||z.zk==='drwy';if(z.zk==='air2'){mark(-W/2,-H/2,W/2,AIR2RY+230,0);mark(-W/2,-H/2,-650,H/2,0)} // an airfield keeps its grass clear: only the land behind the terminal and the cargo side is used
+  for(let pi=0;pi<P.length;pi++){const p=P[pi],k=p.k;
+    if(k==='b'||k==='pk'||k==='cont'||k==='bund'||k==='logs'||k==='boards'||k==='bales'||k==='field'||k==='track'||k==='switch'||k==='pv'||k==='twall'||k==='rw2'||k==='court'||k==='rows'||k==='solar')mark(p.x,p.y,p.x+p.w,p.y+p.h,3);
+    else if(k==='cyl'||k==='pile'||k==='helipad'||k==='berm'||(k==='gc'&&p.r>3))mark(p.x-p.r,p.y-p.r,p.x+p.r,p.y+p.r,3);
+    else if(k==='quarry')mark(p.x-p.rx,p.y-p.ry,p.x+p.rx,p.y+p.ry,5);
+    else if(k==='veh'||k==='uav'||k==='pjack'||k==='wellhd'||k==='hframe'||k==='dome'||k==='flag')mark(p.x-6,p.y-6,p.x+6,p.y+6,3);
+    else if(k==='cat')mark(p.x-3,p.y-4,p.x+p.len+3,p.y+4,3);
+    else if(k==='gl'||k==='pipe'||k==='conv'||k==='rail')lmark(p.pts,(p.w||3)+(k==='rail'?3:0));
+    else if(k==='g'&&pi>0){const c=p.c,dark=c[0]+c[1]+c[2]<330;if(apron&&!dark){for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const cx=x0+(i+0.5)*cs,cy=y0+(j+0.5)*cs;if(cx>p.x+3&&cx<p.x+p.w-3&&cy>p.y+3&&cy<p.y+p.h-3&&!occ[j*nx+i])occ[j*nx+i]=2}}else if(dark)mark(p.x,p.y,p.x+p.w,p.y+p.h,2)}}
+  let cls=0;const free=(i,j,w,h)=>{for(let b=j;b<j+h;b++)for(let a=i;a<i+w;a++)if(a>=nx||b>=ny||occ[b*nx+a]!==cls)return false;return true};
+  const AL=['vehM','crateM','apron','apron'];
+  let budget=nx*ny*0.62,miss=0;
+  for(let it=0;it<900&&budget>0&&miss<260;it++){const i=R()*nx|0,j=R()*ny|0;if(occ[j*nx+i]===1){miss++;continue}cls=occ[j*nx+i];
+    const wm=2+(R()*4|0),hm=2+(R()*3|0);let w=1,h=1;while(w<wm&&free(i+w,j,1,h))w++;while(h<hm&&free(i,j+h,w,1))h++;if(w*h<2){occ[j*nx+i]=1;miss++;continue}
+    const x=x0+i*cs+1.5,y=y0+j*cs+1.5,cw=w*cs-3,ch=h*cs-3,n0=P.length;zclus(z,(cls?AL:L)[R()*(cls?AL:L).length|0],P,R,x,y,cw,ch,cam);for(let q=n0;q<P.length;q++)P[q].fz=1;
+    for(let b=j;b<j+h;b++)for(let a=i;a<i+w;a++)occ[b*nx+a]=1;budget-=w*h}}
+function zclus(z,t,P,R,x,y,w,h,cam){const hz=w>=h;
+  switch(t){
+  case 'pal':{const pc=[[178,142,98],[212,214,216],[72,112,160],[190,170,120]][R()*4|0];for(let yy=y;yy+2.2<=y+h;yy+=3.4)for(let xx=x;xx+2.6<=x+w;xx+=3.2)if(R()<0.82)B(P,xx,yy,2.6,2.2,0.7+R()*1.5,pc,'f');break}
+  case 'cont':case 'contM':{const mil=t==='contM';if(hz)for(let yy=y;yy+2.5<=y+h;yy+=3.2)for(let xx=x;xx+6.1<=x+w;xx+=6.7){if(R()<0.15)continue;B(P,xx,yy,6.1,2.44,R()<0.4?5.2:2.6,mil?[[96,104,72],[110,112,96],[84,90,70]][R()*3|0]:FCC[R()*FCC.length|0],'co')}
+    else for(let xx=x;xx+2.5<=x+w;xx+=3.2)for(let yy=y;yy+6.1<=y+h;yy+=6.7){if(R()<0.15)continue;B(P,xx,yy,2.44,6.1,R()<0.4?5.2:2.6,mil?[[96,104,72],[110,112,96],[84,90,70]][R()*3|0]:FCC[R()*FCC.length|0],'co')}break}
+  case 'trk':PK(P,x,y,w,h,0.75,R()*1e9|0,1);break;
+  case 'pipe':{const c=[[150,96,70],[120,124,130],[196,190,170]][R()*3|0];if(hz)for(let yy=y+1;yy<y+h-0.5;yy+=1.3)P.push({k:'pipe',pts:[x+R()*2,yy,x+w-R()*2,yy],n:1,w:0.9,gr:1,c});else for(let xx=x+1;xx<x+w-0.5;xx+=1.3)P.push({k:'pipe',pts:[xx,y+R()*2,xx,y+h-R()*2],n:1,w:0.9,gr:1,c});break}
+  case 'skip':{let xx=x;while(xx+4.2<=x+w){B(P,xx,y+(h-2.2)*R(),4.2,2.2,1.4,[[226,180,40],[52,96,160],[64,120,72]][R()*3|0],'f');xx+=5.2+R()*2}break}
+  case 'drum':{const c=[[40,90,150],[170,50,40],[60,64,70],[200,170,60]][R()*4|0];for(let yy=y+0.6;yy+0.6<=y+h;yy+=1.35)for(let xx=x+0.6;xx+0.6<=x+w;xx+=1.35)if(R()<0.7)CY(P,xx,yy,0.45,0.95,c,'tank');break}
+  case 'shed':{const sw=M.min(w,10+R()*10),sh=M.min(h,6+R()*5);B(P,x+(w-sw)*R(),y+(h-sh)*R(),sw,sh,3.5+R()*2.5,ROOF_IND[R()*ROOF_IND.length|0],R()<0.5?'co':'f');break}
+  case 'kiosk':{const kx=x+(w-5)*R(),ky=y+(h-4)*R();B(P,kx+0.8,ky+0.8,3.4,2.4,2.5,[176,178,170],'f');P.push({k:'fence',x:kx,y:ky,w:5,h:4});break}
+  case 'pile':case 'ore':case 'rock':case 'dust':case 'manure':{const O=z.o||{},oc=[[48,46,46],[60,56,54],[52,50,50],[150,84,58],[96,138,116],[192,170,118],[150,160,96],[226,224,214]][O.ore|0];
+    const c=t==='ore'&&oc?oc:t==='dust'?[200,166,112]:t==='manure'?[92,74,52]:t==='rock'?[130,126,118]:[[60,58,56],[190,170,130],[150,140,125],[120,80,60]][R()*4|0];
+    const n=1+(R()*2|0);for(let q=0;q<n;q++){const r=M.min(w,h)/(n+1)*0.9;P.push({k:'pile',x:x+r+(w-2*r)*(n>1?q/(n-1):0.5),y:y+h/2+(R()-0.5)*(h-2*r)*0.6,r,c})}break}
+  case 'tankS':{const n=M.max(1,M.min(4,M.floor((hz?w:h)/6)));for(let q=0;q<n;q++){const tx=hz?x+3+q*6:x+w/2,ty=hz?y+h/2:y+3+q*6;CY(P,tx,ty,2.3,4+R()*2,[[210,210,204],[150,160,150],[96,108,84]][R()*3|0],'tank')}break}
+  case 'tyre':{for(let yy=y+1.4;yy+1.4<=y+h;yy+=3)for(let xx=x+1.4;xx+1.4<=x+w;xx+=3)if(R()<0.55)CY(P,xx,yy,1.3,0.8+(R()*3|0)*0.8,[34,34,36],'tank');break}
+  case 'logs':{for(let yy=y;yy+8<=y+h;yy+=10)P.push({k:'logs',x,y:yy,w,h:8,seed:R()*1e9|0});break}
+  case 'boards':{for(let yy=y;yy+11<=y+h;yy+=14)for(let xx=x;xx+7<=x+w;xx+=9)P.push({k:'boards',x:xx,y:yy,w:7,h:11,seed:R()*1e9|0});break}
+  case 'bales':P.push({k:'bales',x,y,w,h,seed:R()*1e9|0});break;
+  case 'herd':G(P,x,y,w,h,[118,108,74]);P.push({k:'fence',x,y,w,h});P.push({k:'herd',x,y,w,h,seed:R()*1e9|0});B(P,x+1,y+1,M.min(6,w-2),M.min(3,h-2),2.6,[120,96,70],'f');break;
+  case 'silage':{G(P,x,y,w,h,[110,106,70]);const n=hz?M.max(1,M.floor(h/6)):M.max(1,M.floor(w/6));for(let q=0;q<n;q++){if(hz){B(P,x,y+q*6,w,0.7,1.8,[176,172,160],'f');P.push({k:'pile',x:x+w/2,y:y+q*6+3.3,r:M.min(2.4,h/4),c:[124,128,66]})}else{B(P,x+q*6,y,0.7,h,1.8,[176,172,160],'f');P.push({k:'pile',x:x+q*6+3.3,y:y+h/2,r:M.min(2.4,w/4),c:[124,128,66]})}}break}
+  case 'rows':P.push({k:'rows',x,y,w,h,o:hz?0:1});break;
+  case 'crateM':{for(let yy=y;yy+1.5<=y+h;yy+=2.6)for(let xx=x;xx+2.1<=x+w;xx+=2.8)if(R()<0.75)B(P,xx,yy,2.1,1.5,1+R()*0.9,[[96,104,72],[86,92,64],[120,112,84]][R()*3|0],'f');break}
+  case 'tent':{const tw=M.min(w,8),th=M.min(h,5);for(let xx=x;xx+tw<=x+w;xx+=tw+3)B(P,xx,y+(h-th)/2,tw,th,2.6,[[104,112,78],[92,98,70]][R()*2|0],'g');break}
+  case 'vehM':case 'veh':{const v=z.zk==='mil'?[0,1,2,4][R()*4|0]:4;const n=M.max(1,M.floor((hz?w:h)/8));for(let q=0;q<n;q++)P.push({k:'veh',x:hz?x+4+q*8:x+w/2,y:hz?y+h/2:y+4+q*8,a:hz?PI/2:0,v,c:cam});break}
+  case 'berm':{const r=M.min(w,h)/2-1;if(r>4){P.push({k:'berm',x:x+w/2,y:y+h/2,r,a:R()*TAU});if(r>6)P.push({k:'veh',x:x+w/2,y:y+h/2,a:R()*TAU,v:4,c:cam})}break}
+  case 'mast':{CY(P,x+w/2,y+h/2,0.7,22+R()*14,[200,200,204],'tower');B(P,x+w/2+2,y+h/2-1.5,3,3,2.4,[170,174,166],'f');break}
+  case 'bladder':{const r=M.min(w,h)/2-1;if(r>2){P.push({k:'gc',x:x+w/2,y:y+h/2,r,c:[44,48,42]});P.push({k:'gc',x:x+w/2,y:y+h/2,r:r*0.7,c:[58,62,52]})}break}
+  case 'apron':{P.push({k:'gl',pts:[x,y,x+w,y,x+w,y+h,x,y+h,x,y],w:0.3,c:[226,206,90]});if(w>10&&h>8){P.push({k:'gl',pts:[x+w/2,y+1,x+w/2,y+h-1],w:0.25,c:[226,206,90],dash:1});B(P,x+1.2,y+1.2,2.4,1.6,1.1,[200,196,60],'f')}break}
+  case 'trees':{const n=M.max(2,M.floor(w*h/40));for(let q=0;q<n;q++)TR(P,x+2+R()*(w-4),y+2+R()*(h-4),4+R()*4,[0,1,2,4][R()*4|0]);break}
+  }}
 // randomly placed zone objects must not interpenetrate: a building that overlaps an earlier one is dropped,
 // a tank / tower / chimney that overlaps a building or an earlier cylinder too (with its smoke)
 function fpOver(a,b){if(a.k==='b'&&b.k==='b')return a.x<b.x+b.w-0.2&&b.x<a.x+a.w-0.2&&a.y<b.y+b.h-0.2&&b.y<a.y+a.h-0.2;
@@ -961,15 +1153,68 @@ function dynCross(r0){const NEW=[];for(let i=r0;i<roads.length;i++)if(roads[i].k
       if(inC&&st<0)st=M.max(0,s-15);if(!inC&&st>=0){I.push([st,s]);st=-1}}if(st>=0)I.push([st,r.L]);r.inC=I.length?I:undefined}}
 // ---------- railways of the game: a line between two stations ('rst' zones or a station frame about to be built)
 // the line leaves a station along its axis (from the end facing the other station) and runs straight on for 160 m
-function railEnd(z,tx,ty){const s=(tx-z.x)*z.ca+(ty-z.y)*z.sa>=0?1:-1;return [[z.x+z.ca*s*z.W/2,z.y+z.sa*s*z.W/2],[z.x+z.ca*s*(z.W/2+160),z.y+z.sa*s*(z.W/2+160)]]}
-// rail line A → B: [points] or a reason string
-function railPts(A,B){const [ea,fa]=railEnd(A,B.x,B.y),[eb,fb]=railEnd(B,A.x,A.y);const L=M.hypot(fb[0]-fa[0],fb[1]-fa[1]);if(M.hypot(B.x-A.x,B.y-A.y)<900)return 'Слишком коротко';
-  const sk=[A,B].filter(z=>z.kind==='zone');let mid=avoidZ([fa[0],fa[1],fb[0],fb[1]],5,sk);if(!mid)return 'Мешают постройки';
-  const P=[A.x,A.y,ea[0],ea[1]].concat(mid,[eb[0],eb[1],B.x,B.y]);let Q=chaikin(P,3);if(zoneOnPath(Q.slice(4,Q.length-4),RW[5]/2+6,sk))Q=P;
+function railEnd(z,tx,ty,flip){let s=(tx-z.x)*z.ca+(ty-z.y)*z.sa>=0?1:-1;if(flip)s=-s;return [[z.x+z.ca*s*z.W/2,z.y+z.sa*s*z.W/2],[z.x+z.ca*s*(z.W/2+160),z.y+z.sa*s*(z.W/2+160)]]}
+// the end of a station a line may leave from: the one facing the other station, unless its lead runs into a town
+// (or water); then the other end first
+function railEnds(z,o){const bad=f=>{const p=f[1];if(landE(p[0],p[1],0)<0)return true;for(const c of queryF(p[0]-1,p[1]-1,p[0]+1,p[1]+1))if(c.kind==='city'&&c.type>=1&&cityF(c,p[0],p[1])<1.02)return true;return false};
+  const a=railEnd(z,o.x,o.y),b=railEnd(z,o.x,o.y,1);return bad(a)&&!bad(b)?[b,a]:[a,b]}
+// rail line A → B: [points] or a reason string. The line finds its own way (stage 5.11): an A* search on a grid of
+// 110..260 m cells round towns (their centre is closed, the built-up area costs a lot, the outskirts extra), villages, buildings, high
+// mountains and long water (a bridge costs a lot); blk(x,y) can close more cells (the game: foreign land). The cell path
+// is straightened (string pulling over cheap cells) and rounded off (Chaikin), so the track bends in long curves.
+function railPts(A,B,blk){if(M.hypot(B.x-A.x,B.y-A.y)<900)return 'Слишком коротко';
+  const sk=[A,B].filter(z=>z.kind==='zone');let Q=null;const EA=railEnds(A,B),EB=railEnds(B,A);
+  for(const [ia,ib] of [[0,0],[1,0],[0,1],[1,1]]){const [ea,fa]=EA[ia],[eb,fb]=EB[ib];
+    for(const cs0 of [0,1]){const mid=railRoute(fa,fb,sk,blk,cs0,[A,B],ea,eb);if(!mid)continue;
+      for(const it of [8,4,0]){const P=[A.x,A.y,ea[0],ea[1]].concat(railSmooth(mid,ea,eb,it),[eb[0],eb[1],B.x,B.y]);const q=chaikin(P,3);if(!zoneOnPath(q.slice(4,q.length-4),RW[5]/2+6,sk)){Q=q;break}}if(Q)break}if(Q)break}
+  if(!Q)return 'Нет пути: мешают города, постройки, вода или горы';
   if(!waterRunOK(Q,900,0.35))return 'Слишком много воды на пути';
   for(const c of live){if(c.type<1)continue;for(let i=0;i<Q.length;i+=8)if(cityF(c,Q[i],Q[i+1])<0.85)return 'Путь идёт через центр '+c.name}
   return Q}
-function addRail(q){const A=zones[q.a],B=zones[q.b];if(!A||!B)return -1;const P=railPts(A,B);if(typeof P==='string')return -1;const r0=roads.length;const r=mkRoad(5,P);if(!r)return -1;r.dyn=1;r.st=q.st;r.za=q.a;r.zb=q.b;bridgesOf(r);
+// the cell path is resampled every ~60 m and relaxed (each point moves towards the mean of its neighbours; the
+// station leads stay fixed), so corners open into curves of a few hundred metres radius
+function railSmooth(mid,ea,eb,it){if(!it)return mid;const P=[];for(let i=0;i+3<mid.length;i+=2){const ax=mid[i],ay=mid[i+1],bx=mid[i+2],by=mid[i+3],n=M.max(1,M.round(M.hypot(bx-ax,by-ay)/60));for(let q=0;q<n;q++)P.push([ax+(bx-ax)*q/n,ay+(by-ay)*q/n])}
+  P.push([mid[mid.length-2],mid[mid.length-1]]);const n=P.length;if(n<4)return mid;
+  // the ends are fixed; the first and last points are also drawn onto the line of their station lead (no kink there)
+  const da=[P[0][0]-ea[0],P[0][1]-ea[1]],db=[P[n-1][0]-eb[0],P[n-1][1]-eb[1]],la=M.hypot(da[0],da[1])||1,lb=M.hypot(db[0],db[1])||1;
+  for(let k=0;k<it;k++)for(let r=0;r<3;r++){for(let i=1;i<n-1;i++){const a=P[i-1],b=P[i+1];P[i][0]+=((a[0]+b[0])/2-P[i][0])*0.5;P[i][1]+=((a[1]+b[1])/2-P[i][1])*0.5}
+    for(const [i,e,d,l] of [[1,P[0],da,la],[n-2,P[n-1],db,lb]]){const t=M.hypot(P[i][0]-e[0],P[i][1]-e[1]);P[i][0]+=(e[0]+d[0]/l*t-P[i][0])*0.5;P[i][1]+=(e[1]+d[1]/l*t-P[i][1])*0.5}}
+  const out=[];for(const p of P)out.push(p[0],p[1]);return out}
+function railRoute(fa0,fb0,sk,blk,fine,ends,ea,eb){const L=M.hypot(fb0[0]-fa0[0],fb0[1]-fa0[1]),pad=M.max(2600,L*0.5);let cs=clamp(L/(fine?110:70),fine?80:110,fine?180:260);
+  // the search runs between points a further 2.5 cells out along the station leads, so the line leaves and meets
+  // each station head-on (never sneaking in alongside it)
+  const ext=(f,e)=>{const dx=f[0]-e[0],dy=f[1]-e[1],l=M.hypot(dx,dy)||1;return [f[0]+dx/l*cs*2.5,f[1]+dy/l*cs*2.5]},fa=ext(fa0,ea),fb=ext(fb0,eb);
+  const bx0=M.min(fa[0],fb[0])-pad,by0=M.min(fa[1],fb[1])-pad,bx1=M.max(fa[0],fb[0])+pad,by1=M.max(fa[1],fb[1])+pad;while(((bx1-bx0)/cs+1)*((by1-by0)/cs+1)>70000)cs*=1.2;
+  const nx=M.ceil((bx1-bx0)/cs)+1,ny=M.ceil((by1-by0)/cs)+1,N=nx*ny,C=new Float32Array(N);
+  const X=i=>bx0+i*cs,Y=j=>by0+j*cs,ci=x=>M.round((x-bx0)/cs),cj=y=>M.round((y-by0)/cs);
+  for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const x=X(i),y=Y(j),e=landE(x,y,0.002);C[j*nx+i]=e<0?9:e>0.34?0:e>0.24?2.2:1}
+  // towns: the built-up area is closed, the outskirts cost extra; villages are closed with a margin
+  for(const c of live){if(c.dead)continue;const rr=c.type>=1?c.R*1.6+cs:c.R+260;if(c.x+rr<bx0||c.x-rr>bx1||c.y+rr<by0||c.y-rr>by1)continue;
+    for(let j=M.max(0,cj(c.y-rr));j<=M.min(ny-1,cj(c.y+rr));j++)for(let i=M.max(0,ci(c.x-rr));i<=M.min(nx-1,ci(c.x+rr));i++){const k=j*nx+i;if(!C[k])continue;const x=X(i),y=Y(j);
+      if(c.type>=1){const f=cityF(c,x,y);if(f<0.92)C[k]=0;else if(f<1.45)C[k]+=(1.45-f)*14+(f<1.08?22:0)}else if(M.hypot(x-c.x,y-c.y)<c.R+150)C[k]=0}}
+  // other buildings are closed with a margin; the two stations too (the line reaches them only along their leads)
+  for(const z of queryF(bx0,by0,bx1,by1).concat(ends.filter(e=>e.kind!=='zone').map(e=>Object.assign({kind:'zone',rad:M.hypot(e.W,e.H)/2},e)))){if(z.kind!=='zone'||z.dead)continue;const r=z.rad+90+cs*0.7;
+    for(let j=M.max(0,cj(z.y-r));j<=M.min(ny-1,cj(z.y+r));j++)for(let i=M.max(0,ci(z.x-r));i<=M.min(nx-1,ci(z.x+r));i++){const dx=X(i)-z.x,dy=Y(j)-z.y;
+      if(M.abs(dx*z.ca+dy*z.sa)<z.W/2+70+cs*0.7&&M.abs(-dx*z.sa+dy*z.ca)<z.H/2+70+cs*0.7)C[j*nx+i]=0}}
+  if(blk)for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const k=j*nx+i;if(C[k]&&blk(X(i),Y(j)))C[k]=0}
+  const s0=cj(fa[1])*nx+ci(fa[0]),g0=cj(fb[1])*nx+ci(fb[0]);
+  // the cells right at the two ends stay open (a station may stand next to a town)
+  for(const [ex,ey] of [fa,fb])for(let j=M.max(0,cj(ey)-1);j<=M.min(ny-1,cj(ey)+1);j++)for(let i=M.max(0,ci(ex)-1);i<=M.min(nx-1,ci(ex)+1);i++){const k=j*nx+i;if(!C[k])C[k]=3}
+  // A* (8 neighbours, octile distance)
+  const G=new Float32Array(N).fill(1e30),Fr=new Int32Array(N).fill(-1),cl=new Uint8Array(N),H=[],HF=[];
+  const push=(k,f)=>{H.push(k);HF.push(f);let i=H.length-1;while(i>0){const p=(i-1)>>1;if(HF[p]<=HF[i])break;[H[p],H[i]]=[H[i],H[p]];[HF[p],HF[i]]=[HF[i],HF[p]];i=p}};
+  const pop=()=>{const k=H[0],lk=H.pop(),lf=HF.pop();if(H.length){H[0]=lk;HF[0]=lf;let i=0;for(;;){const a=2*i+1,b=a+1;let m=i;if(a<H.length&&HF[a]<HF[m])m=a;if(b<H.length&&HF[b]<HF[m])m=b;if(m===i)break;[H[m],H[i]]=[H[i],H[m]];[HF[m],HF[i]]=[HF[i],HF[m]];i=m}}return k};
+  const gx=g0%nx,gy=(g0/nx)|0,hz=k=>{const dx=M.abs(k%nx-gx),dy=M.abs(((k/nx)|0)-gy);return (M.max(dx,dy)+0.4142*M.min(dx,dy))};
+  G[s0]=0;push(s0,hz(s0));let it=0,found=false;
+  while(H.length&&it++<N*4){const k=pop();if(cl[k])continue;cl[k]=1;if(k===g0){found=true;break}const kx=k%nx,ky=(k/nx)|0;
+    for(let dj=-1;dj<=1;dj++)for(let di=-1;di<=1;di++){if(!di&&!dj)continue;const x=kx+di,y=ky+dj;if(x<0||y<0||x>=nx||y>=ny)continue;const q=y*nx+x,c=C[q];if(!c||cl[q])continue;
+      if(di&&dj&&(!C[ky*nx+x]||!C[y*nx+kx]))continue;const g=G[k]+(di&&dj?1.4142:1)*(c+C[k])/2;if(g<G[q]){G[q]=g;Fr[q]=k;push(q,g+hz(q))}}}
+  if(!found)return null;const cells=[];for(let k=g0;k>=0;k=Fr[k])cells.push(k);cells.reverse();
+  // string pulling: a straight run is kept while every cell under it is open and no dearer than the cells it replaces
+  const los=(a,b)=>{const ax=a%nx,ay=(a/nx)|0,bx=b%nx,by=(b/nx)|0,n=M.max(M.abs(bx-ax),M.abs(by-ay))*2;let mx=1.05;for(let q=0;q<=n;q++){const x=M.round(ax+(bx-ax)*q/n),y=M.round(ay+(by-ay)*q/n),c=C[y*nx+x];if(!c||c>M.max(1.3,mx))return false}return true};
+  const keep=[cells[0]];let i=0;while(i<cells.length-1){let j=cells.length-1;while(j>i+1&&!los(cells[i],cells[j]))j--;keep.push(cells[j]);i=j}
+  const out=[fa0[0],fa0[1],fa[0],fa[1]];for(let q=1;q<keep.length-1;q++){const x=X(keep[q]%nx),y=Y((keep[q]/nx)|0);if(M.hypot(x-fa[0],y-fa[1])<cs*1.6||M.hypot(x-fb[0],y-fb[1])<cs*1.6)continue;out.push(x,y)}out.push(fb[0],fb[1],fb0[0],fb0[1]);return out}
+function addRail(q){const A=zones[q.a],B=zones[q.b];if(!A||!B)return -1;const P=q.P&&q.P.length>=8?q.P:railPts(A,B);if(typeof P==='string')return -1;const r0=roads.length;const r=mkRoad(5,P);if(!r)return -1;r.dyn=1;r.st=q.st;r.za=q.a;r.zb=q.b;bridgesOf(r);
   for(const o of queryF(r.bb[0],r.bb[1],r.bb[2],r.bb[3]))if(o.kind==='city'&&o.type>=1)throughClear(r,o);dynCross(r0);return r.id}
 function removeRail(id){const r=roads[id];if(!r||r.dead||r.k!==5)return -1;r.dead=1;DEADN++;return id}
 // ---------- upgrades of a building (stage 5.7): the zone is laid out again with the extra parts (same seed, so the
@@ -1242,7 +1487,7 @@ function drawPlane(x,s,ci){ // facing +x, ~ 60 m
 // ---------------------------------------------------------------- tile render: raster
 const TINTZ={ind:1,ref:1,pow:1,port:1,stn:1,gas:1,agro:1};
 const GS=4,GN=TS/GS+4;
-const gH=new Float32Array(GN*GN),gR=new Float32Array(GN*GN),gW=new Float32Array(GN*GN),gM=new Float32Array(GN*GN),gF=new Float32Array(GN*GN),gA=new Float32Array(GN*GN),gU=new Float32Array(GN*GN),gS=new Float32Array(GN*GN),gGR=new Float32Array(GN*GN),gGH=new Float32Array(GN*GN),gHS=new Float32Array(GN*GN),gMS=new Float32Array(GN*GN),gCV=new Float32Array(GN*GN),MC1=new Float32Array(400),MC2=new Float32Array(400);
+const gQX=new Float32Array(GN*GN),gQY=new Float32Array(GN*GN),gH=new Float32Array(GN*GN),gR=new Float32Array(GN*GN),gW=new Float32Array(GN*GN),gM=new Float32Array(GN*GN),gF=new Float32Array(GN*GN),gA=new Float32Array(GN*GN),gU=new Float32Array(GN*GN),gS=new Float32Array(GN*GN),gGR=new Float32Array(GN*GN),gGH=new Float32Array(GN*GN),gHS=new Float32Array(GN*GN),gMS=new Float32Array(GN*GN),gCV=new Float32Array(GN*GN),MC1=new Float32Array(400),MC2=new Float32Array(400);
 const LX=-0.55,LY=-0.62,LZ=0.56;const LN_=M.hypot(LX,LY,LZ);
 let VCx=1e9,VCy=1e9;const VP=new Float64Array(27),VF=new Float32Array(9);
 // game worlds: is the field system with centre (x, y) ploughed? Each settlement farms the systems whose centres lie
@@ -1269,6 +1514,9 @@ function raster(ctx,x0,y0,mpp,near){const WIN=SEASON===2;if(EMPTY)VCx=1e9;
       const fv=EMPTY?smooth(R2,R2-800,d):smooth(c.R+4500,c.R+600,d)*(c.type===0?0.85:1)*(GROW.size?growFields(c):1);if(fv>fa)fa=fv;
       if(d<c.R*1.6){const f=cityF(c,wx,wy)*(c.type===0?0.8:1)+(GROW.size?growShift(c):0);const v=smooth(1.1,0.92,f)*(c.type===0?0.12:1);if(v>u)u=v}}
     gA[k]=fa;gU[k]=u;
+    // game worlds: field systems are looked up through a smooth domain warp, so the edge between farmland and wood or
+    // meadow (and the field tracks between systems) curves like a real clearing instead of following straight Voronoi edges
+    if(EMPTY){gQX[k]=noise(wx/2100+5.3,wy/2100-2.7)*330+noise(wx/640+1.9,wy/640+7.7)*70;gQY[k]=noise(wx/2100-8.1,wy/2100+4.4)*330+noise(wx/640-3.3,wy/640-6.1)*70}
     const r=M.abs(rv);gHS[k]=e}}
   // macro relief (smooth 4-octave height, 250 m stencil) on a 4x coarser grid, bilinearly upsampled:
   // readable hills / valleys / hilltops that do not depend on zoom
@@ -1315,25 +1563,32 @@ function raster(ctx,x0,y0,mpp,near){const WIN=SEASON===2;if(EMPTY)VCx=1e9;
         let fo=smooth(0.06,0.13,fv)*(1-smooth(0.04,0.25,u))*smooth(0.55,0.44,e);
         // fields
         let agv=smooth(0.25,0.55,ag)*smooth(0.36,0.22,e)*(1-smooth(0.05,0.3,u))*(1-smooth(1.2,2.5,slope));
-        let i1=0,i2=0,dB=0,pdx=0,pdy=0,EDP=-1;
+        let i1=0,i2=0,dB=0,pdx=0,pdy=0,EDP=-1,fe=0;
         if(agv>0.01&&(fieldsOn||EMPTY)){
           // field systems: jittered Voronoi regions (each with its own furrow direction and plot sizes),
           // bounded by field tracks / hedgerows, so there are no straight seams on a fixed grid
-          const vx=M.floor(wx/2400),vy=M.floor(wy/2400);if(vx!==VCx||vy!==VCy){VCx=vx;VCy=vy;let q=0;for(let b2=-1;b2<=1;b2++)for(let a2=-1;a2<=1;a2++){const hq=hh(vx+a2,vy+b2,23);VP[q++]=(vx+a2+0.15+((hq&1023)/1023)*0.7)*2400;VP[q++]=(vy+b2+0.15+(((hq>>>10)&1023)/1023)*0.7)*2400;VP[q++]=hq;if(EMPTY)VF[q/3-1]=fieldOn(VP[q-3],VP[q-2],hq)}}
-          let q1=1e18,q2=1e18;for(let q=0;q<27;q+=3){const dx=wx-VP[q],dy=wy-VP[q+1],dd=dx*dx+dy*dy;if(dd<q1){q2=q1;i2=i1;q1=dd;i1=q}else if(dd<q2){q2=dd;i2=q}}
+          let qx=wx,qy=wy;if(EMPTY){qx+=gQX[k]*w00+gQX[k+1]*w10+gQX[k+GN]*w01+gQX[k+GN+1]*w11;qy+=gQY[k]*w00+gQY[k+1]*w10+gQY[k+GN]*w01+gQY[k+GN+1]*w11}
+          const vx=M.floor(qx/2400),vy=M.floor(qy/2400);if(vx!==VCx||vy!==VCy){VCx=vx;VCy=vy;let q=0;for(let b2=-1;b2<=1;b2++)for(let a2=-1;a2<=1;a2++){const hq=hh(vx+a2,vy+b2,23);VP[q++]=(vx+a2+0.15+((hq&1023)/1023)*0.7)*2400;VP[q++]=(vy+b2+0.15+(((hq>>>10)&1023)/1023)*0.7)*2400;VP[q++]=hq;if(EMPTY)VF[q/3-1]=fieldOn(VP[q-3],VP[q-2],hq)}}
+          let q1=1e18,q2=1e18;for(let q=0;q<27;q+=3){const dx=qx-VP[q],dy=qy-VP[q+1],dd=dx*dx+dy*dy;if(dd<q1){q2=q1;i2=i1;q1=dd;i1=q}else if(dd<q2){q2=dd;i2=q}}
           pdx=VP[i2]-VP[i1];pdy=VP[i2+1]-VP[i1+1];dB=(q2-q1)/(2*M.sqrt(pdx*pdx+pdy*pdy)+1e-6);
           // game worlds: a whole field system is ploughed or left as meadow / wood, so the farmland has the ragged outline
           // of real field patterns (no rings around the towns); 1 px blend across the boundary
           // near a boundary between ploughed and wild systems each plot decides on its own (EDP: chance to be ploughed),
           // so the edge of the farmland follows plot margins instead of a straight line
-          if(EMPTY){const f1=VF[i1/3],f2=VF[i2/3];if(f1!==f2){const band=260+((VP[i1+2]>>>4)&255)*1.6;if(fieldsOn&&mpp<40&&dB<band)EDP=f1?0.5+0.5*dB/band:0.5-0.5*dB/band;else{const e2=clamp(dB/M.max(mpp,0.5),0,1)*0.5;agv*=f1?0.5+e2:0.5-e2}}else agv*=f1}}
-        if(agv>0)fo*=1-smooth(0.3,0.7,agv)*0.85;
+          if(EMPTY){const f1=VF[i1/3],f2=VF[i2/3];
+            // wild side: the wood thins out into a meadow verge towards the nearest ploughed system (distance to its edge)
+            if(!f1){let dP=1e9;for(let q=0;q<27;q+=3){if(q===i1||!VF[q/3])continue;const ex=VP[q]-VP[i1],ey=VP[q+1]-VP[i1+1],dd=(qx-VP[q])**2+(qy-VP[q+1])**2;dP=M.min(dP,(dd-q1)/(2*M.sqrt(ex*ex+ey*ey)+1e-6))}
+              if(dP<1e8){const bd=260+((VP[i1+2]>>>4)&255)*1.6;fe=smooth(bd+160,bd*0.3,dP)*0.92}}else fe=0.85; // fallow plots among the crops: meadow, a few trees
+            if(f1!==f2){const band=260+((VP[i1+2]>>>4)&255)*1.6;if(fieldsOn&&mpp<40&&dB<band)EDP=f1?0.5+0.5*dB/band:0.5-0.5*dB/band;else{const e2=clamp(dB/M.max(mpp,0.5),0,1)*0.5;agv*=f1?0.5+e2:0.5-e2}}else agv*=f1}}
+        // wood gives way to the crops (game worlds: completely, after each plot has decided whether it is ploughed)
+        const clr=()=>{if(agv>0)fo*=1-smooth(0.3,0.7,agv)*(EMPTY?1:0.85)};if(!(agv>0.01&&fieldsOn))clr();
+        if(fe>0&&!crowns)fo*=1-fe;
         if(agv>0.01&&fieldsOn){
           const hR=VP[i1+2];const an=((hR>>>20)&1023)/1023*PI;const ca=M.cos(an),sa=M.sin(an);
           const lx=wx*ca+wy*sa,ly=-wx*sa+wy*ca;const fH=70+((hR>>>18)&255)*0.75;const cy=M.floor(ly/fH);const hrow=hh(cy,hR,7);
           const fW=(150+((hR>>>10)&255)*1.2)*(0.55+((hrow&255)/255)*1.1),lxs=lx+((hrow>>>8)&1023)/1023*fW;const cx=M.floor(lxs/fW);
           let hf=hh(cx,cy,hR);const ey0=ly/fH-cy;const half=(hf>>>28)&1;if(half&&ey0>0.5)hf=hh(cx,cy+7919,hR);const crop=hf&7;
-          if(EDP>=0&&((hf>>>3)&1023)/1023>=EDP)agv=0;
+          if(EDP>=0&&((hf>>>3)&1023)/1023>=EDP)agv=0;clr();
           let fr,fg,fb;
           switch(crop){case 0:fr=196;fg=172;fb=98;break;case 1:fr=122;fg=150;fb=62;break;case 2:fr=124;fg=96;fb=66;break;case 3:fr=206;fg=192;fb=72;break;
             case 4:fr=94;fg=134;fb=56;break;case 5:fr=150;fg=148;fb=92;break;case 6:fr=172;fg=158;fb=100;break;default:fr=108;fg=128;fb=70}
@@ -1369,6 +1624,7 @@ function raster(ctx,x0,y0,mpp,near){const WIN=SEASON===2;if(EMPTY)VCx=1e9;
             for(let b=-1;b<=1;b++)for(let a=-1;a<=1;a++){const hq=hh(cxi+a,cyi+b,3);const fx=(cxi+a+((hq&255)/255)*0.8+0.1)*C,fy=(cyi+b+(((hq>>>8)&255)/255)*0.8+0.1)*C;
               const rr=(0.62+((hq>>>16)&255)/255*0.5);const dx=wx-fx,dy=wy-fy;const dd=(dx*dx+dy*dy)/(rr*rr*C*C);if(dd<bd){bd=dd;bx=dx;by=dy;br=(hq>>>24)&255}}
             const dist=M.sqrt(bd);const cr=clamp(1.15-dist,0,1);const lit=clamp(0.5-(bx+by)/(C*1.3),0,1);
+            if(fe>0){const keep=((br*37)&255)/255>fe;fo*=keep?smooth(0.05,0.35,cr):0} // the verge: single trees and clumps, no torn edge
             let cb=0.45+cr*(0.55+lit*0.55);cb=lerp(0.85+dt*0.3,cb,1-smooth(0.7,1.7,mpp));const tint=br/255;
             const ever=(br&3)===0||mo>0.32;
             if(SEASON===1&&!ever){const q=(br>>2)&3;const AC=AUT[q];fr=AC[0];fg=AC[1];fb=AC[2]}
@@ -1411,7 +1667,8 @@ function raster(ctx,x0,y0,mpp,near){const WIN=SEASON===2;if(EMPTY)VCx=1e9;
 
 // ---------------------------------------------------------------- block generation
 const MASS_=[0,[128,130,136],[138,130,122],[134,136,132],[122,126,104],[96,118,74],[160,160,160],[126,132,108],[124,118,110],[118,128,100],[134,134,124],[140,128,110],[142,136,128]];
-const MASS=MASS_.concat([[112,132,90],[180,182,180],[130,120,120],[112,130,96],[132,132,134],[0,0,0],[120,132,146],[100,122,76],[176,170,160]]);
+const MASS=MASS_.concat([[112,132,90],[180,182,180],[130,120,120],[112,130,96],[132,132,134],[0,0,0],[120,132,146],[100,122,76],[176,170,160],[136,138,132],[178,172,160]]);
+function occR(O,x,y,w,h){for(let q=0;q<O.length;q+=4)if(x<O[q]+O[q+2]&&x+w>O[q]&&y<O[q+1]+O[q+3]&&y+h>O[q+1])return true;return false}
 function occ(O,x,y,m){for(let i=0;i<O.length;i+=4){if(x>O[i]-m&&x<O[i]+O[i+2]+m&&y>O[i+1]-m&&y<O[i+1]+O[i+3]+m)return true}return false}
 let LITE=false,LITE2=false;
 function treesIn(P,O,R,x0,y0,w,h,n,dmin,dmax,vset){if(LITE)n=M.min(n,LITE2?4:10);for(let q=0;q<n;q++){const x=x0+R()*w,y=y0+R()*h,d=dmin+R()*(dmax-dmin);if(occ(O,x,y,d*0.45))continue;TR(P,x,y,d,vset[R()*vset.length|0])}}
@@ -1441,12 +1698,12 @@ function dropCrowns(P){const G=mkBins();let nb=0;for(const p of P)if(p.k==='b'||
 // street trees on the sidewalk; a crown that would cover a roof is left out (trees are drawn above buildings)
 function streetTrees(P,R,x0,y0,x1,y1,sp,O){if(LITE2)return;if(LITE)sp*=1.6;const v=R()*3|0;const T=(x,y)=>{const d=5+R()*3;if(!O||!occ(O,x,y,d*0.5))TR(P,x,y,d,v)};for(let x=x0+4;x<x1-4;x+=sp){T(x,y0+1.8);T(x,y1-1.8)}for(let y=y0+4+sp;y<y1-4-sp;y+=sp){T(x0+1.8,y);T(x1-1.8,y)}}
 function genBlock(c,bi,bj,t){
-  const R=rng(hh(c.id,bi*1013+bj,61));const i=bi-c.N,j=bj-c.N;const hu0=(c.us[bi+1]-c.us[bi])/2,hv0=(c.vs[bj+1]-c.vs[bj])/2;let hu=hu0,hv=hv0;if(c.wp){const f=blkFrame(c,bi,bj);hu=f[4];hv=f[5]}
-  const iL=lineHalf(i),iR=lineHalf(i+1),iB=lineHalf(j),iT=lineHalf(j+1);
+  const R=rng(hh(c.id,bi*1013+bj,61));const i=bi-c.N,j=bj-c.N;const sp=blkSpan(c,bi,bj);const hu0=(c.us[bi+sp[0]]-c.us[bi])/2,hv0=(c.vs[bj+sp[1]]-c.vs[bj])/2;let hu=hu0,hv=hv0,bf=null;if(c.cv||c.sp){bf=blkFrame(c,bi,bj);hu=bf[4];hv=bf[5]}
+  const iL=c.kU?KH(c.kU[bi]):lineHalf(i),iR=c.kU?KH(c.kU[bi+sp[0]]):lineHalf(i+1),iB=c.kV?KH(c.kV[bj]):lineHalf(j),iT=c.kV?KH(c.kV[bj+sp[1]]):lineHalf(j+1);
   const sx0=-hu+iL,sy0=-hv+iB,sx1=hu-iR,sy1=hv-iT;const P=[],O=[];
   G(P,sx0,sy0,sx1-sx0,sy1-sy0,SIDEW);P[P.length-1].tr=1;
   const X0=sx0+3.5,Y0=sy0+3.5,X1=sx1-3.5,Y1=sy1-3.5,W=X1-X0,H=Y1-Y0,cx=(X0+X1)/2,cy=(Y0+Y1)/2;
-  const dn=M.hypot(c.us[bi]+hu0,c.vs[bj]+hv0)/c.R;
+  const dn=c.pol?M.hypot(bf[0]-c.x,bf[1]-c.y)/c.R:M.hypot(c.us[bi]+hu0,c.vs[bj]+hv0)/c.R;
   const bld=(x,y,w,h,Hh,col,r,ex)=>{B(P,x,y,w,h,Hh,col,r,ex);O.push(x,y,w,h)};
   switch(t){
   case 1:{ // towers
@@ -1598,6 +1855,34 @@ function genBlock(c,bi,bj,t){
   case 20:{ // green buffer along a through-road: meadow + tree groups kept clear of the carriageway
     G(P,X0,Y0,W,H,[104,124,72]);const bf=blkFrame(c,bi,bj),ca=bf[2],sa=bf[3],bx=bf[0],by=bf[1];
     const n=M.floor(W*H/90);for(let q=0;q<n;q++){const x=X0+3+R()*(W-6),y=Y0+3+R()*(H-6),d=4+R()*6;const wx=bx+x*ca-y*sa,wy=by+x*sa+y*ca;if(roadHits(wx,wy,0,d,d,4,null))continue;TR(P,x,y,d,[0,1,2,4,6][R()*5|0])}
+    break}
+  case 22:{ // microdistrict on a superblock: panel slabs along the edges with gaps, point towers on the corners,
+            // a school with a running track and a kindergarten in the middle, parking strips and playgrounds in the yards
+    G(P,X0,Y0,W,H,YARD);const col=PANELC[R()*PANELC.length|0],fls=[9,9,12,14,16][R()*5|0],sw=12+R()*2.5,st=6;
+    const fl=()=>(R()<0.22?[5,9,12,16][R()*4|0]:fls)*2.9;
+    const put=(x,y,w,h,Hh,ex,cl)=>{if(x<X0+2||y<Y0+2||x+w>X1-2||y+h>Y1-2||occR(O,x-4,y-4,w+8,h+8))return false;bld(x,y,w,h,Hh,cl||col,'f',ex);return true};
+    const flat=(x,y,w,h,o)=>{if(x<X0+1||y<Y0+1||x+w>X1-1||y+h>Y1-1||occR(O,x-1.5,y-1.5,w+3,h+3))return false;P.push(Object.assign({x,y,w,h},o));O.push(x,y,w,h);return true};
+    const ct=R()<0.65,tw=20+R()*4;
+    if(ct)for(const [x,y] of [[X0+st,Y0+st],[X1-st-tw,Y0+st],[X0+st,Y1-st-tw],[X1-st-tw,Y1-st-tw]])if(R()<0.8)put(x,y,tw,tw,(16+(R()*7|0))*2.9,{mr:1});
+    const run=(alongX,a0,a1,fix,e)=>{let p=a0;while(p<a1-36){let len=M.min(a1-p,58+R()*62);if(a1-p-len<36)len=a1-p;if(len<36)break;
+        if(alongX)put(p,fix,len,sw,fl(),{mr:1,gf:[-1,e,-1]});else put(fix,p,sw,len,fl(),{mr:1,gf:[-1,e,-1]});p+=len+16+R()*26}};
+    const m0=st+(ct?tw+10:0),m1=st+M.max(sw,ct?tw:0)+14;
+    run(true,X0+m0,X1-m0,Y0+st,2);run(true,X0+m0,X1-m0,Y1-st-sw,0);if(H>130){run(false,Y0+m1,Y1-m1,X0+st,1);run(false,Y0+m1,Y1-m1,X1-st-sw,3)}
+    const ix0=X0+st+sw+14,iy0=Y0+st+sw+14,ix1=X1-st-sw-14,iy1=Y1-st-sw-14,iw=ix1-ix0,ih=iy1-iy0;
+    if(iw>40&&ih>40){
+      if(iw>120&&ih>70&&R()<0.8){const tw2=M.min(iw*0.42,95),th2=M.min(ih*0.6,56),left=R()<0.5,tx=left?ix0:ix1-tw2,ty=iy0+(ih-th2)*R();
+        if(flat(tx,ty,tw2,th2,{k:'track'})){const bw=M.min(64,iw-tw2-24);if(bw>26){const bx=left?tx+tw2+12:tx-12-bw;put(bx,ty,bw,13,12.5,{},[184,120,90]);put(left?bx:bx+bw-13,ty+17,13,M.min(30,th2-17),12.5,{},[184,120,90])}}}
+      for(let q=0;q<8;q++){const kx=ix0+R()*(iw-30),ky=iy0+R()*(ih-28);if(put(kx,ky,30,14,7,{},[[206,158,104],[196,176,140],[214,196,170]][R()*3|0])){flat(kx+1,ky+17,13,9,{k:'play'});flat(kx+16,ky+17,13,9,{k:'play'});break}}
+      for(let q=0;q<6;q++){const pw=28+R()*30,px=ix0+R()*(iw-pw),py=iy0+R()*(ih-6);if(!occR(O,px-2,py-2,pw+4,10)){PK(P,px,py,pw,6,0.65,R()*1e9|0);O.push(px,py,pw,6)}}
+      for(let q=0;q<7;q++)flat(ix0+R()*(iw-14),iy0+R()*(ih-10),14,10,{k:'play'})}
+    treesIn(P,O,R,X0+2,Y0+2,W-4,H-4,M.floor(W*H/360),5,10,[0,1,2,4,6]);streetTrees(P,R,sx0,sy0,sx1,sy1,13,O);break}
+  case 23:{ // town square: patterned paving, a fountain (sometimes a column in it), four lawns, rows of trees, kiosks
+    G(P,X0,Y0,W,H,PAVE);P.push({k:'plz',x:X0,y:Y0,w:W,h:H,seed:hh(c.id,bi*1013+bj,98)});const r=M.min(W,H),lw=W*0.27,lh=H*0.27;
+    for(const [sx,sy] of [[-1,-1],[1,-1],[-1,1],[1,1]])P.push({k:'lawn',x:cx+sx*W*0.24-lw/2,y:cy+sy*H*0.24-lh/2,w:lw,h:lh,o:W>=H?0:1});
+    P.push({k:'gc',x:cx,y:cy,r:r*0.15,c:[198,192,178]});P.push({k:'pond',x:cx,y:cy,rx:r*0.105,ry:r*0.105});O.push(cx-r*0.16,cy-r*0.16,r*0.32,r*0.32);
+    if(R()<0.5)bld(cx-1.8,cy-1.8,3.6,3.6,13+R()*8,[132,128,120],'f');
+    const ts=8.5+R()*2,tv=[0,1,4][R()*3|0];for(let x=X0+6;x<X1-4;x+=ts){TR(P,x,Y0+5,5+R()*2,tv);TR(P,x,Y1-5,5+R()*2,tv)}for(let y=Y0+6+ts;y<Y1-4-ts;y+=ts){TR(P,X0+5,y,5+R()*2,tv);TR(P,X1-5,y,5+R()*2,tv)}
+    if(W>70&&H>60)for(const sd of [-1,1]){const kx=cx+sd*W*0.36-4,ky=cy-3;if(!occR(O,kx-2,ky-2,12,10))bld(kx,ky,8,6,3.6,[[176,120,80],[90,120,96],[160,60,52]][R()*3|0],'f')}
     break}
   }
   // towers and offices: lobby + entrance canopy on the facade nearest to the street
@@ -2088,6 +2373,9 @@ function drawPrims(ctx,P,pass,mpp){const s=1/mpp;
       else if(k==='play'){if(s<0.5)continue;playground(ctx,p,s)}
       else if(k==='plz'){if(s<0.35)continue;plaza(ctx,p,s)}
       else if(k==='bales'){if(s<0.6)continue;const r=rng(p.seed);for(let q=0;q<60;q++){const x=p.x+r()*p.w,y=p.y+r()*p.h;ctx.fillStyle='rgba(0,0,0,0.28)';ctx.beginPath();ctx.arc(x+0.7,y+0.55,0.9,0,TAU);ctx.fill();ctx.fillStyle=r()<0.5?'#d8c070':'#c8b062';ctx.beginPath();ctx.arc(x,y,0.9,0,TAU);ctx.fill()}}
+      else if(k==='herd'){if(s<0.6)continue;const r=rng(p.seed),n=M.min(40,M.floor(p.w*p.h/30));for(let q=0;q<n;q++){const x=p.x+1.6+r()*(p.w-3.2),y=p.y+1.6+r()*(p.h-3.2),a=r()*TAU,ca=M.cos(a),sa=M.sin(a),t=r();
+          ctx.fillStyle='rgba(0,0,0,0.3)';ctx.beginPath();ctx.ellipse(x+0.5,y+0.4,1.15,0.5,a,0,TAU);ctx.fill();ctx.fillStyle=t<0.45?'#6a4a32':t<0.75?'#e8e4dc':'#2a2624';ctx.beginPath();ctx.ellipse(x,y,1.1,0.48,a,0,TAU);ctx.fill();
+          if(t>=0.45&&t<0.75){ctx.fillStyle='#2a2624';ctx.beginPath();ctx.arc(x-ca*0.2,y-sa*0.2,0.26,0,TAU);ctx.fill()}ctx.fillStyle='#3a2a20';ctx.beginPath();ctx.arc(x+ca*1.1,y+sa*1.1,0.32,0,TAU);ctx.fill()}}
       else if(k==='hedge'){if(s<0.7)continue;ctx.strokeStyle=SEASON===2?'#6a7a6a':SEASON===1?'#7a6a30':'#3e6a30';ctx.lineWidth=1.1;ctx.strokeRect(p.x,p.y,p.w,p.h)}
       else if(k==='fence'){if(s<1.0)continue;const t=hh(p.x*3|0,p.y*3|0,41)%4;const col=['rgba(110,84,60,0.85)','rgba(70,104,72,0.9)','rgba(150,150,150,0.7)','rgba(120,64,48,0.85)'][t];
         ctx.strokeStyle='rgba(14,18,28,0.25)';ctx.lineWidth=t===1||t===3?0.25:0.12;ctx.strokeRect(p.x+SDX*0.9,p.y+SDY*0.9,p.w,p.h);ctx.strokeStyle=col;ctx.strokeRect(p.x,p.y,p.w,p.h);
@@ -2317,18 +2605,36 @@ function drawLightPrims(ctx,P,mpp,ind){const s=1/mpp;
     else if(k==='lflood'){for(let y=p.y+p.sp/2;y<p.y+p.h;y+=p.sp)for(let x=p.x+p.sp/2;x<p.x+p.w;x+=p.sp){fdot(ctx,p.c,x,y,p.r*2,0.38);fdot(ctx,p.c,x,y,2.5,1)}}
   }}
 const LAMP=[[[0],48,26,'sod',0.75],[[6.8],55,19,'sod',0.7],[[10.8,-10.8],32,16,'wled',0.6],[[5.6,-5.6],38,13,'sod',0.55],[[3.6],80,11,'warm',0.5],null,[[0],40,16,'sod',0.6],[[12.8,-12.8],30,16,'wled',0.62],null];
-function lightRoads(ctx,list,mpp,bx0,by0,bx1,by1){const s=1/mpp;ctx.lineCap='round';ctx.lineJoin='round';
-  const byK=[[],[],[],[],[],[],[],[],[]];for(const r of list)if(byK[r.k])byK[r.k].push(r);
+// street lighting. All of it is drawn as opaque light intensity on black into its own layer G, where light from
+// different roads and lamps combines by maximum ('lighten'), so a crossing is no brighter than the street and pools do
+// not stack up; the glow along a road is a feathered band (three nested strokes), not a flat strip with hard edges.
+// G is then turned back into premultiplied light (alpha = brightest channel) and added to the tile.
+let LG_=null,LT_=null;const POOLO={};
+function poolO(c,a){const key=c+a;let q=POOLO[key];if(q)return q;q=POOLO[key]=mkCanvas(64,64);const x=q.getContext('2d');x.fillStyle='#000';x.fillRect(0,0,64,64);x.globalAlpha=a;x.drawImage(pools()[c],0,0);return q}
+function fdotO(g,c,x,y,d,a){LCNT++;const px=d*LS;if(px>=1.6){g.drawImage(poolO(c,a),x-d/2,y-d/2,d,d);return}
+  const q=1.3*LMPP,k=M.min(1,a*0.32*(px/1.3)*(px/1.3)+0.02*a),cc=LC[c].split(',');g.fillStyle=`rgb(${cc[0]*k|0},${cc[1]*k|0},${cc[2]*k|0})`;g.fillRect(x-q/2,y-q/2,q,q)}
+function lightRoads(ctx,list,mpp,bx0,by0,bx1,by1){const s=1/mpp,W=ctx.canvas.width,H=ctx.canvas.height,tf=ctx.getTransform();
+  const byK=[[],[],[],[],[],[],[],[],[]];for(const r of list)if(byK[r.k])byK[r.k].push(r);let any=false;
+  for(const k of [4,3,6,2,7,1,0])if(byK[k].length&&LAMP[k])any=true;if(!any)return;
+  if(!LG_||LG_.width!==W||LG_.height!==H){LG_=mkCanvas(W,H);LT_=mkCanvas(W,H)}
+  const g=LG_.getContext('2d',{willReadFrequently:true}),t=LT_.getContext('2d');const blank=(c)=>{c.setTransform(1,0,0,1,0,0);c.globalCompositeOperation='source-over';c.globalAlpha=1;c.fillStyle='#000';c.fillRect(0,0,W,H);c.setTransform(tf)};
+  blank(g);g.globalCompositeOperation='lighten';t.lineCap='round';t.lineJoin='round';any=false;
+  const band=(L,col,a,w0)=>{blank(t);t.globalCompositeOperation='lighter';
+    for(const [f,q] of [[1.7,0.26],[1.25,0.32],[0.85,0.42]]){t.strokeStyle=la(LC[col],a*q);t.lineWidth=w0*f;t.beginPath();for(const r of L)offsetPath(t,r,0);t.stroke()}
+    g.setTransform(1,0,0,1,0,0);g.drawImage(LT_,0,0);g.setTransform(tf)};
   for(const k of [4,3,6,2,7,1,0]){const L=byK[k];if(!L.length||!LAMP[k])continue;if((k===3&&mpp>70)||((k===2||k===7)&&mpp>130)||(k===4&&mpp>45)||(k===6&&mpp>30))continue;
-    const [offs,sp,D,col,a]=LAMP[k];LCNT+=L.length;
-    if(D*s>2.4){ctx.strokeStyle=la(LC[col],0.07);ctx.lineWidth=RW[k]*1.15;ctx.beginPath();for(const r of L)offsetPath(ctx,r,0);ctx.stroke();
+    const [offs,sp,D,col,a]=LAMP[k];LCNT+=L.length;any=true;
+    if(D*s>2.4){band(L,col,0.07,RW[k]*1.15);
       for(const r of L){if(r.bb[2]<bx0-D||r.bb[0]>bx1+D||r.bb[3]<by0-D||r.bb[1]>by1+D)continue;const ph=hr(r.id,3,3)*sp;
         for(let oi=0;oi<offs.length;oi++){const off=offs[oi];for(let q=ph+oi*sp/2;q<r.L;q+=sp){const p=posAt(r,q);const x=p[0]-p[3]*off,y=p[1]+p[2]*off;
-          if(x<bx0-D||x>bx1+D||y<by0-D||y>by1+D)continue;fdot(ctx,col,x,y,D,a);fdot(ctx,col,x,y,D*0.12,1)}}}}
-    else{const w=M.max(D*0.8,mpp*1.15);const aa=a*0.4*M.min(1,D*0.8/w)*(k===0?1.3:k===3?0.8:k===7?1.1:1)*(k===3?1.7-smooth(22,70,mpp)*1.1:(k===2||k===7)?1-smooth(40,130,mpp)*0.5:1);ctx.strokeStyle=la(LC[col],M.min(1,aa));ctx.lineWidth=w;ctx.beginPath();for(const r of L)offsetPath(ctx,r,0);ctx.stroke()}}
-  ctx.lineCap='butt'}
-const BLA=[0,0.95,0.7,0.62,0.3,0.06,0.9,0.3,0.12,0.55,0.45,0.25,0.8,0.3,0.7,0.5,0.55,0.45,0.3,0.85,0.02,0.7];
-const ZLA={ref:0.42,port:0.36,ind:0.2,air:0.16,pow:0.26,solar:0,gas:0.55,stn:0.42,agro:0.5,farm:0.08,dacha:0.1,quarry:0.05,cem:0};
+          if(x<bx0-D||x>bx1+D||y<by0-D||y>by1+D)continue;fdotO(g,col,x,y,D,a);fdotO(g,col,x,y,D*0.12,1)}}}}
+    else{const w=M.max(D*0.8,mpp*1.15);const aa=a*0.4*M.min(1,D*0.8/w)*(k===0?1.3:k===3?0.8:k===7?1.1:1)*(k===3?1.7-smooth(22,70,mpp)*1.1:(k===2||k===7)?1-smooth(40,130,mpp)*0.5:1);band(L,col,M.min(1,aa),w)}}
+  if(!any)return;
+  g.setTransform(1,0,0,1,0,0);g.globalCompositeOperation='source-over';const im=g.getImageData(0,0,W,H),d=im.data;
+  const u=new Uint32Array(d.buffer,d.byteOffset,d.length>>2);for(let q=0,i=0;q<u.length;q++,i+=4){if((u[q]&0xffffff)===0){u[q]=0;continue}const m=d[i]>d[i+1]?(d[i]>d[i+2]?d[i]:d[i+2]):(d[i+1]>d[i+2]?d[i+1]:d[i+2]);const f=255/m;d[i]=d[i]*f;d[i+1]=d[i+1]*f;d[i+2]=d[i+2]*f;d[i+3]=m}
+  g.putImageData(im,0,0);ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.globalCompositeOperation='lighter';ctx.drawImage(LG_,0,0);ctx.restore()}
+const BLA=[0,0.95,0.7,0.62,0.3,0.06,0.9,0.3,0.12,0.55,0.45,0.25,0.8,0.3,0.7,0.5,0.55,0.45,0.3,0.85,0.02,0.7,0.66,0.4];
+const ZLA={air2:0.2,ref:0.42,port:0.36,ind:0.2,air:0.16,pow:0.26,solar:0,gas:0.55,stn:0.42,agro:0.5,farm:0.08,dacha:0.1,quarry:0.05,cem:0};
 const ZFL={gas:[22,16,'led',0.28],stn:[40,22,'wled',0.42],farm:[90,14,'warm',0.4],quarry:[150,34,'sod',0.32],dacha:[70,10,'warm',0.3]};
 function lightFeat(ctx,f,x0,y0,s,mpp,qx0,qy0,qx1,qy1){
   if(f.kind==='city'){
@@ -2338,7 +2644,7 @@ function lightFeat(ctx,f,x0,y0,s,mpp,qx0,qy0,qx1,qy1){
         const vk='v'+f.id+'_'+i+(LITE2?'b':LITE?'a':'')+(GROW.has(f.id)?'g'+GROW.get(f.id).toFixed(2):'');let P=bcGet(vk);if(!P){P=genVillage(f,i);bcSet(vk,P)}drawLightPrims(ctx,P,mpp,false);
         for(let a=20;a<st.L;a+=80)fdot(ctx,'warm',a,4,11,0.5)}return}
     const BD=f.D-1;const [i0,i1,j0,j1]=blkRange(f,qx0,qy0,qx1,qy1);
-    const bi0=M.max(0,bsr(f.us,i0)),bi1=M.min(BD-1,bsr(f.us,i1)),bj0=M.max(0,bsr(f.vs,j0)),bj1=M.min(BD-1,bsr(f.vs,j1));
+    const bi0=M.max(0,bsr(f.us,i0)-(f.msi||0)),bi1=M.min(BD-1,bsr(f.us,i1)),bj0=M.max(0,bsr(f.vs,j0)-(f.msj||0)),bj1=M.min(BD-1,bsr(f.vs,j1));
     for(let bj=bj0;bj<=bj1;bj++)for(let bi=bi0;bi<=bi1;bi++){const t=growT(f,bi,bj,f.blocks[bj*BD+bi]);if(!t)continue;
       const bf=blkFrame(f,bi,bj);setFrame(ctx,bf[0],bf[1],bf[2],bf[3],x0,y0,s);
       if(mpp>14){const bw=bf[4]*2,bh=bf[5]*2;const a=BLA[t]*(0.7+hr(f.id,bi*999+bj,8)*0.6);const R=rng(hh(f.id,bi*999+bj,8));
@@ -2412,7 +2718,7 @@ function removeDeposit(i){const f=DEPS[i];if(f)f.dead=1;return i}
 // Streets are laid a little ahead of the houses; the town's zones and their access roads appear when it is nearly complete.
 const GROW=new Map();
 function setGrow(id,g){if(g>=1)GROW.delete(id);else GROW.set(id,M.max(0.05,g))}
-function blkF(f,bi,bj){const BD=f.D-1;let a=f._bf;if(!a){a=f._bf=new Float32Array(BD*BD);for(let j=0;j<BD;j++)for(let i=0;i<BD;i++){const u=(f.us[i]+f.us[i+1])/2,v=(f.vs[j]+f.vs[j+1])/2;if(f.wp){const q=cW(f,u,v);a[j*BD+i]=cityF(f,q[0],q[1])}else a[j*BD+i]=cityF(f,f.x+u*f.ca-v*f.sa,f.y+u*f.sa+v*f.ca)}}return a[bj*BD+bi]}
+function blkF(f,bi,bj){const BD=f.D-1;let a=f._bf;if(!a){a=f._bf=new Float32Array(BD*BD);for(let j=0;j<BD;j++)for(let i=0;i<BD;i++){const u=(f.us[i]+f.us[i+1])/2,v=(f.vs[j]+f.vs[j+1])/2;if(f.cv||f.sp){const q=blkFrame(f,i,j);a[j*BD+i]=cityF(f,q[0],q[1])}else a[j*BD+i]=cityF(f,f.x+u*f.ca-v*f.sa,f.y+u*f.sa+v*f.ca)}}return a[bj*BD+bi]}
 function growT(f,bi,bj,t){if(!t||!GROW.size||t===21)return t;const g=GROW.get(f.id);if(g===undefined)return t;const d=blkF(f,bi,bj);return d>g+0.1?0:d>g?11:t}
 function growFields(c){const g=GROW.get(c.id);return g===undefined?1:M.min(1,g*1.4)}
 function growShift(c){const g=GROW.get(c.id);return g===undefined?0:1-M.min(1,g+0.1)}
@@ -2460,9 +2766,9 @@ function renderTile(z,tx,ty){
 function drawCross(ctx,f,x0,y0,s,qx0,qy0,qx1,qy1){if(f.kind!=='city'||f.type===0||GROW.has(f.id))return;const N=f.N,D=f.D;
   const [i0,i1,j0,j1]=blkRange(f,qx0,qy0,qx1,qy1);
   const a0=M.max(0,bsr(f.us,i0)),a1=M.min(D-1,bsr(f.us,i1)+1),b0=M.max(0,bsr(f.vs,j0)),b1=M.min(D-1,bsr(f.vs,j1)+1);if(a1<a0||b1<b0)return;
-  if(!f.wp)setFrame(ctx,f.x,f.y,f.ca,f.sa,x0,y0,s);ctx.fillStyle='rgba(236,236,230,0.85)';ctx.beginPath();
+  if(!f.cv)setFrame(ctx,f.x,f.y,f.ca,f.sa,x0,y0,s);ctx.fillStyle='rgba(236,236,230,0.85)';ctx.beginPath();
   for(let j=b0;j<=b1;j++)for(let i=a0;i<=a1;i++){const up=f.eU[j*D+i],um=i>0&&f.eU[j*D+i-1],vp=f.eV[j*D+i],vm=j>0&&f.eV[(j-1)*D+i];if(up+um+vp+vm<3)continue;
-    let cx=f.us[i],cy=f.vs[j];if(f.wp){const nf=nodeFrame(f,i,j);ctx.fill();setFrame(ctx,nf[0],nf[1],nf[2],nf[3],x0,y0,s);ctx.beginPath();cx=0;cy=0}const hvI=RW[lineKind(i-N)]/2,hvJ=RW[lineKind(j-N)]/2;
+    let cx=f.us[i],cy=f.vs[j];if(f.cv){const nf=nodeFrame(f,i,j);ctx.fill();setFrame(ctx,nf[0],nf[1],nf[2],nf[3],x0,y0,s);ctx.beginPath();cx=0;cy=0}const hvI=RW[lkU(f,i)]/2,hvJ=RW[lkV(f,j)]/2;
     const zeb=(dirx,diry,dist,half)=>{for(let o=-half+0.5;o<half-0.4;o+=1.05){if(dirx){const x=cx+dirx*dist;ctx.rect(dirx>0?x:x-3,cy+o,3,0.55)}else{const y=cy+diry*dist;ctx.rect(cx+o,diry>0?y:y-3,0.55,3)}}};
     if(up)zeb(1,0,hvI+1.6,hvJ-0.4);if(um)zeb(-1,0,hvI+1.6,hvJ-0.4);if(vp)zeb(0,1,hvJ+1.6,hvI-0.4);if(vm)zeb(0,-1,hvJ+1.6,hvI-0.4);
     if(up)ctx.rect(cx+hvI+5.4,cy,0.35,hvJ-0.6);if(um)ctx.rect(cx-hvI-5.75,cy-hvJ+0.6,0.35,hvJ-0.6);if(vp)ctx.rect(cx-hvI+0.6,cy+hvJ+5.4,hvI-0.6,0.35);if(vm)ctx.rect(cx,cy-hvJ-5.75,hvI-0.6,0.35)}
@@ -2477,9 +2783,10 @@ function drawFeat(ctx,f,pass,x0,y0,s,mpp,qx0,qy0,qx1,qy1){
   if(f.kind==='city'){if(f.type===0){if(mpp>9)return;for(let i=0;i<f.vst.length;i++){const st=f.vst[i];setFrame(ctx,st.x0,st.y0,st.ca,st.sa,x0,y0,s);const vk='v'+f.id+'_'+i+(LITE2?'b':LITE?'a':'')+(GROW.has(f.id)?'g'+GROW.get(f.id).toFixed(2):'');let P=bcGet(vk);if(!P){P=genVillage(f,i);bcSet(vk,P)}
         if(pass===1){ctx.beginPath();drawPrims(ctx,P,1,mpp);ctx.fillStyle=SHADOW;ctx.fill()}else drawPrims(ctx,P,pass,mpp)}return}
     const N=f.N,BD=f.D-1;const [i0,i1,j0,j1]=blkRange(f,qx0,qy0,qx1,qy1);
-    const bi0=M.max(0,bsr(f.us,i0)),bi1=M.min(BD-1,bsr(f.us,i1)),bj0=M.max(0,bsr(f.vs,j0)),bj1=M.min(BD-1,bsr(f.vs,j1));
+    if(f.pol&&mpp<=14){const pr=f.pol.rin;if(f.px+pr>qx0&&f.px-pr<qx1&&f.py+pr>qy0&&f.py-pr<qy1){setFrame(ctx,f.px,f.py,1,0,x0,y0,s);const P=plazaPrims(f);if(pass===1){ctx.beginPath();drawPrims(ctx,P,1,mpp);ctx.fillStyle=SHADOW;ctx.fill()}else drawPrims(ctx,P,pass,mpp)}}
+    const bi0=M.max(0,bsr(f.us,i0)-(f.msi||0)),bi1=M.min(BD-1,bsr(f.us,i1)),bj0=M.max(0,bsr(f.vs,j0)-(f.msj||0)),bj1=M.min(BD-1,bsr(f.vs,j1));
     const LB=[];for(let bj=bj0;bj<=bj1;bj++)for(let bi=bi0;bi<=bi1;bi++){const t=growT(f,bi,bj,f.blocks[bj*BD+bi]);if(!t)continue;
-      const u=(f.us[bi]+f.us[bi+1])/2,v=(f.vs[bj]+f.vs[bj+1])/2;LB.push(bi,bj,t,f.wp?cW(f,u,v)[1]:f.y+u*f.sa+v*f.ca)}
+      const u=(f.us[bi]+f.us[bi+1])/2,v=(f.vs[bj]+f.vs[bj+1])/2;LB.push(bi,bj,t,f.cv||f.sp?blkFrame(f,bi,bj)[1]:f.y+u*f.sa+v*f.ca)}
     const ord=[];for(let q=0;q<LB.length;q+=4)ord.push(q);if(pass===2)ord.sort((a,b)=>LB[a+3]-LB[b+3]);
     for(const q of ord){const bi=LB[q],bj=LB[q+1],t=LB[q+2];
       const bf=blkFrame(f,bi,bj);setFrame(ctx,bf[0],bf[1],bf[2],bf[3],x0,y0,s);
@@ -2492,10 +2799,19 @@ function drawFeat(ctx,f,pass,x0,y0,s,mpp,qx0,qy0,qx1,qy1){
     for(const t of f.t){if(pass===1){ctx.moveTo(t.x,t.y);ctx.lineTo(t.x+SUNX*95-2,t.y+SUNY*95-2);ctx.lineTo(t.x+SUNX*95+2,t.y+SUNY*95+2);ctx.closePath()}
       else{ctx.fillStyle='#c8c8c4';ctx.beginPath();ctx.arc(t.x,t.y,M.max(2.5,mpp*0.8),0,TAU);ctx.fill();ctx.fillStyle='#9a9a90';ctx.fillRect(t.x-6,t.y-6,12,12)}}if(pass===1){ctx.fillStyle=SHADOW;ctx.fill()}}
 }
+// the round central square of a radial (or fan) town, inside its first ring: paving, a lawn ring with trees,
+// a fountain basin and a column on a pedestal in the middle, lamp posts and benches
+function plazaPrims(f){if(f._pz)return f._pz;const R=rng(f.seed^0x77aa),P=[],r=f.pol.rin-14.5-3.5;
+  P.push({k:'gc',x:0,y:0,r,c:PAVE});P.push({k:'gc',x:0,y:0,r:r*0.8,c:[96,132,70]});P.push({k:'gc',x:0,y:0,r:r*0.62,c:[184,178,166]});
+  for(let q=0;q<4;q++){const a=q*PI/2+PI/4;P.push({k:'path',x:M.cos(a)*r*0.71-2,y:M.sin(a)*r*0.71-2,w:4,h:4})}
+  const n=M.floor(TAU*r*0.71/11);for(let q=0;q<n;q++){const a=q/n*TAU;if(q%M.max(1,n>>2)===0)continue;TR(P,M.cos(a)*r*0.71,M.sin(a)*r*0.71,5.5+R()*2,[0,1,4][q%3])}
+  P.push({k:'pond',x:0,y:0,rx:r*0.36,ry:r*0.36});P.push({k:'gc',x:0,y:0,r:r*0.14,c:[178,172,160]});
+  B(P,-5,-5,10,10,3.2,[170,166,156],'f');B(P,-2.2,-2.2,4.4,4.4,24+R()*12,[150,146,138],'f',{H0:3.2,lvl:1});
+  f._pz=dropCrowns(P);return f._pz}
 // zone cylinder shadows need stroke not fill: patch drawPrims pass1 for cyl via stroke
 const _dp=drawPrims;
 
-return {roadShown,addPlace,addZone,removeZone,addDeposits,removeDeposit,moveDeposit,addRail,removeRail,railPts,zoneUp,setHidden,drawUav:(ctx,v,c,s)=>drawUav(ctx,v,c,s,0),isHid:id=>HID.has(id),
+return {air2Rw:z=>{const y=AIR2RY,p=(x)=>[z.x+x*z.ca-y*z.sa,z.y+x*z.sa+y*z.ca];return [p(-900),p(900)]},roadShown,addPlace,addZone,removeZone,addDeposits,removeDeposit,moveDeposit,addRail,removeRail,railPts,zoneUp,setHidden,drawUav:(ctx,v,c,s)=>drawUav(ctx,v,c,s,0),isHid:id=>HID.has(id),
   fieldReach:c=>EMPTY?fieldR(c)*1.3+3500:c.R+4700,blkFrame,cU,cW,deps:DEPS,zoneDead:id=>!zones[id]||!!zones[id].dead,forestAt,portAt:(x,y)=>portAt(x,y,820,900),setGrow,growOf:id=>GROW.has(id)?GROW.get(id):1,opt:OPT,setSeason,season:()=>SEASON,renderLights,WORLD,TS,SUNX,SUNY,WDX,WDY,LEANX,LEANY,cities:live,roads,zones,farms,ships,flights,emitters,airports,queryRoads,queryF,posAt,renderTile,sprites,drawShip,drawPlane,baseH,landE,rng,hh,noise,genTime:Date.now()-T0,mkCanvas,_dbg:{genVillage,genBlock,RW,riverV,riverW,avoidZ,zoneOnPath,waterRunOK,zoneExit,projOn,fieldOn,fieldR}};
 }
 

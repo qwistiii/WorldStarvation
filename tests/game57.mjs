@@ -33,7 +33,7 @@ try {
   const ui = await page.evaluate(() => { const r = (id) => document.getElementById(id).getBoundingClientRect(), tabs = r('bb-tabs'), tray = r('bb-tray'), pause = r('bpause');
     return { pauseLeft: pause.left < 120 && pause.top >= tray.top, tabsFull: tabs.left <= 4 && tabs.right >= innerWidth - 4, trayBelow: tray.top >= tabs.bottom - 1 && tray.bottom >= innerHeight - 1,
       tabs: document.querySelectorAll('#bb-tabs button').length, cards: document.querySelectorAll('#bb-cat .bcat').length, metal: !!document.getElementById('rmetal-v') }; });
-  check(ui.pauseLeft && ui.tabsFull && ui.trayBelow && ui.tabs === 7 && ui.cards === 15 && ui.metal, 'панели: вкладки во всю ширину, под ними панель с паузой и скоростью слева, металл в ресурсах', JSON.stringify(ui));
+  check(ui.pauseLeft && ui.tabsFull && ui.trayBelow && ui.tabs === 7 && ui.cards === 16 && ui.metal, 'панели: вкладки во всю ширину, под ними панель с паузой и скоростью слева, металл в ресурсах', JSON.stringify(ui));
   await page.click('#bb-tabs [data-t="cities"]');
   const off = await page.evaluate(() => document.body.classList.contains('tray-off'));
   await page.click('#bb-tabs [data-t="strike"]');

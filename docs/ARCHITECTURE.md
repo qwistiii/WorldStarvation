@@ -64,6 +64,10 @@
 | `mapShape`, `ISL`, `SZO/SZR`, `LAKT` | Опции карты этапа 5: формы суши, размер, озёра |
 | `CAPS` → `capC`, тип 21, зона `mil`, `vehSprites`/`drawVeh`, `drawFlagPole` | Столицы, правительственный квартал, военные базы, техника, флагштоки |
 | `GROW`, `setGrow`, `growT`, `growRoads`, `streetIv`, `featOn` | Рост столиц |
+| `cityLayout`, `buildPolar`, `mergeBlocks`, `addDiag`, `gridStreets`, `blkFrame`/`blkSpan`/`grpAt`, `plW`/`plU`, `plazaPrims` | Планировки городов игры (5.11): кольца и лучи, веер, сетки, суперкварталы, диагонали |
+| `zoneFill`, `zclus`, `ZFILL` | Детали на свободных частях площадок построек игры (5.11) |
+| `railPts`, `railRoute` (A*), `railSmooth`, `railEnds` | ЖД путь игры в обход препятствий (5.11) |
+| зона `air2`, `air2Rw` | Аэропорт игры; рейсы ведёт `game.js` (`stepFlights`), рисует `drawFlights` по `api.gflights` |
 | `raster`, `grain`, `renderTile`, `renderLights`, `drawFeat` | Генерация тайлов |
 | `sprites`, `drawShip`, `drawPlane` | Спрайты |
 

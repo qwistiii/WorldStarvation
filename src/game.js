@@ -145,6 +145,7 @@ const BLD={
   refinery:{n:'НПЗ',cost:3500,time:20,d:'Нефть → топливо и деньги',zk:'ref2',W:1000,H:700,area:'own',need:{oil:4,energy:3},prod:{fuel:3,money:12}},
   port:{n:'Порт',cost:4000,time:20,d:'Экспорт излишков, импорт нехватки, +800 к складу',zk:'port',W:820,H:900,area:'coast',need:{energy:2}},
   barracks:{n:'Военная часть',cost:2500,time:18,d:'Армия до 12 бойцов',zk:'mil',W:720,H:520,area:'own'},
+  airport:{n:'Аэропорт',cost:5000,time:24,d:'Самолёты летают по рейсам: пассажирские — в свои аэропорты и в страны с безвизом, грузовые — в свои аэропорты и на экспорт в мирные страны. Каждый рейс приносит деньги. Нужна энергия',zk:'air2',W:2000,H:440,area:'own',need:{energy:2}},
   sam:{n:'ПВО',cost:1800,time:12,d:'Сбивает вражеские дроны в радиусе 9 км',zk:'sam',W:150,H:150,area:'own'},
   // stage 5.7
   solar:{n:'Солнечные панели',cost:700,time:8,d:'Резерв энергии: днём +6, излишек заряжает аккумулятор (600), он покрывает нехватку ночью и когда ТЭЦ стоит. Рядом с дронопортом питает его',zk:'sol2',W:72,H:46,area:'own',solar:6,bat:600},
@@ -156,7 +157,7 @@ const BLD={
   drwy:{n:'ВПП',cost:1500,time:12,d:'Модуль дронопорта: взлёт реактивных Гераней-3',zk:'drwy',W:460,H:56,area:'dport',mod:1},
   dstore:{n:'Склад БПЛА',cost:900,time:8,d:'Модуль дронопорта: +6 мест для дронов',zk:'dstore',W:120,H:76,area:'dport',mod:1},
   dronefab:{n:'Цех БПЛА',cost:4000,time:20,d:'Производство дронов: Ланцет, Герань-3, Орлан-10. Улучшения: солнечные панели, противодронная сетка, бетон',zk:'dfab',W:400,H:280,area:'town',need:{energy:6}}};
-const BORDER=['village','farm','factory','power','sawmill','oil','refinery','port','city','barracks','sam','solar','mine','gaswell','station','droneport','dronefab'];
+const BORDER=['village','farm','factory','power','sawmill','oil','refinery','port','airport','city','barracks','sam','solar','mine','gaswell','station','droneport','dronefab'];
 const RES=['food','goods','wood','oil','fuel','metal'];const RESN={money:'Деньги',food:'Еда',goods:'Товары',energy:'Энергия',wood:'Древесина',oil:'Нефть',fuel:'Топливо',metal:'Металл'};
 const PRICE={food:1,goods:3,wood:1.5,oil:2,fuel:3,metal:4};
 // mines: output per second by the ore of the deposit (index in ORES)
@@ -203,7 +204,7 @@ function rectHit(z,x,y,hw,hh,a){const c=a?M.cos(a):1,sn=a?M.sin(a):0,ax=[[c,sn],
   for(const [ux,uy] of ax){const pa=hw*M.abs(ux*c+uy*sn)+hh*M.abs(-ux*sn+uy*c),pb=z.W/2*M.abs(ux*z.ca+uy*z.sa)+z.H/2*M.abs(-ux*z.sa+uy*z.ca);if(M.abs(dx*ux+dy*uy)>pa+pb)return false}return true}
 // a station stands along the town edge: its hall (local +y) faces the nearest settlement
 function stationAng(s,x,y){const h=homeOf(s,x,y);if(!h)return 0;return M.atan2(-(h.x-x),h.y-y)}
-const ZLBL={farm:'Колхоз',ind:'Завод товаров',pow:'ТЭЦ',saw:'Лесопилка',oil:'Нефтевышка',ref2:'НПЗ',port:'Порт',mil:'Военная часть',sam:'ПВО'};
+const ZLBL={air2:'Аэропорт',farm:'Колхоз',ind:'Завод товаров',pow:'ТЭЦ',saw:'Лесопилка',oil:'Нефтевышка',ref2:'НПЗ',port:'Порт',mil:'Военная часть',sam:'ПВО'};
 // the footprint of a building: dry land everywhere (3 x 3 samples + corners) and no road across it
 function footBad(x,y,w,h,an){const c=an?M.cos(an):1,sn=an?M.sin(an):0;for(let a=0;a<=4;a++)for(let b=0;b<=4;b++){const u=(a/4-0.5)*w,v=(b/4-0.5)*h;if(W.landE(x+u*c-v*sn,y+u*sn+v*c,0.002)<0)return 'Здесь вода'}
   const RW=W._dbg.RW,R=M.hypot(w,h)/2;for(const r of W.queryRoads(x-R-40,y-R-40,x+R+40,y+R+40)){if(r.k===8||r.dead)continue;const m=RW[r.k]/2+6;
@@ -230,7 +231,8 @@ function startRail(s,a,b,L){const cost=M.round(L*RAILK),c=creative()&&s.isP?0:co
 const RAILK=0.9,byUid=(s,u)=>s.builds.find(q=>q.uid===u),fmtKm=m=>(m/1000).toFixed(1).replace('.',',')+' км';
 // construction finished: the world gets the new town or zone (same op in all workers)
 function finishBuild(s,q){q.done=true;
-  if(q.k==='rail'){const A=byUid(s,q.a),B=byUid(s,q.b);q.id=A&&B&&A.id>=0&&B.id>=0?api.op('addRail',{a:A.id,b:B.id,st:s.id}):-1;if(q.id<0){q.failed=true;if(s.isP)toast('ЖД путь не удалось проложить','ic-b-rail');return}
+  if(q.k==='rail'){const A=byUid(s,q.a),B=byUid(s,q.b);let P=null;if(A&&B&&A.id>=0&&B.id>=0){P=W.railPts(W.zones[A.id],W.zones[B.id],railBlk(s));if(typeof P==='string')P=null}
+    q.id=P?api.op('addRail',{a:A.id,b:B.id,st:s.id,P:P.map(v=>M.round(v*10)/10)}):-1;if(q.id<0){q.failed=true;if(s.isP)toast('ЖД путь не удалось проложить','ic-b-rail');return}
     if(s.isP){toast(`Построено: <b>ЖД путь</b> ${fmtKm(q.L)}`,'ic-b-rail');onBuilt('rail',true)}return}
   const b=BLD[q.k];
   if(q.k==='city'||q.k==='village'){let p=s.places.find(o=>o.bq===q.uid);if(!p){placeNow(s,q);p=s.places.find(o=>o.bq===q.uid)}
@@ -365,15 +367,15 @@ function droneHit(d){const t=G.states[d.to];if(!t)return;const D=DRN[d.kind]||{o
   for(const a of t.armies)if(a.units.length&&M.hypot(a.x-d.tx,a.y-d.ty)<1200){a.units.splice(0,M.min(D.kill||2,a.units.length));if(t.isP)toast(`Дрон ударил по армии №${a.n}`,'ic-b-army');return}}
 
 // ---------- war and peace
-function declareWar(a,b){if(atWar(a.id,b.id)||a.allies.includes(b.id))return;G.wars.add(a.id+'-'+b.id);toast(`<b>${esc(a.name)}</b> объявляет войну <b>${esc(b.name)}</b>`,a.flag,null,9000);updDip()}
+function declareWar(a,b){if(atWar(a.id,b.id)||a.allies.includes(b.id))return;G.wars.add(a.id+'-'+b.id);dropVisa(a,b);toast(`<b>${esc(a.name)}</b> объявляет войну <b>${esc(b.name)}</b>`,a.flag,null,9000);updDip()}
 function makePeace(a,b){G.wars.delete(a.id+'-'+b.id);G.wars.delete(b.id+'-'+a.id);toast(`<b>${esc(a.name)}</b> и <b>${esc(b.name)}</b> заключили мир`,a.flag);updDip()}
 function askPeace(o){const p=player();const mine=p.armies.reduce((t,a)=>t+strength(a),0),their=o.armies.reduce((t,a)=>t+strength(a),0);if(their<mine*0.9||hsh(o.id,G.t|0)<0.3)makePeace(p,o);else toast(`<b>${esc(o.name)}</b> отвергает мир`,o.flag);o.asked=G.t;updDip()}
 
 // ---------- bots
-const BOTPLAN={trader:['village','farm','factory','power','port','sawmill','oil','refinery','solar','city','mine','barracks','sam','droneport','dramp','dronefab','factory','village','farm','city','gaswell'],
-  militarist:['village','farm','barracks','factory','power','sam','droneport','dramp','dronefab','mine','oil','refinery','drwy','city','barracks','factory','solar','sawmill','port','village','farm','city'],
-  cautious:['village','farm','factory','power','sam','solar','sawmill','barracks','oil','refinery','mine','port','droneport','dramp','city','dronefab','factory','village','farm','sam'],
-  adventurer:['village','city','farm','factory','power','oil','refinery','barracks','droneport','dramp','dronefab','village','city','mine','sawmill','port','sam','drwy','factory','farm','gaswell']};
+const BOTPLAN={trader:['village','farm','factory','power','port','sawmill','oil','refinery','solar','city','mine','barracks','sam','droneport','dramp','dronefab','factory','village','farm','airport','city','gaswell'],
+  militarist:['village','farm','barracks','factory','power','sam','droneport','dramp','dronefab','mine','oil','refinery','drwy','city','barracks','factory','solar','sawmill','port','village','farm','airport','city'],
+  cautious:['village','farm','factory','power','sam','solar','sawmill','barracks','oil','refinery','mine','port','droneport','dramp','city','dronefab','factory','village','farm','airport','sam'],
+  adventurer:['village','city','farm','factory','power','oil','refinery','barracks','droneport','dramp','dronefab','village','city','mine','sawmill','port','sam','drwy','factory','farm','airport','gaswell']};
 function botThink(s){const ai=cfg.rules.ai,R=()=>hsh(s.id*7919+(G.t|0),G.dec++);if(s.dead)return;
   // build: next item of the plan (then repeat its second half)
   s.bT=(s.bT||0)+1;if(!s.builds.some(q=>!q.done)&&s.bT>=[6,4,3][s.diff]){s.bT=0;const plan=BOTPLAN[s.trait]||BOTPLAN.trader;const i=s.planI||0,k=plan[i<plan.length?i:plan.length/2+(i-plan.length)%(plan.length/2)|0];
@@ -392,12 +394,16 @@ function botThink(s){const ai=cfg.rules.ai,R=()=>hsh(s.id*7919+(G.t|0),G.dec++);
     // peace when losing badly
     if(strengthOf(s)<strengthOf(t)*0.4&&R()<0.05)makePeace(s,t)}
   if(cfg.rules.alliances&&G.t-(s.offT||-1e9)>150&&R()<0.012*(1.5-ai*0.5)*(s.trait==='cautious'?1.8:1)){s.offT=G.t;const others=G.states.filter(o=>o!==s&&!o.dead&&!s.allies.includes(o.id)&&!atWar(s.id,o.id));if(others.length){const o=others[(R()*others.length)|0];
-      if(o.isP)offerAlly(s);else if(R()<0.5)ally(s,o)}}}
+      if(o.isP)offerAlly(s);else if(R()<0.5)ally(s,o)}}
+  // visa-free travel: a peaceful state with an airport proposes it now and then (to the player — as a question)
+  if(airportsOf(s).length&&G.t-(s.visT||-1e9)>200&&R()<0.02){s.visT=G.t;const o=G.states.filter(t=>t!==s&&!t.dead&&t.places.length&&!atWar(s.id,t.id)&&!visa(s,t))[0];
+    if(o){if(o.isP)toast(`<b>${esc(s.name)}</b> предлагает безвизовый режим: пассажирские рейсы между вашими странами`,s.flag,[['Принять',()=>{if(!atWar(s.id,o.id))signVisa(o,s);updDip()}],['Отказать',()=>{}]],12000);else if(R()<0.6)signVisa(s,o)}}}
 const strengthOf=s=>s.armies.reduce((t,a)=>t+strength(a),0);
 function findSite(s,k,R){const b=BLD[k];const dep=f=>G.dep.filter(d=>f(d)&&d.known&&d.used<0&&own[d.c]===s.id+1).map(d=>({x:d.x,y:d.y}));
   const base=k==='farm'?s.places.filter(p=>p.k==='village'):k==='oil'?dep(d=>ORES[d.k].k==='oil'):k==='gaswell'?dep(d=>ORES[d.k].k==='gas'):k==='mine'?dep(d=>!!MINE[d.k]):b.mod?s.builds.filter(q=>q.k==='droneport'&&q.done):s.places;
   for(let t=0;t<40;t++){const p=base[(R()*base.length)|0];if(!p)return null;const r=k==='city'?6000+R()*8000:k==='village'?3500+R()*5000:k==='farm'?500+R()*700:k==='oil'||k==='mine'||k==='gaswell'?0:b.mod?280+R()*500:600+R()*(p.k?placeR(p)+800:600);const a=R()*M.PI*2;
     const x=p.x+M.cos(a)*r,y=p.y+M.sin(a)*r;if(canBuild(s,k,x,y)===null)return [x,y]}return null}
+function dropVisa(a,b){a.visa=(a.visa||[]).filter(i=>i!==b.id);b.visa=(b.visa||[]).filter(i=>i!==a.id)}
 function ally(a,b){if(a.allies.includes(b.id))return;if(atWar(a.id,b.id))makePeace(a,b);a.allies.push(b.id);b.allies.push(a.id);dirtyFog=true;toast(`<b>${esc(a.name)}</b> и <b>${esc(b.name)}</b> заключили альянс`,a.flag)}
 function offerAlly(s){if(G.offers.includes(s.id))return;G.offers.push(s.id);
   toast(`<b>${esc(s.name)}</b> предлагает вам альянс`,s.flag,[['Принять',()=>{G.offers=G.offers.filter(i=>i!==s.id);ally(player(),s);updDip()}],['Отказать',()=>{G.offers=G.offers.filter(i=>i!==s.id)}]],20000)}
@@ -412,7 +418,7 @@ function sim(dt){G.t+=dt;
     for(const p of s.places){if(p.grow>=1)continue;const q=p.bq&&s.builds.find(o=>o.uid===p.bq&&!o.done);
       if(q){p.grow=M.max(p.grow,0.05+(q.k==='city'?0.07:0.95)*q.t/q.time);syncPlace(p)}else if(p.k==='city'){p.grow=M.min(1,p.grow+dt*0.008);syncPlace(p)}}
     econ(s,dt);for(const a of s.armies){recruit(s,a,dt);stepArmy(s,a,dt)}}
-  stepDrones(dt);
+  stepDrones(dt);stepFlights(dt);
   for(const s of G.states){if(s.isP||s.dead||!s.places.length)continue;s._dt=(s._dt||0)+dt;const iv=DIFF[s.diff].dec;if(s._dt>=iv){s._dt-=iv;botThink(s)}}
   G._popT=(G._popT||0)+dt;if(G._popT>2){G._popT=0;updPop();claimAll()}
   for(const d of G.dep)if(!d.known&&own[d.c]===1)d.known=true;
@@ -635,6 +641,8 @@ function buildPanel(el,q){const p=player(),b=q.k==='rail'?{n:'ЖД путь',d:'
     more=`<div class="pc-s">Улучшения</div><div class="pc-r">`+Object.entries(UPG).map(([k,u])=>card({n:UPGS[k],tn:u.n,sub:q.up&&q.up[k]?'есть':fmt(u.cost),ic:UPGI[k],data:q.up&&q.up[k]?'':`data-up="${k}"`,cls:q.up&&q.up[k]?'done':'',tip:u.d})).join('')+`</div>`+
       (uavCap(p)?'':'<div class="pc-d">Готовым дронам нужен дронопорт (вкладка «Удар»).</div>')}
   if(q.k==='station'){g+=stat('Линий',p.builds.filter(r=>r.k==='rail'&&(r.a===q.uid||r.b===q.uid)).length);keys+=card({id:'a-rail',n:'Ж/Д путь',sub:fmt(RAILK*1000)+' / км',ic:'ic-b-rail',cls:G.mode==='rail'?'on':'',tip:'Нажмите на вокзал и, не отпуская, ведите путь к другому вокзалу или в поле'})}
+  if(q.k==='airport'){const F=(G.flights||[]).filter(f=>f.a===q),dest=[...new Set(F.map(f=>G.states[f.to].isP?'свой аэропорт':G.states[f.to].name))];
+    g+=stat('В воздухе',F.length?F.map(f=>(f.kind==='pax'?'пассажирский':'грузовой')).join(', '):'нет')+stat('Куда летят',dest.length?dest.join(', '):'—')+stat('Безвиз',G.states.filter(t=>t!==p&&visa(p,t)).map(t=>t.name).join(', ')||'нет — договоритесь в «Дипломатии»')+stat('Рейсов выполнено',fmt(p.landed||0))}
   if(q.k==='barracks')keys+=card({id:'a-army',n:'Армия',ic:'ic-b-army',tip:'Армия этой части: сборка и приказы'});
   keys+=card({id:'a-dem',n:'Снести',sub:fmt((b.cost||0)*0.3),ic:'ic-b-demolish',cls:'red',tip:'Снести постройку: вернётся 30 % цены'});
   el.innerHTML=pcHead(q.k==='rail'?'ic-b-rail':'ic-b-'+q.k,b.n,state+(pr?' · '+pr:''))+`<div class="pc-s">${PCS[q.k]||'Действия'}</div><div class="pc-r">${keys}</div>${more}<div class="pc-g">${g}</div><div class="pc-d">${b.d}</div>`;
@@ -649,14 +657,14 @@ function buyUp(s,q,u){const c=creative()&&s.isP?0:UPG[u].cost;if(s.res.money<c){
 const atWarAny=()=>G.states.some(t=>atWar(0,t.id));
 // bottom panel (as in DroneFlames): tabs КАРТА ГОРОДА УДАР ПВО АРМИЯ ПОЛИТ. ФЛОТ on the panel: pause, speed, then the keys of the tab
 const TABS=[['map','Карта'],['cities','Города'],['strike','Удар'],['aa','ПВО'],['army','Армия'],['pol','Полит.'],['fleet','Флот']];
-const ECON=['city','village','farm','factory','power','solar','mine','sawmill','oil','gaswell','refinery','port','station'];
+const ECON=['city','village','farm','factory','power','solar','mine','sawmill','oil','gaswell','refinery','port','airport','station'];
 const STRIKE=['droneport','dramp','drwy','dstore','dronefab'];
 const tabOf=k=>k==='sam'?'aa':k==='barracks'||k==='assembly'?'army':ECON.includes(k)||k==='rail'?'cities':STRIKE.includes(k)||k==='order'||k==='uav'?'strike':null;
 let tab='cities',tabSig='';
 const TABIC={map:'ic-tab-map',cities:'ic-tab-city',strike:'ic-tab-strike',aa:'ic-tab-aa',army:'ic-tab-army',pol:'ic-tab-pol',fleet:'ic-tab-fleet'};
 const TABSUB={map:'Слои карты и переходы',cities:'Экономика: города, сёла, заводы, энергия, добыча, железная дорога',strike:'Дронопорт, его модули, цех БПЛА и удары дронами',aa:'Противовоздушная оборона',army:'Военные части и армии',pol:'Государства, союзы, война и мир',fleet:'Порты и флот'};
 // the short names of the keys (the full one is in the tooltip)
-const SHORT={city:'Город',village:'Село',farm:'Колхоз',factory:'Завод',power:'ТЭЦ',solar:'Солнце',mine:'Рудник',sawmill:'Лесопилка',oil:'Нефть',gaswell:'Газ',refinery:'НПЗ',port:'Порт',station:'Вокзал',
+const SHORT={city:'Город',village:'Село',farm:'Колхоз',factory:'Завод',power:'ТЭЦ',solar:'Солнце',mine:'Рудник',sawmill:'Лесопилка',oil:'Нефть',gaswell:'Газ',refinery:'НПЗ',port:'Порт',airport:'Аэропорт',station:'Вокзал',
   barracks:'Воен. часть',sam:'ПВО',droneport:'Дронопорт',dramp:'Рампа',drwy:'ВПП',dstore:'Склад БПЛА',dronefab:'Цех БПЛА'};
 function buildTabs(){const t=$('bb-tabs');t.innerHTML='';TABS.forEach(([k,n],i)=>{const b=document.createElement('button');b.dataset.t=k;b.dataset.tn=n+' · клавиша '+(i+1);b.dataset.td=TABSUB[k];
   b.innerHTML=`<i>${i+1}</i><span class="ic ${TABIC[k]}"></span><b>${n}</b>`;b.onclick=()=>setTab(k,true);t.appendChild(b)})}
@@ -760,12 +768,14 @@ function onBuilt(k,done){const h=HINTS[hintStep];if(!h)return;const p=player();
 function updDip(){const b=$('dipb');if(!$('dip').classList.contains('show')||!G)return;const p=player();let h='';
   for(const s of G.states){if(!s.places.length&&!s.dead)continue;const ally=p.allies.includes(s.id),war=atWar(p.id,s.id);
     h+=`<div class="dst"><span class="fl" data-st="${s.id}"></span><div><b>${esc(s.name)}${s.isP?' (вы)':''}${s.dead?' — пало':''}</b><small>${esc(s.gov)} · ${esc(s.capital)}${s.isP?'':' · '+TRAITS[s.trait]+' · '+DIFF[s.diff].n.toLowerCase()}</small><small>${fmt(s.score)} очков · ${fmtK(s.pop)} чел. · армия ${fmt(strengthOf(s))}</small></div>`+
-      (s.isP?'<span></span>':`<span class="rel${ally?' ally':war?' war':''}">${ally?'Союзник':war?'Война':'Мир'}</span>`)+`<div class="acts">`+
+      (s.isP?'<span></span>':`<span class="rel${ally?' ally':war?' war':''}">${ally?'Союзник':war?'Война':'Мир'}${!s.isP&&visa(p,s)?' · безвиз':''}</span>`)+`<div class="acts">`+
+      (s.isP||s.dead||war||visa(p,s)?'':`<button class="btn sm" data-visa="${s.id}" ${s.askedV&&G.t-s.askedV<60?'disabled':''}>Безвиз</button>`)+
       (s.isP||s.dead?'':war?`<button class="btn sm" data-peace="${s.id}" ${s.asked&&G.t-s.asked<60?'disabled':''}>Предложить мир</button>`:`${cfg.rules.alliances&&!ally?`<button class="btn sm" data-ally="${s.id}" ${s.asked&&G.t-s.asked<60?'disabled':''}>Альянс</button>`:''}${ally?'':`<button class="btn sm danger" data-war="${s.id}">Объявить войну</button>`}`)+
       `<button class="btn sm" data-go="${s.id}">Показать</button></div></div>`}
   if(h===b._h)return;b._h=h;b.innerHTML=h;for(const e of b.querySelectorAll('.fl'))e.replaceWith(flagCanvas(G.states[+e.dataset.st].flag,38,25));
   for(const e of b.querySelectorAll('[data-ally]'))e.onclick=()=>askAlly(G.states[+e.dataset.ally]);
   for(const e of b.querySelectorAll('[data-war]'))e.onclick=()=>declareWar(p,G.states[+e.dataset.war]);
+  for(const e of b.querySelectorAll('[data-visa]'))e.onclick=()=>askVisa(G.states[+e.dataset.visa]);
   for(const e of b.querySelectorAll('[data-peace]'))e.onclick=()=>askPeace(G.states[+e.dataset.peace]);
   for(const e of b.querySelectorAll('[data-go]'))e.onclick=()=>{const s=G.states[+e.dataset.go];const q=s.places[0];if(q)api.flyTo(q.x,q.y,6)}}
 function updModes(){tabSig=''}
@@ -838,10 +848,48 @@ function railEval(A,x,y,sx,sy){const p=player(),za=W.zones[A.id],B=stationAtScre
   let zb,nb=null,cost=0;
   if(B){if(p.builds.some(r=>r.k==='rail'&&((r.a===A.uid&&r.b===B.uid)||(r.a===B.uid&&r.b===A.uid))))return {bad:'Эти вокзалы уже соединены',B};zb=W.zones[B.id]}
   else{const ang=M.atan2(y-za.y,x-za.x),why=canBuild(p,'station',x,y,ang);nb={x,y,ang};if(why)return {bad:why,nb,x,y};zb={x,y,ca:M.cos(ang),sa:M.sin(ang),W:BLD.station.W,H:BLD.station.H};cost+=BLD.station.cost}
-  const P=W.railPts(za,zb);if(typeof P==='string')return {bad:P,nb,x,y,B};
+  const P=W.railPts(za,zb,railBlk(p));if(typeof P==='string')return {bad:P,nb,x,y,B};
   for(let i=0;i<P.length;i+=12){const o=ownerAt(P[i],P[i+1]);if(o&&o!==p.id+1)return {bad:'Путь идёт по чужой земле',P,nb,B}}
   let L=0;for(let i=2;i<P.length;i+=2)L+=M.hypot(P[i]-P[i-2],P[i+1]-P[i-1]);cost+=M.round(L*RAILK);
   if(p.res.money<cost&&!creative())return {bad:'Не хватает денег: нужно '+fmt(cost),P,L,cost,nb,B};return {P,L,cost,B,nb,A}}
+// ---------- airports and flights (stage 5.11). Every working airport sends a plane about once a minute (at most three
+// of its planes in the air): a passenger flight to another own airport or to a state with a visa-free agreement, a cargo
+// flight to an own airport or (export) to any state at peace. A flight is a real trip: take-off run, climb-out, cruise,
+// approach along the runway of the destination, landing; it earns money when it lands (export also moves goods).
+const FLR={pax:[45,20],cargo:[60,0]},FLS=90,FLA=5000,FLB=10300;
+// metres flown after t seconds: 90 m/s on the take-off run and climb-out (5 km) and on the approach (10.3 km), cruise
+// between them at up to 260 m/s; flTime: the whole trip
+const flCruise=g=>M.min(260,M.max(FLS,(g.L-FLA-FLB)/60)),flTime=g=>{const m=g.L-FLA-FLB;return m<=0?g.L/FLS:(FLA+FLB)/FLS+m/flCruise(g)};
+function flAt(g,t){const m=g.L-FLA-FLB;if(m<=0)return t*FLS;const t1=FLA/FLS,t2=t1+m/flCruise(g);return t<t1?t*FLS:t<t2?FLA+(t-t1)*flCruise(g):FLA+m+(t-t2)*FLS}
+const airportsOf=s=>s.builds.filter(q=>q.k==='airport'&&q.done&&q.id>=0&&W.zones[q.id]&&!W.zones[q.id].dead);
+const visa=(a,b)=>a===b||(a.visa||[]).includes(b.id);
+function flightPath(za,zb){const [a0,a1]=W.air2Rw(za),[b0,b1]=W.air2Rw(zb);
+  // take off towards the destination, land in the direction that keeps the approach on the near side
+  const tA=(a1[0]-a0[0])*(zb.x-za.x)+(a1[1]-a0[1])*(zb.y-za.y)>=0,[as,ae]=tA?[a0,a1]:[a1,a0];const tB=(b1[0]-b0[0])*(zb.x-za.x)+(b1[1]-b0[1])*(zb.y-za.y)>=0,[bs,be]=tB?[b0,b1]:[b1,b0];
+  const ux=(ae[0]-as[0])/1800,uy=(ae[1]-as[1])/1800,vx=(be[0]-bs[0])/1800,vy=(be[1]-bs[1])/1800;
+  const pts=[as[0],as[1],ae[0],ae[1],ae[0]+ux*3200,ae[1]+uy*3200,bs[0]-vx*9000,bs[1]-vy*9000,bs[0],bs[1],bs[0]+vx*1300,bs[1]+vy*1300];
+  const n=pts.length/2,cum=[0];let L=0;for(let i=1;i<n;i++){L+=M.hypot(pts[i*2]-pts[i*2-2],pts[i*2+1]-pts[i*2-1]);cum.push(L)}return {pts,cum,L,n}}
+function stepFlights(dt){const F=G.flights||(G.flights=[]);
+  for(let i=F.length-1;i>=0;i--){const f=F[i];if(G.t-f.t0<flTime(f.g))continue;F.splice(i,1);const gi=api.gflights.indexOf(f.g);if(gi>=0)api.gflights.splice(gi,1);landed(f)}
+  for(const s of G.states){if(s.dead||!s.places.length)continue;const mine=airportsOf(s);if(!mine.length)continue;
+    for(const q of mine){if(q.off>0)continue;if(q.ft==null)q.ft=G.t+5+hsh(q.uid,7)*20;if(G.t<q.ft)continue;q.ft=G.t+45+hsh(q.uid,G.t|0)*40;
+      if(F.filter(f=>f.a===q).length>=3)continue;
+      const dest=[];for(const t of G.states){if(t.dead||!t.places.length||atWar(s.id,t.id))continue;for(const r of airportsOf(t)){if(r===q)continue;const pax=visa(s,t),cargo=true;dest.push([t,r,pax,cargo])}}
+      if(!dest.length)continue;const R=hsh(q.uid*31+(G.t|0),G.dec++);const d=dest[R*dest.length|0];const kind=d[2]&&(hsh(q.uid,G.t*7|0)<0.55||!d[3])?'pax':'cargo';
+      const za=W.zones[q.id],zb=W.zones[d[1].id];if(!za||!zb)continue;const g=flightPath(za,zb);Object.assign(g,{v:FLS,alt:kind==='pax'?2600:3200,kind:0,lift:1000,c:s.id%5,ph:hsh(q.uid,G.uid)*100,s:0,fl:1});
+      const f={st:s.id,a:q,to:d[0].id,b:d[1],kind,t0:G.t,g};F.push(f);const Hs=G.fhist||(G.fhist=[]);Hs.push([s.id,d[0].id,kind,G.t|0]);if(Hs.length>80)Hs.shift();api.gflights.push(g);s.nFl=(s.nFl||0)+1;
+      if(s.isP&&!s._fl1){s._fl1=1;toast(`Первый рейс: <b>${kind==='pax'?'пассажирский':'грузовой'}</b> в ${esc(G.states[d[0].id].isP?'свой аэропорт':G.states[d[0].id].name)}`,'ic-b-airport')}}}}
+function landed(f){const s=G.states[f.st],t=G.states[f.to];if(!s||s.dead)return;const [mo,mt]=FLR[f.kind];const foreign=s!==t;
+  if(f.kind==='cargo'&&foreign){const n=M.min(4,s.res.goods||0);s.res.goods-=n;t.res.goods=(t.res.goods||0)+n;addMoney(s,mo+n*PRICE.goods*4)}
+  else addMoney(s,foreign?mo+10:mo*0.6);if(foreign&&f.kind==='pax'&&mt)addMoney(t,mt);
+  s.landed=(s.landed||0)+1;if(s.isP&&foreign&&!(s._flTo||(s._flTo={}))[t.id]){s._flTo[t.id]=1;toast(`Рейс прибыл в <b>${esc(t.name)}</b>: ${f.kind==='pax'?'пассажиры':'груз'} · +${fmt(mo)}`,t.flag)}}
+const addMoney=(s,v)=>{if(s.res.money!==Infinity)s.res.money+=v;s.earned=(s.earned||0)+v};
+// visa-free agreements: asked in the diplomacy window; a state at peace agrees when it likes the asker enough
+function signVisa(a,b){if(visa(a,b))return;(a.visa=a.visa||[]).push(b.id);(b.visa=b.visa||[]).push(a.id);toast(`<b>${esc(a.name)}</b> и <b>${esc(b.name)}</b> ввели безвизовый режим: пассажирские рейсы между ними`,a.flag)}
+function askVisa(o){const p=player();if(atWar(p.id,o.id)){toast('Во время войны безвиз невозможен');return}const like=p.allies.includes(o.id)?0.95:o.trait==='cautious'?0.35:o.trait==='militarist'?0.4:0.65;
+  if(hsh(o.id*13,G.t|0)<like)signVisa(p,o);else toast(`<b>${esc(o.name)}</b> отклоняет безвиз`,o.flag);o.askedV=G.t;updDip()}
+// the line keeps to the state's own land and neutral land (foreign land is closed to the route search)
+const railBlk=s=>(x,y)=>{const o=ownerAt(x,y);return !!o&&o!==s.id+1};
 function buildRailway(ev){const p=player();if(!ev||ev.bad)return false;let b=ev.B;
   if(!b){if(!startBuild(p,'station',ev.nb.x,ev.nb.y,ev.nb.ang))return false;b=p.builds[p.builds.length-1]}
   return startRail(p,ev.A.uid,b.uid,ev.L)}
@@ -912,6 +960,7 @@ const hooks={
   pup(x,y,sx,sy,cancel){if(!railDrag)return;const d=railDrag;railDrag=null;if(cancel)return;const ev=railEval(d.a,x,y,sx,sy);if(ev.bad){toast(ev.bad);return}
     G.railAsk=ev;openAsk(`ЖД путь ${fmtKm(ev.L)}${ev.nb?' и новый вокзал':''}`,`${ev.B?'Соединит два вокзала':'В конце пути встанет вокзал'}<br>Стоимость <b>${fmt(ev.cost)}</b>`,()=>{if(buildRailway(ev)){onBuilt('rail',false);updHUD()}},sx,sy)},
   frame(dt){if(!G||G.over&&G.speed===0){return}const sp=G.phase==='play'&&own&&api&&api.ready?G.speed:0;if(sp>0){simAcc+=dt*sp;prf('sim',()=>{while(simAcc>0.1){sim(0.1);simAcc-=0.1}})}
+    if(G.flights)for(const f of G.flights)f.g.s=flAt(f.g,G.t+simAcc-f.t0);
     G._hud=(G._hud||0)+dt;if(G._hud>0.25){G._hud=0;prf('hud',()=>{updHUD();updDip()})}},
   draw:(ctx,A)=>{drawOverlay(ctx,A);if(G&&G.phase==='play'&&own)drawObjects(ctx,A)},
   seen:(x,y)=>!G||!own||seenAt(x,y),
@@ -963,13 +1012,13 @@ function found(x,y){closeConfirm();setPlacing(false);const picks=chooseCaps(x,y)
     toast(`Вы основали столицу <b>${esc(p.capital)}</b>. ${esc(p.gov)} ${esc(p.name)} начинает свою историю`,p.flag,null,9000);hint(2);save(true)},60)}
 function snapshot(){const P=player();return {cfg,meta:{date:Date.now(),name:P.name,flag:P.flag,t:G.t,phase:G.phase,day:gameClock(),score:P.score,map:cfg.map.type},
   g:{t:G.t,phase:G.phase,over:G.over,wars:[...G.wars],ops:api?api.ops.slice():[],hint:hintStep,uid:G.uid,rev:[...G.rev],
-    states:G.states.map(s=>({res:Object.fromEntries(Object.entries(s.res).map(([k,v])=>[k,v===Infinity?'inf':v])),earned:s.earned,cap:s.cap,grow:s.grow,allies:s.allies,trait:s.trait,dead:s.dead,lostCap:s.lostCap,planI:s.planI,warAfter:s.warAfter,armyN:s.armyN,uav:s.uav,bat:s.bat,
+    states:G.states.map(s=>({res:Object.fromEntries(Object.entries(s.res).map(([k,v])=>[k,v===Infinity?'inf':v])),earned:s.earned,cap:s.cap,grow:s.grow,allies:s.allies,visa:s.visa||[],trait:s.trait,dead:s.dead,lostCap:s.lostCap,planI:s.planI,warAfter:s.warAfter,armyN:s.armyN,uav:s.uav,bat:s.bat,
       places:s.places.map(p=>({k:p.k,id:p.id,x:p.x,y:p.y,grow:p.grow,name:p.name,t0:p.t0,bq:p.bq})),builds:s.builds.map(q=>({k:q.k,x:q.x,y:q.y,t:q.t,time:q.time,done:q.done,id:q.id,off:q.off,dep:q.dep,failed:q.failed,uid:q.uid,a:q.a,b:q.b,L:q.L,cost:q.cost,port:q.port,queue:q.queue,pt:q.pt,paid:q.paid,up:q.up})),
       armies:s.armies.map(a=>({n:a.n,id:a.id,x:a.x,y:a.y,tpl:a.tpl,units:a.units,tx:a.tx,ty:a.ty,home:s.builds.indexOf(a.home)}))})),
     dep:G.dep.map(d=>[d.k,M.round(d.x),M.round(d.y),d.amt===Infinity?-1:M.round(d.amt),d.max===Infinity?-1:M.round(d.max),d.known?1:0,d.used]),own:own?rle(own):null,expl:expl?rle(expl):null,cam:api?[api.cam.x,api.cam.y,api.cam.m]:null}}}
 function save(auto){if(!G||!cfg||cfg.tutorial&&auto)return false;const ok=Saves.put(cfg.slot||1,snapshot());if(!auto)toast(ok?`Сохранено в ячейку ${cfg.slot||1}`:'Не удалось сохранить: нет места в хранилище браузера',ok?'ic-save':'ic-warn');return ok}
 function load(sv){const c=sv.cfg;initState(c);const g=sv.g;G.t=g.t;G.phase=g.phase;G.over=g.over;G.wars=new Set(g.wars||[]);G.rev=new Set(g.rev||[]);G.uid=g.uid||0;
-  g.states.forEach((q,i)=>{const s=G.states[i];if(!s)return;if(q.res)for(const k in q.res)s.res[k]=q.res[k]==='inf'?Infinity:q.res[k];Object.assign(s,{earned:q.earned,cap:q.cap,grow:q.grow,allies:q.allies||[],trait:q.trait||s.trait,dead:q.dead,lostCap:q.lostCap,planI:q.planI,warAfter:q.warAfter,armyN:q.armyN});if(q.uav)s.uav=Object.assign({lancet:0,geran:0,orlan:0},q.uav);s.bat=q.bat||0;if(s.res.metal==null)s.res.metal=0;
+  g.states.forEach((q,i)=>{const s=G.states[i];if(!s)return;if(q.res)for(const k in q.res)s.res[k]=q.res[k]==='inf'?Infinity:q.res[k];Object.assign(s,{earned:q.earned,cap:q.cap,grow:q.grow,allies:q.allies||[],visa:q.visa||[],trait:q.trait||s.trait,dead:q.dead,lostCap:q.lostCap,planI:q.planI,warAfter:q.warAfter,armyN:q.armyN});if(q.uav)s.uav=Object.assign({lancet:0,geran:0,orlan:0},q.uav);s.bat=q.bat||0;if(s.res.metal==null)s.res.metal=0;
     s.places=(q.places||[]).map(p=>Object.assign({growQ:-1,st:s},p));s.builds=(q.builds||[]).map(b=>{if(b.uid==null)b.uid=++G.uid;return b});s.armies=(q.armies||[]).map(a=>Object.assign({st:s.id,rec:0,fight:0},a,{home:s.builds[a.home]||s.builds[0]}))});
   ui.loading('Загрузка сохранения',esc(sv.meta.name)+' · '+sv.meta.day);
   setTimeout(()=>{const caps=G.phase==='play'?c.caps:null;boot(caps,()=>{ui.loaded();if(g.cam){api.cam.x=g.cam[0];api.cam.y=g.cam[1];api.cam.m=g.cam[2]}},g.ops);document.body.className='m-game';
@@ -1003,6 +1052,6 @@ function wire(u){ui=u;
   $('overm').onclick=()=>{$('over').classList.remove('show');ui.toMenu()};$('overk').onclick=()=>$('over').classList.remove('show')}
 return {wire,newGame,load,save,exit,setSpeed:v=>G&&setSpeed(v),get G(){return G},get api(){return api},paused:()=>G?G.speed===0:true,
   pauseInfo:()=>G?`${esc(player().name)} · ${gameClock()} · ${fmt(player().score)} очков · ячейка ${cfg.slot||1}`:'',setIcon:(k,img)=>{ICONIMG[k]=img},
-  _prof:PRF,_dbg:DBG,_test:{demolish:q=>demolish(player(),q),run:sec=>{for(let t=0;t<sec;t+=0.1)sim(0.1)},validSite:(x,y)=>validSite(x,y),found,get own(){return own},chooseCaps,canBuild:(k,x,y)=>canBuild(player(),k,x,y),startBuild:(k,x,y)=>startBuild(player(),k,x,y),BLD,declareWar:(i)=>declareWar(player(),G.states[i]),launchDrone,launchUav:(k,x,y,to)=>launchUav(player(),k,x,y,to),startRail:(a,b,L)=>startRail(player(),a,b,L),railEval,buildRailway,
+  _prof:PRF,_dbg:DBG,_test:{startBuildFor:(i,k,x,y)=>startBuild(G.states[i],k,x,y),canBuildFor:(i,k,x,y)=>canBuild(G.states[i],k,x,y),signVisa:i=>signVisa(player(),G.states[i]),visa:i=>visa(player(),G.states[i]),flightPath,demolish:q=>demolish(player(),q),run:sec=>{for(let t=0;t<sec;t+=0.1)sim(0.1)},validSite:(x,y)=>validSite(x,y),found,get own(){return own},chooseCaps,canBuild:(k,x,y)=>canBuild(player(),k,x,y),startBuild:(k,x,y)=>startBuild(player(),k,x,y),BLD,declareWar:(i)=>declareWar(player(),G.states[i]),launchDrone,launchUav:(k,x,y,to)=>launchUav(player(),k,x,y,to),startRail:(a,b,L)=>startRail(player(),a,b,L),railEval,buildRailway,
     buyUp:(q,u)=>buyUp(player(),q,u),clearDeps,updHidden,DRN,oreIcon,uavCap:()=>uavCap(player()),daylight,stationAtScreen,get hidSig(){return hidSig},get vis(){return vis}}};
 })();

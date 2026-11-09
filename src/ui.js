@@ -2,7 +2,7 @@
 (function(){
 'use strict';
 const $=id=>document.getElementById(id);
-const VERSION='5.10';
+const VERSION='5.11';
 let bg=null,C=null,prevWorker=null,prevId=0,prevT=0,setFrom=null,paused=null;
 
 // ---------------------------------------------------------------- settings
@@ -71,6 +71,10 @@ function paintIcons(){const css=[];
   css.push(icon('refinery',x=>{col(x,IC.w);x.fillRect(8,26,10,30);col(x,IC.s);x.fillRect(22,14,8,42);col(x,IC.w2);x.fillRect(34,32,22,24);x.beginPath();x.arc(45,30,10,Math.PI,0);x.fill();col(x,IC.r);x.fillRect(8,34,10,3);x.fillRect(34,40,22,3);
     col(x,IC.o);x.beginPath();x.moveTo(26,2);x.bezierCurveTo(32,7,30,12,26,14);x.bezierCurveTo(22,12,21,7,26,2);x.fill();col(x,IC.y);x.beginPath();x.arc(26,11,2,0,P2);x.fill()},1));
   css.push(icon('port',x=>{col(x,IC.b2);x.fillRect(4,52,56,8);col(x,IC.b);x.beginPath();x.arc(32,14,6,0,P2);x.stroke();x.beginPath();x.moveTo(32,20);x.lineTo(32,52);x.moveTo(20,30);x.lineTo(44,30);x.stroke();x.beginPath();x.moveTo(10,38);x.quadraticCurveTo(14,52,32,52);x.quadraticCurveTo(50,52,54,38);x.stroke()},1));
+  css.push(icon('airport',x=>{col(x,IC.k);x.fillRect(4,47,56,11);col(x,IC.w);for(let i=0;i<5;i++)x.fillRect(7+i*11,51.5,6,2);
+    col(x,IC.s2);x.fillRect(47,20,7,27);col(x,IC.b);x.beginPath();x.moveTo(42,20);x.lineTo(59,20);x.lineTo(56,12);x.lineTo(45,12);x.closePath();x.fill();
+    x.save();x.translate(24,26);x.rotate(-0.55);col(x,IC.w);x.beginPath();x.ellipse(0,0,19,3.6,0,0,P2);x.fill();x.beginPath();x.moveTo(-3,-2);x.lineTo(-9,-17);x.lineTo(-4,-17);x.lineTo(6,-2);x.lineTo(6,2);x.lineTo(-4,17);x.lineTo(-9,17);x.lineTo(-3,2);x.closePath();x.fill();
+    x.beginPath();x.moveTo(-14,-1);x.lineTo(-18,-8);x.lineTo(-15,-8);x.lineTo(-10,-1);x.lineTo(-10,1);x.lineTo(-15,8);x.lineTo(-18,8);x.lineTo(-14,1);x.closePath();x.fill();col(x,IC.b2);x.fillRect(11,-1.6,5,3.2);x.restore()},1));
   css.push(icon('barracks',x=>{col(x,IC.ol);x.beginPath();x.moveTo(32,6);x.lineTo(54,14);x.lineTo(54,32);x.quadraticCurveTo(52,50,32,58);x.quadraticCurveTo(12,50,10,32);x.lineTo(10,14);x.closePath();x.fill();col(x,IC.ol2);x.beginPath();x.moveTo(32,6);x.lineTo(54,14);x.lineTo(54,32);x.quadraticCurveTo(52,50,32,58);x.closePath();x.fill();
     col(x,IC.r);x.beginPath();for(let i=0;i<10;i++){const a=-Math.PI/2+i*Math.PI/5,r=i%2?5:12;x.lineTo(32+Math.cos(a)*r,32+Math.sin(a)*r)}x.closePath();x.fill()},1));
   css.push(icon('sam',x=>{col(x,IC.ol2);x.fillRect(8,46,48,8);col(x,IC.k);for(const cx of [16,30,44]){x.beginPath();x.arc(cx,56,3.5,0,P2);x.fill()}x.save();x.translate(30,44);x.rotate(-0.7);col(x,IC.ol);for(let i=0;i<2;i++)x.fillRect(-4,-8-i*9,34,7);col(x,IC.r);for(let i=0;i<2;i++)x.fillRect(28,-8-i*9,5,7);x.restore();
@@ -161,8 +165,30 @@ function swatches(el,list,val,on,custom){el.innerHTML='';for(const c of list){co
   function set(c){for(const q of el.children)q.classList.toggle('on',q.title===c||(q.classList.contains('cust')&&!list.includes(c)))}}
 function rnd(){return Math.random()}
 
-// ---------------------------------------------------------------- main menu
-function showMenu(){document.body.className='m-menu';
+// ---------------------------------------------------------------- main menu (stage 5.11: laid out as in DroneFlames)
+// the logo: chunky Rubik Black letters with a dark outline and drop, an orange-to-yellow fill with a light top band
+// and pixel rows, a wheat ear and a drone over the title — drawn in Canvas when the font is ready
+function drawLogo(cv){const x=cv.getContext('2d'),W=cv.width,H=cv.height;x.clearRect(0,0,W,H);
+  const word=(t,y,size,track)=>{x.font=`900 ${size}px Rubik, system-ui, sans-serif`;x.textBaseline='alphabetic';const ch=[...t],w=ch.map(c=>x.measureText(c).width),tot=w.reduce((a,b)=>a+b,0)+track*(ch.length-1);
+    let cx=W/2-tot/2;const P=ch.map((c,i)=>{const p=cx;cx+=w[i]+track;return p});
+    const each=f=>ch.forEach((c,i)=>f(c,P[i]));
+    x.fillStyle='#160a04';each((c,p)=>x.fillText(c,p+2,y+size*0.1));x.lineJoin='round';x.strokeStyle='#160a04';x.lineWidth=size*0.2;each((c,p)=>x.strokeText(c,p,y));
+    const L=document.createElement('canvas');L.width=W;L.height=H;const l=L.getContext('2d');l.font=x.font;l.textBaseline='alphabetic';
+    const g=l.createLinearGradient(0,y-size*0.75,0,y+size*0.02);g.addColorStop(0,'#fff09a');g.addColorStop(0.3,'#ffc63a');g.addColorStop(0.62,'#f58a1c');g.addColorStop(1,'#b8380c');l.fillStyle=g;ch.forEach((c,i)=>l.fillText(c,P[i],y));
+    l.globalCompositeOperation='source-atop';l.fillStyle='rgba(255,255,235,0.42)';l.fillRect(0,y-size*0.75,W,size*0.13);l.fillStyle='rgba(90,20,0,0.16)';for(let q=y-size*0.4;q<y;q+=4)l.fillRect(0,q,W,2);
+    l.globalCompositeOperation='source-over';x.drawImage(L,0,0);x.strokeStyle='rgba(60,16,0,0.55)';x.lineWidth=2;each((c,p)=>x.strokeText(c,p,y))};
+  word('WORLD',128,124,6);word('STARVATION',262,102,2);
+  // wheat ear (left) and a quadcopter (right) above the first word
+  x.save();x.translate(W*0.1,64);x.rotate(-0.35);x.lineWidth=5;x.strokeStyle='#160a04';x.beginPath();x.moveTo(0,46);x.lineTo(0,-30);x.stroke();x.lineWidth=2.4;x.strokeStyle='#ffd24a';x.beginPath();x.moveTo(0,46);x.lineTo(0,-30);x.stroke();
+  for(let i=0;i<5;i++)for(const sd of [-1,1]){x.save();x.translate(0,-22+i*12);x.rotate(sd*0.55);x.fillStyle='#160a04';x.beginPath();x.ellipse(sd*8,0,10,5.6,0,0,P2);x.fill();x.fillStyle=i%2?'#ffcf3c':'#f2a52a';x.beginPath();x.ellipse(sd*8,0,8,4,0,0,P2);x.fill();x.restore()}x.restore();
+  x.save();x.translate(W*0.9,50);const arm=(a)=>{x.save();x.rotate(a);x.fillStyle='#160a04';x.fillRect(-2,-30,4,30);x.beginPath();x.ellipse(0,-30,15,5,0,0,P2);x.fill();x.fillStyle='#e5743a';x.beginPath();x.ellipse(0,-30,12,3,0,0,P2);x.fill();x.restore()};
+  for(const a of [0.8,-0.8,2.35,-2.35])arm(a);x.fillStyle='#160a04';x.fillRect(-14,-9,28,18);x.fillStyle='#f2a52a';x.fillRect(-11,-6,22,12);x.fillStyle='#ffe36a';x.fillRect(-11,-6,22,4);x.restore()}
+function logoReady(){const cv=$('mm-logo');if(!cv)return;drawLogo(cv);if(document.fonts&&document.fonts.load)document.fonts.load('900 100px Rubik').then(()=>drawLogo(cv)).catch(()=>{})}
+// «Что нового»: the changes of the latest stages (newest first)
+const NEWS=[['5.11',['Города растут по-разному: кольца и лучи вокруг площади, веер от площади, прямая сетка с диагональными бульварами, изогнутые и «старые» сетки; суперкварталы, микрорайоны, площади и скверы','Аэропорт: самолёты летают по рейсам — пассажирские в свои аэропорты и в страны с безвизом, грузовые — свои и на экспорт','Безвизовый режим в «Дипломатии»; война его отменяет','Железная дорога сама огибает города, постройки, горы и воду','Детали на площадках всех построек: склады, техника, грузы, стада, кучи руды','Пашня плавно переходит в лес через опушку; свет фонарей без пятен на перекрёстках','Главное меню, настройки и новая игра — в стиле DroneFlames']],
+  ['5.10',['Облака снова в полном разрешении, FPS у облаков как у земли']],['5.9',['Сёла растут с закладки, разные планировки сёл','Слева «Штаб» и «Залежи»: список свободных залежей и постройка добычи в два клика','Значки залежей — булавки, свои постройки на миникарте']]];
+function showNews(v){const w=$('news');if(!v){w.classList.remove('show');return}$('newsb').innerHTML=NEWS.map(([ver,L])=>`<div class="nw-v">Версия ${ver}</div><ul>${L.map(t=>`<li>${t}</li>`).join('')}</ul>`).join('');w.classList.add('show')}
+function showMenu(){document.body.className='m-menu';logoReady();
   const L=Saves.latest(),cb=$('mm-cont');cb.disabled=!L;cb.style.display=L?'':'none';$('mm-cont-s').textContent=L?`${L.s.meta.name} · ${L.s.meta.day} · ячейка ${L.i}`:'Сохранений пока нет';
   $('mm-ver').textContent='v'+VERSION;
   if(!S.menuBg||bg){loaded();return}
@@ -339,12 +365,13 @@ paintIcons();applyS();if(document.fonts)document.fonts.load('700 12px Rubik').ca
 const U={viewOpts:()=>Object.assign({clouds:S.clouds,traffic:S.traffic,labels:S.labels,fps:S.fps},QV[S.quality]||QV.balance),settings:()=>S,pause,toMenu,loading,loaded};
 Game.wire(U);
 for(const b of document.querySelectorAll('.mm-b'))b.onclick=()=>menuGo(b.dataset.go);
+$('mm-news').onclick=()=>showNews(!$('news').classList.contains('show'));$('newsx').onclick=()=>showNews(false);
 for(const b of document.querySelectorAll('[data-back]'))b.onclick=()=>{if(document.body.classList.contains('m-settings'))closeSettings();else showMenu()};
 $('screate').onclick=create;
 $('presume').onclick=()=>pause(false);$('psave').onclick=()=>{Game.save(false);$('pinfo').textContent=Game.pauseInfo()};$('pset').onclick=()=>openSettings('game');
 $('pexit').onclick=()=>{$('pause').classList.remove('show');paused=null;toMenu()};
 addEventListener('resize',()=>{if(!$('loading').classList.contains('fade'))drawLdBg()});
-addEventListener('keydown',e=>{if(e.code!=='Escape')return;if(document.body.classList.contains('m-settings')){closeSettings();return}if(document.body.classList.contains('m-setup'))showMenu()});
+addEventListener('keydown',e=>{if(e.code!=='Escape')return;if($('news').classList.contains('show')){showNews(false);return}if(document.body.classList.contains('m-settings')){closeSettings();return}if(document.body.classList.contains('m-setup'))showMenu()});
 window.__ui={S,menuGo,openSetup,create,get C(){return C}};
 const HS=location.hash.slice(1);
 if(/^\d/.test(HS)||/^view/.test(HS)){document.body.className='m-view';loading('Загрузка мира','Режим просмотра · сид '+parseInt(HS));setTimeout(()=>startWorld({mode:'view',onReady:()=>loaded()}),60)}
