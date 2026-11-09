@@ -229,7 +229,7 @@ function cityLayout(c){const Q=rng(c.seed^0x4c41a7);
   if(fam==='fan'){c.pol={full:0,off:c.R*(0.42+Q()*0.2),th:PI*(1.1+Q()*0.3),rin:95+Q()*45};c.cv=1;return}
   // block proportions: square-ish, long slabs along one axis or the other
   const asp=Q()<0.3?1:0.62+Q()*0.8;c.bu*=M.sqrt(asp);c.bv/=M.sqrt(asp);c.mrg=fam==='organic'?0.3:0.16;c.opn=fam==='organic'?0.07:0.035;
-  if(fam==='grid'){c.diag=Q()<0.75?1+(Q()<0.55?1:0):0;return}
+  if(fam==='grid'){c.diag=0;return} /* stage 5.14: no diagonal boulevards (the cross through the grid) */
   const s=fam==='organic'?1.25:1,a=(0.12+Q()*0.1)*s,aa=Q()*TAU,b=(0.015+Q()*0.035)*s,ba=Q()*TAU;
   if(fam==='organic')c.jit=1;
   c.wp=[a*M.cos(aa),a*M.sin(aa),b*M.cos(ba),b*M.sin(ba)];c.wL=c.R*1.3;c.cv=1}
@@ -466,7 +466,7 @@ for(const c of bigs)for(const o of nearest(c,bigs,2,48000))connect(c,o,5);
 for(const c of towns)for(const o of nearest(c,live.filter(q=>q.type>=1),2,16000))connect(c,o,1);
 for(const c of vills){const nn=nearest(c,live,2,7000);if(nn[0])connect(c,nn[0],4);if(nn[1]&&hr(c.id,1,1)<0.45)connect(c,nn[1],4)}
 // ring roads
-for(const c of bigs){if(c.type!==3)continue;const n=96,pts=[],wat=[];
+for(const c of bigs){if(c.type!==3||EMPTY||c.cap!==undefined)continue;/* stage 5.14: no ring motorway round capitals and in game worlds */const n=96,pts=[],wat=[];
   for(let k=0;k<n;k++){const a=k/n*TAU;const rr=ringR(c,a);const x=c.x+M.cos(a)*rr,y=c.y+M.sin(a)*rr;pts.push([x,y]);wat.push(landE(x,y,0)<0)}
   let st=wat.indexOf(true);const runs=[];
   if(st<0){const p=[];for(let k=0;k<=n;k++)p.push(pts[k%n][0],pts[k%n][1]);runs.push(p)}else{
@@ -2735,6 +2735,29 @@ function growRoads(rl,whole){const out=[];for(const r of rl){const id=r.city!==u
 let blockCache=new Map();const BCACHE=new Map();
 function bcGet(key){const v=BCACHE.get(key);return v}
 function bcSet(key,v){if(BCACHE.size>6000){let n=0;for(const k of BCACHE.keys()){BCACHE.delete(k);if(++n>2000)break}}BCACHE.set(key,v)}
+// stage 5.14: one depth order for every building of a tile. Before, the blocks of a town were sorted by their centre,
+// but the buildings inside a block (and in the zones) were drawn in the order they were made, so a tall roof (roofs lean
+// north) was painted over by a lower neighbour standing south of it. Now pass 2 collects units (a building with its
+// upper levels, domes and masts; footprints that overlap inside one block stay one unit in their own order: a podium and
+// its tower) from all blocks, plazas and zones of the tile, sorts them by the world y of their footprint and draws them
+// back to front. Flat things of pass 2 (cars, paving) are drawn first, under all buildings.
+let DQ=null,DQLOG=null;
+function isUS(p){return (p.k==='b'&&p.lvl===undefined&&p.H0===undefined)||p.k==='cyl'}
+function isUA(p){return p.k==='b'||p.lvl!==undefined||p.H!==undefined}
+function pBox(p){if(p.k==='cyl')return [p.x-p.r,p.y-p.r,p.x+p.r,p.y+p.r];if(p.a){const cx=p.x+p.w/2,cy=p.y+p.h/2,r=M.hypot(p.w,p.h)/2;return [cx-r,cy-r,cx+r,cy+r]}return [p.x,p.y,p.x+p.w,p.y+p.h]}
+function bOv(a,b){return a[0]<b[2]-0.2&&b[0]<a[2]-0.2&&a[1]<b[3]-0.2&&b[1]<a[3]-0.2}
+function unitsOf(P){if(P._u&&P._un===P.length)return P._u;const pre=[],U=[];let cur=null,cb=null;
+  for(const p of P){if(isUS(p)){const b=pBox(p);let u=null;for(const o of U){for(const q of o.bs)if(bOv(b,q)){u=o;break}if(u)break}
+      if(u){u.a.push(p);u.bs.push(b);const B=u.b;if(b[0]<B[0])B[0]=b[0];if(b[1]<B[1])B[1]=b[1];if(b[2]>B[2])B[2]=b[2];if(b[3]>B[3])B[3]=b[3]}else{u={a:[p],bs:[b],b:b.slice()};U.push(u)}cur=u;cb=b}
+    else if(cur&&(isUA(p)||(p.x!==undefined&&p.y!==undefined&&p.x>=cb[0]-2&&p.x<=cb[2]+2&&p.y>=cb[1]-2&&p.y<=cb[3]+2)))cur.a.push(p);else pre.push(p)}
+  P._u={pre,U};P._un=P.length;return P._u}
+function dq(P,fx,fy,ca,sa){const u=unitsOf(P);if(u.pre.length)drawPrims(DQ.ctx,u.pre,2,DQ.mpp);
+  for(const e of u.U){const b=e.b;let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(let c=0;c<4;c++){const lx=c&1?b[2]:b[0],ly=c&2?b[3]:b[1];const wx=fx+lx*ca-ly*sa,wy=fy+lx*sa+ly*ca;if(wx<x0)x0=wx;if(wx>x1)x1=wx;if(wy<y0)y0=wy;if(wy>y1)y1=wy}
+    DQ.push({a:e.a,fx,fy,ca,sa,k:(y0+y1)/2,x0,y0,x1,y1})}}
+function flushDQ(){const Q=DQ;DQ=null;if(!Q)return;Q.sort((a,b)=>a.k-b.k);
+  for(const j of Q){setFrame(Q.ctx,j.fx,j.fy,j.ca,j.sa,Q.x0,Q.y0,Q.s);drawPrims(Q.ctx,j.a,2,Q.mpp)}
+  if(DQLOG)for(const j of Q)DQLOG.push([j.k,j.x0,j.y0,j.x1,j.y1])}
+function paintLog(on){const r=DQLOG;DQLOG=on?[]:null;return r}
 function renderTile(z,tx,ty){
   const tsz=WORLD/(1<<z),mpp=tsz/TS,x0=tx*tsz,y0=ty*tsz,s=1/mpp;
   const cv=mkCanvas(TS,TS),ctx=cv.getContext('2d',{willReadFrequently:true});
@@ -2754,7 +2777,7 @@ function renderTile(z,tx,ty){
   if(detail){
     ctx.fillStyle=SHADOW;
     for(const f of feats){drawFeat(ctx,f,1,x0,y0,s,mpp,qx0,qy0,qx1,qy1)}
-    for(const f of feats)drawFeat(ctx,f,2,x0,y0,s,mpp,qx0,qy0,qx1,qy1);
+    DQ=[];DQ.ctx=ctx;DQ.mpp=mpp;DQ.x0=x0;DQ.y0=y0;DQ.s=s;try{for(const f of feats)drawFeat(ctx,f,2,x0,y0,s,mpp,qx0,qy0,qx1,qy1)}finally{flushDQ()}
   }
   ctx.setTransform(1,0,0,1,0,0);
   if(TREEQ.length){const S=sprites();for(let i=0;i<TREEQ.length;i+=4){const d=TREEQ[i+2]*1.45;if(d<1.6)continue;ctx.drawImage(S.treeS[SEASON][TREEQ[i+3]],TREEQ[i]-d*0.44,TREEQ[i+1]-d*0.44,d,d)}}
@@ -2783,7 +2806,7 @@ function drawFeat(ctx,f,pass,x0,y0,s,mpp,qx0,qy0,qx1,qy1){
   if(f.kind==='city'){if(f.type===0){if(mpp>9)return;for(let i=0;i<f.vst.length;i++){const st=f.vst[i];setFrame(ctx,st.x0,st.y0,st.ca,st.sa,x0,y0,s);const vk='v'+f.id+'_'+i+(LITE2?'b':LITE?'a':'')+(GROW.has(f.id)?'g'+GROW.get(f.id).toFixed(2):'');let P=bcGet(vk);if(!P){P=genVillage(f,i);bcSet(vk,P)}
         if(pass===1){ctx.beginPath();drawPrims(ctx,P,1,mpp);ctx.fillStyle=SHADOW;ctx.fill()}else drawPrims(ctx,P,pass,mpp)}return}
     const N=f.N,BD=f.D-1;const [i0,i1,j0,j1]=blkRange(f,qx0,qy0,qx1,qy1);
-    if(f.pol&&mpp<=14){const pr=f.pol.rin;if(f.px+pr>qx0&&f.px-pr<qx1&&f.py+pr>qy0&&f.py-pr<qy1){setFrame(ctx,f.px,f.py,1,0,x0,y0,s);const P=plazaPrims(f);if(pass===1){ctx.beginPath();drawPrims(ctx,P,1,mpp);ctx.fillStyle=SHADOW;ctx.fill()}else drawPrims(ctx,P,pass,mpp)}}
+    if(f.pol&&mpp<=14){const pr=f.pol.rin;if(f.px+pr>qx0&&f.px-pr<qx1&&f.py+pr>qy0&&f.py-pr<qy1){setFrame(ctx,f.px,f.py,1,0,x0,y0,s);const P=plazaPrims(f);if(pass===1){ctx.beginPath();drawPrims(ctx,P,1,mpp);ctx.fillStyle=SHADOW;ctx.fill()}else if(pass===2&&DQ)dq(P,f.px,f.py,1,0);else drawPrims(ctx,P,pass,mpp)}}
     const bi0=M.max(0,bsr(f.us,i0)-(f.msi||0)),bi1=M.min(BD-1,bsr(f.us,i1)),bj0=M.max(0,bsr(f.vs,j0)-(f.msj||0)),bj1=M.min(BD-1,bsr(f.vs,j1));
     const LB=[];for(let bj=bj0;bj<=bj1;bj++)for(let bi=bi0;bi<=bi1;bi++){const t=growT(f,bi,bj,f.blocks[bj*BD+bi]);if(!t)continue;
       const u=(f.us[bi]+f.us[bi+1])/2,v=(f.vs[bj]+f.vs[bj+1])/2;LB.push(bi,bj,t,f.cv||f.sp?blkFrame(f,bi,bj)[1]:f.y+u*f.sa+v*f.ca)}
@@ -2792,9 +2815,9 @@ function drawFeat(ctx,f,pass,x0,y0,s,mpp,qx0,qy0,qx1,qy1){
       const bf=blkFrame(f,bi,bj);setFrame(ctx,bf[0],bf[1],bf[2],bf[3],x0,y0,s);
       if(mpp>14){if(pass===0){const c=seasonC(MASS[t],0);const v2=0.93+hr(f.id,bi*999+bj,4)*0.14;ctx.fillStyle=cs(c,v2);const bw=bf[4]*2,bh=bf[5]*2;ctx.fillRect(-bw/2+5,-bh/2+5,bw-10,bh-10)}continue}
       const key=(f.id*1e6+bj*1000+bi)*3+(LITE2?2:LITE?1:0)+(t!==f.blocks[bj*BD+bi]?0.5:0);let P=bcGet(key);if(!P){P=genBlock(f,bi,bj,t);bcSet(key,P)}
-      if(pass===1){ctx.beginPath();drawPrims(ctx,P,1,mpp);ctx.fillStyle=SHADOW;ctx.fill()}else drawPrims(ctx,P,pass,mpp)}
+      if(pass===1){ctx.beginPath();drawPrims(ctx,P,1,mpp);ctx.fillStyle=SHADOW;ctx.fill()}else if(pass===2&&DQ)dq(P,bf[0],bf[1],bf[2],bf[3]);else drawPrims(ctx,P,pass,mpp)}
     return}
-  if(f.kind==='zone'){setFrame(ctx,f.x,f.y,f.ca,f.sa,x0,y0,s);if(pass===1){ctx.beginPath();drawPrims(ctx,f.prims,1,mpp);ctx.fillStyle=SHADOW;ctx.fill();return}drawPrims(ctx,f.prims,pass,mpp);return}
+  if(f.kind==='zone'){setFrame(ctx,f.x,f.y,f.ca,f.sa,x0,y0,s);if(pass===1){ctx.beginPath();drawPrims(ctx,f.prims,1,mpp);ctx.fillStyle=SHADOW;ctx.fill();return}if(pass===2&&DQ){dq(f.prims,f.x,f.y,f.ca,f.sa);return}drawPrims(ctx,f.prims,pass,mpp);return}
   if(f.kind==='farm'){if(pass===0)return;ctx.setTransform(s,0,0,s,-x0*s,-y0*s);if(pass===1)ctx.beginPath();
     for(const t of f.t){if(pass===1){ctx.moveTo(t.x,t.y);ctx.lineTo(t.x+SUNX*95-2,t.y+SUNY*95-2);ctx.lineTo(t.x+SUNX*95+2,t.y+SUNY*95+2);ctx.closePath()}
       else{ctx.fillStyle='#c8c8c4';ctx.beginPath();ctx.arc(t.x,t.y,M.max(2.5,mpp*0.8),0,TAU);ctx.fill();ctx.fillStyle='#9a9a90';ctx.fillRect(t.x-6,t.y-6,12,12)}}if(pass===1){ctx.fillStyle=SHADOW;ctx.fill()}}
@@ -2812,6 +2835,6 @@ function plazaPrims(f){if(f._pz)return f._pz;const R=rng(f.seed^0x77aa),P=[],r=f
 const _dp=drawPrims;
 
 return {air2Rw:z=>{const y=AIR2RY,p=(x)=>[z.x+x*z.ca-y*z.sa,z.y+x*z.sa+y*z.ca];return [p(-900),p(900)]},roadShown,addPlace,addZone,removeZone,addDeposits,removeDeposit,moveDeposit,addRail,removeRail,railPts,zoneUp,setHidden,drawUav:(ctx,v,c,s)=>drawUav(ctx,v,c,s,0),isHid:id=>HID.has(id),
-  fieldReach:c=>EMPTY?fieldR(c)*1.3+3500:c.R+4700,blkFrame,cU,cW,deps:DEPS,zoneDead:id=>!zones[id]||!!zones[id].dead,forestAt,portAt:(x,y)=>portAt(x,y,820,900),setGrow,growOf:id=>GROW.has(id)?GROW.get(id):1,opt:OPT,setSeason,season:()=>SEASON,renderLights,WORLD,TS,SUNX,SUNY,WDX,WDY,LEANX,LEANY,cities:live,roads,zones,farms,ships,flights,emitters,airports,queryRoads,queryF,posAt,renderTile,sprites,drawShip,drawPlane,baseH,landE,rng,hh,noise,genTime:Date.now()-T0,mkCanvas,_dbg:{genVillage,genBlock,RW,riverV,riverW,avoidZ,zoneOnPath,waterRunOK,zoneExit,projOn,fieldOn,fieldR}};
+  fieldReach:c=>EMPTY?fieldR(c)*1.3+3500:c.R+4700,blkFrame,cU,cW,deps:DEPS,zoneDead:id=>!zones[id]||!!zones[id].dead,forestAt,portAt:(x,y)=>portAt(x,y,820,900),setGrow,growOf:id=>GROW.has(id)?GROW.get(id):1,opt:OPT,setSeason,season:()=>SEASON,renderLights,WORLD,TS,SUNX,SUNY,WDX,WDY,LEANX,LEANY,cities:live,roads,zones,farms,ships,flights,emitters,airports,queryRoads,queryF,posAt,renderTile,sprites,drawShip,drawPlane,baseH,landE,rng,hh,noise,genTime:Date.now()-T0,mkCanvas,_dbg:{paintLog,unitsOf,genVillage,genBlock,RW,riverV,riverW,avoidZ,zoneOnPath,waterRunOK,zoneExit,projOn,fieldOn,fieldR}};
 }
 

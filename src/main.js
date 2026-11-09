@@ -400,19 +400,28 @@ function drawFlightLights(a){if(a<0.02||!FLB.length)return;ctx.globalCompositeOp
 // the camera moved (by a third of a pixel), the wind drifted the clouds by a third of a pixel, the cover, the daylight
 // or the tint changed. A still camera blits one image per pass.
 const CLL=[{c:mk(4,4),key:'',cx:0,cy:0},{c:mk(4,4),key:'',cx:0,cy:0}];
-function drawClouds(shadowPass){const H=camH();const cloudFar=1; // clouds are seen from orbit too (stage 5.5); near the cloud layer they dissolve (game)
+// stage 5.14: while the camera flies (the approach after a capital is founded) the cloud layer below 90 km is no longer
+// redrawn every frame: like the flat layers it is scaled and shifted with the camera (with the parallax of the mean cloud
+// height) and redrawn when the scale drifts by 10 % (shadows 15 %), its edge would show or the camera stops; the two
+// layers are not both redrawn in one frame unless one of them would show its edge. Below the cloud layer (where no cloud
+// can be seen) the cloud pass does nothing at all.
+let CALT=0,CAMN=0,CLRF=-1,CLFN=0;
+function cAlt(mn){if(!CALT){let s=0,m=1e9;for(const c of clouds){s+=c.alt;if(c.alt<m)m=c.alt}CALT=clouds.length?s/clouds.length:2900;CAMN=clouds.length?m:2000}return mn?CAMN:CALT}
+function clProj(L,kN,PAD){const r=(kN/cam.m)/((L.kk||1)/L.m),dx=(L.cx-cam.x)/cam.m*kN,dy=(L.cy-cam.y)/cam.m*kN,wx=(T-L.T)*9/cam.m*kN;return [r,dx+(-PAD-VW/2)*r+VW/2+wx,dy+(-PAD-VH/2)*r+VH/2,dx+wx,dy]}
+function drawClouds(shadowPass){if(shadowPass)CLFN++;const H=camH();const cloudFar=1; // clouds are seen from orbit too (stage 5.5); near the cloud layer they dissolve (game)
   const span=WORLD*1.3;
   if(shadowPass&&(LG.day<0.03||cam.m<0.12))return;
+  if(!shadowPass&&H<(MODE==='game'?3:1.12)*cAlt(1)){CLL[1].key='';CLL[1].n=0;return}
   // the layer is a margin larger than the screen: a pan (the shadows always, the clouds when seen from far above, where
   // they have no parallax) only shifts the old picture until it would show its edge
   const PAD=64,L=CLL[shadowPass?0:1],q=3/cam.m,lw=M.max(4,M.ceil((VW+PAD*2)*DPR)),lh=M.max(4,M.ceil((VH+PAD*2)*DPR));
   const fl=clamp(384/M.max(1,(L.ms||0)*DPR),0.25,1),f=M.round((CAMMV&&(L.ms||0)*DPR>96?M.max(0.25,fl*0.5):fl)*16)/16; // stage 5.12
-  const flat=shadowPass||H>90000,key=[flat?'f':cam.m.toFixed(5)+'|'+M.round(T*9*q),M.round(wcur.cover*60),shadowPass?M.round(LG.day*60):cloudTint,lw,lh,LITE?1:0,f].join('|');
+  const cAl=cAlt(),flat=shadowPass||H>90000,pl=!flat&&H>cAl*2.5,kN=flat?1:H/M.max(1,H-cAl),key=[flat?'f':pl?'p':cam.m.toFixed(5)+'|'+M.round(T*9*q),M.round(wcur.cover*60),shadowPass?M.round(LG.day*60):cloudTint,lw,lh,LITE?1:0,f].join('|');
   const ox=(L.cx-cam.x)/cam.m,oy=(L.cy-cam.y)/cam.m;
   // stage 5.12: a flat layer is reused while the camera zooms (scaled, up to 8 %) and while the wind drifts it (shifted);
   // it is redrawn when the scale drifts further, its edge would show or the camera stops (then at the exact scale)
-  let need=key!==L.key;if(!need){if(flat){const r=L.m/cam.m,X0=ox+(-PAD-VW/2)*r+VW/2+(T-L.T)*9/cam.m,Y0=oy+(-PAD-VH/2)*r+VH/2;need=M.abs(M.log(r))>(CAMMV?0.08:0.002)||X0>-2||Y0>-2||X0+(VW+PAD*2)*r<VW+2||Y0+(VH+PAD*2)*r<VH+2}else need=M.abs(ox)>0.34||M.abs(oy)>0.34}
-  if(need){L.key=key;L.cx=cam.x;L.cy=cam.y;L.m=cam.m;L.T=T;if(L.c.width!==lw||L.c.height!==lh){L.c.width=lw;L.c.height=lh}const x2=L.c.getContext('2d');x2.setTransform(1,0,0,1,0,0);x2.clearRect(0,0,M.min(lw,M.ceil(lw*f)+2),M.min(lh,M.ceil(lh*f)+2));x2.setTransform(DPR*f,0,0,DPR*f,PAD*DPR*f,PAD*DPR*f);x2.imageSmoothingEnabled=true;let n=0,ms=1e9;L.f=f;
+  let need=key!==L.key;if(!need){if(flat||pl){const pr=clProj(L,kN,PAD),r=pr[0],X0=pr[1],Y0=pr[2],tol=shadowPass?0.15:0.1,lr=M.abs(M.log(r)),edge=X0>-2||Y0>-2||X0+(VW+PAD*2)*r<VW+2||Y0+(VH+PAD*2)*r<VH+2;need=edge||lr>(CAMMV?tol:0.002)||(!CAMMV&&pl&&(M.abs(pr[3])>0.34||M.abs(pr[4])>0.34));if(need&&!edge&&CAMMV&&CLRF===CLFN&&lr<tol*1.6)need=false}else need=M.abs(ox)>0.34||M.abs(oy)>0.34}if(need)CLRF=CLFN;
+  if(need){L.key=key;L.cx=cam.x;L.cy=cam.y;L.m=cam.m;L.T=T;L.kk=kN;L.rd=(L.rd||0)+1;if(L.c.width!==lw||L.c.height!==lh){L.c.width=lw;L.c.height=lh}const x2=L.c.getContext('2d');x2.setTransform(1,0,0,1,0,0);x2.clearRect(0,0,M.min(lw,M.ceil(lw*f)+2),M.min(lh,M.ceil(lh*f)+2));x2.setTransform(DPR*f,0,0,DPR*f,PAD*DPR*f,PAD*DPR*f);x2.imageSmoothingEnabled=true;let n=0,ms=1e9;L.f=f;
     for(let ci=0;ci<clouds.length;ci++){const c=clouds[ci];const vis=clamp((wcur.cover-c.g)*14,0,1);if(vis<=0)continue;
       let x=((c.x+T*9+WORLD*0.15)%span+span)%span-WORLD*0.15,y=c.y;
       if(LITE&&ci%2)continue;
@@ -421,7 +430,7 @@ function drawClouds(shadowPass){const H=camH();const cloudFar=1; // clouds are s
       const X=VW/2+(x-cam.x)/cam.m*kk,Y=VH/2+(y-cam.y)/cam.m*kk,sz=c.s/cam.m*kk;if(X+sz/2<-PAD||Y+sz/2<-PAD||X-sz/2>VW+PAD||Y-sz/2>VH+PAD)continue;
       const ca=a*0.95*vis*cloudFar*(MODE==='game'?smooth(VW*2.4,VW*1.3,sz):1);if(ca<0.02)continue;/* game: no screen-filling cloud sprites */x2.globalAlpha=ca;x2.drawImage(CLS[c.v][2],X-sz/2,Y-sz/2,sz,sz);n++;if(sz<ms)ms=sz}
     L.n=n;L.ms=ms}
-  if(!L.n)return;const dx=(L.cx-cam.x)/cam.m,dy=(L.cy-cam.y)/cam.m;ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;{const lf=L.f||1,r=flat?L.m/cam.m:1,X0=dx+(-PAD-VW/2)*r+VW/2+(flat?(T-L.T)*9/cam.m:0),Y0=dy+(-PAD-VH/2)*r+VH/2;if(lf>=1&&!flat)ctx.drawImage(L.c,M.round(X0*DPR),M.round(Y0*DPR));else ctx.drawImage(L.c,0,0,lw*lf,lh*lf,X0*DPR,Y0*DPR,lw*r,lh*r)}ctx.setTransform(DPR,0,0,DPR,0,0)}
+  if(!L.n)return;const dx=(L.cx-cam.x)/cam.m,dy=(L.cy-cam.y)/cam.m;ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;{const lf=L.f||1;let r=1,X0=dx-PAD,Y0=dy-PAD;if(flat||pl){const pr=clProj(L,kN,PAD);r=pr[0];X0=pr[1];Y0=pr[2]}if(lf>=1&&!flat&&!pl)ctx.drawImage(L.c,M.round(X0*DPR),M.round(Y0*DPR));else ctx.drawImage(L.c,0,0,lw*lf,lh*lf,X0*DPR,Y0*DPR,lw*r,lh*r)}ctx.setTransform(DPR,0,0,DPR,0,0)}
 function drawFog(){const f=wcur.fog;if(f<0.01)return;ctx.setTransform(DPR,0,0,DPR,0,0);
   for(let l=0;l<2;l++){const P=l?1700:5200,sc=P/256/cam.m;const ox=VW/2-(cam.x-T*(l?9:5))/cam.m,oy=VH/2-(cam.y+T*(l?3:-2))/cam.m;
     FOG.setTransform(new DOMMatrix([sc,0,0,sc,ox+l*91,oy+l*57]));ctx.fillStyle=FOG;ctx.globalAlpha=f*(l?0.42:0.6);ctx.fillRect(0,0,VW,VH)}
