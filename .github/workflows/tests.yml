@@ -13,7 +13,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,16 +37,19 @@ jobs:
           set -o pipefail
           timeout 600 node tools/perf.mjs 2>&1 | tee perf-branch.log
           if [ -f tests/perf-fly.mjs ]; then timeout 600 node tests/perf-fly.mjs 2>&1 | tee fly-branch.log; fi
+          if [ -f tests/perf-capital.mjs ]; then timeout 600 node tests/perf-capital.mjs 2>&1 | tee cap-branch.log || true; fi
       - name: perf-main
         continue-on-error: true
         run: |
           set -o pipefail
           git worktree add ../base origin/main
           if [ -f tests/perf-fly.mjs ]; then cp tests/perf-fly.mjs ../base/tests/; fi
+          if [ -f tests/perf-capital.mjs ]; then cp tests/perf-capital.mjs ../base/tests/; fi
           cd ../base
           (npm ci || npm install)
           timeout 600 node tools/perf.mjs 2>&1 | tee "$GITHUB_WORKSPACE/perf-main.log"
           if [ -f tests/perf-fly.mjs ]; then timeout 600 node tests/perf-fly.mjs 2>&1 | tee "$GITHUB_WORKSPACE/fly-main.log"; fi
+          if [ -f tests/perf-capital.mjs ]; then timeout 600 node tests/perf-capital.mjs 2>&1 | tee "$GITHUB_WORKSPACE/cap-main.log" || true; fi
       - name: report
         if: always()
         env:
@@ -57,7 +60,7 @@ jobs:
           if [ -z "$PR" ]; then echo "no PR"; exit 0; fi
           {
             echo "sha: $(git rev-parse --short HEAD) · $GITHUB_EVENT_NAME · unit: ${{ steps.unit.outcome }} · browser: ${{ steps.browser.outcome }}"
-            for f in unit browser perf-branch perf-main fly-branch fly-main; do
+            for f in unit browser perf-branch perf-main fly-branch fly-main cap-branch cap-main; do
               [ -f "$f.log" ] || continue
               n=5000; [ "$f" = unit ] && n=2500; [ "$f" = browser ] && n=9000
               echo "### $f"; echo '~~~'
