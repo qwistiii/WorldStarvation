@@ -1,0 +1,191 @@
+######## B @73670
+function B(P,x,y,w,h,H,c,r,ex){const o={k:'b',x,y,w,h,H,c,r};if(ex)for(const q in ex)o[q]=ex[q];P.push(o);return o}
+function TR(P,x,y,d,v){P.push({k:'t',x,y,d,v})}
+function CY(P,x,y,r,H,c,st){P.push({k:'cyl',x,y,r,H,c,st})}
+function LN(P,pts,w,c,dash){P.push({k:'gl',pts,w,c,dash})}
+function PK(P,x,y,w,h,fill,seed,truck){P.push({k:'pk',x,y,w,h,fill,seed,truck})}
+function zemit(z,lx,ly,k,s,H){H=H||0;emitters.push({x:z.x+lx*z.ca-ly*z.sa+LEANX*H,y:z.y+lx*z.sa+ly*z.ca+LEANY*H,k,s,H,ph:hr(lx|0,ly|0,z.id),city:z.city?z.city.id:-1,zid:z.id})}
+function genZone(z){
+  const R=rng(z.seed),P=[],W=z.W,H=z.H;z.prims=P;
+  const ASP=[78,80,84],CON=[160,158,152],GRV=[150,146,136];
+  if(z.zk==='ind'){
+    G(P,-W/2,-H/2,W,H,[142,139,130]);
+    const nx=M.max(2,M.round(W/230)),ny=M.max(2,M.round(H/210)),cw=W/nx,ch=H/ny;
+    for(let i=0;i<=nx;i++)LN(P,[-W/2+i*cw,-H/2,-W/2+i*cw,H/2],9,ASP);for(let j=0;j<=ny;j+
+######## G @73619
+function G(P,x,y,w,h,c){P.push({k:'g',x,y,w,h,c})}
+function B(P,x,y,w,h,H,c,r,ex){const o={k:'b',x,y,w,h,H,c,r};if(ex)for(const q in ex)o[q]=ex[q];P.push(o);return o}
+function TR(P,x,y,d,v){P.push({k:'t',x,y,d,v})}
+function CY(P,x,y,r,H,c,st){P.push({k:'cyl',x,y,r,H,c,st})}
+function LN(P,pts,w,c,das
+######## drawPrims @273165
+function drawPrims(ctx,P,pass,mpp){const s=1/mpp;
+  for(let q=0;q<P.length;q++){const p=P[q];const k=p.k;
+    if(pass===0){
+      if(k==='g'){if(p.w*s<0.4&&p.h*s<0.4)continue;ctx.fillStyle=cs(seasonC(p.c,p.tr?4:0),1);ctx.fillRect(p.x,p.y,p.w,p.h);
+        if(s>0.45&&p.w*s>3&&p.h*s>3){const m=p.gm||(p.gm=groundMat(p));matRect(ctx,m,s,SEASON===2?(m==='grass'||m==='soil'?0.15:0.35):m==='grass'?0.6:0.5,p.x,p.y,p.w,p.h,0,(p.x*7.3+p.y*3.1)|0)}}
+      else if(k==='gl'){ctx.strokeStyle=cs(seasonC(p.c,4),1);ctx.lineWidth=M.max(p.w,mpp*0.6);ctx.lineCap='butt';if(p.dash)ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(p.pts[0],p.pts[1]);for(let i=2;i<p.pts.length;i+=2)ctx.lineTo(p.pts[i],p.pts[i+1]);ctx.stroke();if(p.dash)ctx.setLineDash([])}
+      else if(k==='wood'){if(s<1.5)continue;ctx.fillStyle='rgba(14,18,28,0.3)';ctx.fillRect(p.x+0.4,p.y+0.3,p.w,p.h);ctx.fillStyle='#8a6440';ctx.fillRect(p.x,p.y,p.w,p.h);if(s>4){ctx.fillStyle='#c09868';const r=rng(p.x*9|0);for(let q=0;q<p.w*p.h*12;q++){ctx.beginPath();ctx.arc(p.x+0.1+r()*(p.w-0.2),p.y+0.1+r()*(p.h-0.2),0.07,0,TAU);ctx.fill()}}}
+      else if(k==='path'){ctx.fillStyle=SEASON===2?'#d8dce0':'#b4aa98';ctx.fillRect(p.x,p.y,p.w,p.h);matRect(ctx,'pave',s,0.5,p.x,p.y,p.w,p.h,0,0)}
+      else if(k==='gc'){ctx.fillStyle=cs(seasonC(p.c,0),1);ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,TAU);ctx.fill();if(s>0.45){matFill(ctx,groundMat(p),s,0.45,0,3.3,1.7);ctx.strokeStyle='rgba(0,0,0,0.18)';ctx.lineWidth=0.3;ctx.stroke()}}
+      else if(k==='pond'){const wi=SEASON===2;ctx.fillStyle=wi?'#c8cfd4':'#6a8a5a';ctx.beginPath();ctx.ellipse(p.x,p.y,p.rx+1.5,p.ry+1.5,0,0,TAU);ctx.fill();const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.rx);g.addColorStop(0,wi?'#b8ccd8':'#2e5a66');g.addColorStop(1,wi?'#d6e2ea':'#4a7e80');ctx.fillStyle=g;ctx.beginPath();ctx.ellipse(p.x,p.y,p.rx,p.ry,0,0,TAU);ctx.fill()}
+      else if(k==='pk'){ctx.fillStyle='#55585c';ctx.fillRect(p.x,p.y,p.w,p.h);matRect(ctx,'asph',s,0.8,p.x,p.y,p.w,p.h,0,0);if(s>1.2){ctx.strokeStyle='rgba(235,235,230,0.65)';ctx.lineWidth=0.12;ctx.beginPath();const hor=p.w>=p.h;
+          if(hor){const rows=M.max(1,M.floor(p.h/5.4));for(let r=0;r<rows;r++){for(let x=p.x;x<=p.x+p.w;x+=2.6){ctx.moveTo(x,p.y+r*5.4);ctx.lineTo(x,p.y+r*5.4+5)}}}else{const rows=M.max(1,M.floor(p.w/5.4));for(let r=0;r<rows;r++){for(let y=p.y;y<=p.y+p.h;y+=2.6){ctx.moveTo(p.x+r*5.4,y);ctx.lineTo(p.x+r*5.4+5,y)}}}ctx.stroke()}}
+      else if(k==='rows'){if(s<0.6)continue;const WI=SEASON===2;ctx.fillStyle=WI?'#e2e6ea':'#7a644a';ctx.fillRect(p.x,p.y,p.w,p.h);if(!WI)matRect(ctx,'soil',s,0.6,p.x,p.y,p.w,p.h,0,p.x*13|0);
+        // beds of different crops separated by trodden paths: potatoes (clumps), cabbage (pale rosettes), onion/carrot (fine lines), strawberry
+        const r=rng((p.x*31|0)^(p.y*17|0)),L=p.o===0?p.h:p.w,Wd=p.o===0?p.w:p.h;let pos=0.3;
+        while(pos<L-0.8){const bw=1.0+r()*0.5,crop=r()*4|0;const bx=p.o===0?p.x:p.x+pos,by=p.o===0?p.y+pos:p.y;const bW=p.o===0?Wd:bw,bH=p.o===0?bw:Wd;
+          if(WI){ctx.fillStyle='rgba(180,186,192,0.5)';ctx.fillRect(bx,by,bW,bH*0.3)}
+          else if(SEASON===1&&crop!==1){ctx.fillStyle='rgba(60,44,30,0.35)';ctx.fillRect(bx,by,bW,bH)}
+          else if(s<2.5){ctx.fillStyle=['#4e7a34','#7e9e62','#5f8a3c','#3f6e30'][crop];ctx.fillRect(bx+(p.o?0.15:0),by+(p.o?0:0.15),p.o?bW-0.3:bW,p.o?bH:bH-0.3)}
+          else{const step=crop===2?0.25:0.55,rad=crop===0?0.28:crop===1?0.3:crop===2?0.08:0.18;ctx.fillStyle=['#4e7a34','#88a86a','#6a9a40','#3f7a32'][crop];ctx.beginPath();
+            for(let a=0.3;a<(p.o===0?Wd:Wd)-0.2;a+=step)for(let l=0.25;l<bw-0.2;l+=0.45){const X=p.o===0?bx+a:bx+l,Y=p.o===0?by+l:by+a;const j=(r()-0.5)*0.12;ctx.moveTo(X+j+rad,Y);ctx.arc(X+j,Y,rad,0,TAU)}ctx.fill();
+            }
+          pos+=bw+0.45}}
+      else if(k==='track'){const r=p.h/2;ctx.fillStyle=SEASON===2?'#d8d4d2':'#a8503c';rr(ctx,p.x,p.y,p.w,p.h,r);ctx.fill();ctx.fillStyle=SEASON===2?'#e8ecf0':SEASON===1?'#6e8a3c':'#4f8a3c';rr(ctx,p.x+5,p.y+5,p.w-10,p.h-10,r-5);ctx.fill();
+        if(s>1){ctx.strokeStyle='rgba(255,255,255,0.7)';ctx.lineWidth=0.15;for(let l=1;l<5;l++){rr(ctx,p.x+l,p.y+l,p.w-2*l,p.h-2*l,r-l);ctx.stroke()}ctx.strokeRect(p.x+p.w*0.2,p.y+8,p.w*0.6,p.h-16);ctx.beginPath();ctx.moveTo(p.x+p.w/2,p.y+8);ctx.lineTo(p.x+p.w/2,p.y+p.h-8);ctx.stroke()}}
+      else if(k==='rw'){ctx.fillStyle='#5a5c60';ctx.fillRect(p.x,p.y,p.w,p.h);ctx.fillStyle='rgba(40,40,40,0.5)';ctx.fillRect(p.x+80,p.y+p.h*0.3,p.w-160,p.h*0.4);
+        if(s>0.12){ctx.fillStyle='#ececec';for(let x=p.x+120;x<p.x+p.w-120;x+=60)ctx.fillRect(x,p.y+p.h/2-0.45,30,0.9);
+          for(const e of [p.x+8,p.x+p.w-38])for(let q=0;q<8;q++)ctx.fillRect(e,p.y+4+q*(p.h-8)/8+0.5,30,(p.h-8)/8*0.55);
+          ctx.fillRect(p.x,p.y+1,p.w,0.9);ctx.fillRect(p.x,p.y+p.h-1.9,p.w,0.9);for(const e of [p.x+300,p.x+p.w-345])ctx.fillRect(e,p.y+8,45,8),ctx.fillRect(e,p.y+p.h-16,45,8)}}
+      else if(k==='rw2'){ctx.fillStyle='#4e5054';ctx.fillRect(p.x,p.y,p.w,p.h);matRect(ctx,'asph',s,0.7,p.x,p.y,p.w,p.h,0,7);
+        if(s>0.3){ctx.fillStyle='#e8e8e2';const cy=p.y+p.h/2;for(let x=p.x+34;x<p.x+p.w-40;x+=24)ctx.fillRect(x,cy-0.25,12,0.5);ctx.fillRect(p.x+1,p.y+0.8,p.w-2,0.4);ctx.fillRect(p.x+1,p.y+p.h-1.2,p.w-2,0.4);
+          for(const e of [p.x+3,p.x+p.w-15])for(let q=0;q<6;q++)ctx.fillRect(e,p.y+2+q*(p.h-4)/6+0.3,12,(p.h-4)/6*0.55);for(const e of [p.x+60,p.x+p.w-82])ctx.fillRect(e,p.y+3,22,2),ctx.fillRect(e,p.y+p.h-5,22,2)}
+        if(s>1.2){ctx.fillStyle='rgba(0,0,0,0.25)';for(let x=p.x+40;x<p.x+p.w-40;x+=7)ctx.fillRect(x+(x*13%5),p.y+p.h*0.35,3,p.h*0.3);ctx.fillStyle='#d8d4a0';for(let x=p.x;x<=p.x+p.w;x+=30){ctx.fillRect(x-0.3,p.y-1.5,0.6,0.6);ctx.fillRect(x-0.3,p.y+p.h+0.9,0.6,0.6)}}}
+      else if(k==='mow'){if(s<0.1)continue;ctx.fillStyle='rgba(255,255,220,0.05)';for(let y=p.y;y<p.y+p.h;y+=40)ctx.fillRect(p.x,y,p.w,20)}
+      else if(k==='rail'){ctx.strokeStyle='#7a7266';ctx.lineWidth=M.max(4,mpp*0.6);ctx.beginPath();ctx.moveTo(p.pts[0],p.pts[1]);ctx.lineTo(p.pts[2],p.pts[3]);ctx.stroke();
+        if(s>1.5){ctx.strokeStyle='#444';ctx.lineWidth=0.18;const dx=p.pts[2]-p.pts[0],dy=p.pts[3]-p.pts[1],l=M.hypot(dx,dy),nx=-dy/l*0.72,ny=dx/l*0.72;ctx.beginPath();for(const sg of [-1,1]){ctx.moveTo(p.pts[0]+nx*sg,p.pts[1]+ny*sg);ctx.lineTo(p.pts[2]+nx*sg,p.pts[3]+ny*sg)}ctx.stroke()}}
+      else if(k==='switch'){if(s<0.5)continue;ctx.strokeStyle='rgba(60,60,60,0.7)';ctx.lineWidth=0.3;ctx.beginPath();for(let x=p.x+5;x<p.x+p.w;x+=12){ctx.moveTo(x,p.y);ctx.lineTo(x,p.y+p.h)}for(let y=p.y+5;y<p.y+p.h;y+=18){ctx.moveTo(p.x,y);ctx.lineTo(p.x+p.w,y)}ctx.stroke();
+        ctx.fillStyle='#8a8c90';for(let x=p.x+5;x<p.x+p.w;x+=12)for(let y=p.y+5;y<p.y+p.h;y+=18)ctx.fillRect(x-1.5,y-1.5,3,3)}
+      else if(k==='lawn'){ctx.fillStyle=SEASON===2?'#e4e8ec':SEASON===1?'#8e9450':'#6f9a4c';ctx.fillRect(p.x,p.y,p.w,p.h);matRect(ctx,'grass',s,SEASON===2?0.15:0.7,p.x,p.y,p.w,p.h,0,0);if(s>1.2){ctx.fillStyle='rgba(255,255,230,0.07)';if(p.o===0)for(let x=p.x;x<p.x+p.w;x+=3)ctx.fillRect(x,p.y,1.5,p.h);else for(let y=p.y;y<p.y+p.h;y+=3)ctx.fillRect(p.x,y,p.w,1.5)}}
+      else if(k==='pool'){ctx.fillStyle='#d8d6cc';ctx.fillRect(p.x-0.8,p.y-0.8,p.w+1.6,p.h+1.6);const gp=ctx.createLinearGradient(p.x,p.y,p.x+p.w,p.y+p.h);gp.addColorStop(0,'#3fb6d8');gp.addColorStop(1,'#7fdcef');if(SEASON>0){gp.addColorStop(0,SEASON===2?'#b8c4cc':'#4a7a8a');gp.addColorStop(1,SEASON===2?'#cdd6dc':'#5a8a96')}ctx.fillStyle=gp;ctx.fillRect(p.x,p.y,p.w,p.h);
+        if(s>2){ctx.strokeStyle='rgba(255,255,255,0.35)';ctx.lineWidth=0.12;ctx.beginPath();for(let q=1;q<4;q++){ctx.moveTo(p.x+p.w*q/4,p.y+0.5);ctx.bezierCurveTo(p.x+p.w*q/4+0.6,p.y+p.h*0.3,p.x+p.w*q/4-0.6,p.y+p.h*0.7,p.x+p.w*q/4,p.y+p.h-0.5)}ctx.stroke()}}
+      else if(k==='helipad'){ctx.fillStyle='#4a4d52';ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,TAU);ctx.fill();ctx.strokeStyle='#e8e8e2';ctx.lineWidth=0.5;ctx.beginPath();ctx.arc(p.x,p.y,p.r*0.85,0,TAU);ctx.stroke();
+        if(p.mil){ctx.fillStyle='#e8e8e2';const a=p.r*0.42,b=p.r*0.11;ctx.fillRect(p.x-a,p.y-a,b*1.6,2*a);ctx.fillRect(p.x+a-b*1.6,p.y-a,b*1.6,2*a);ctx.fillRect(p.x-a,p.y-b*0.8,2*a,b*1.6)}
+        else{ctx.fillStyle='#d23a30';const a=p.r*0.55,b=p.r*0.18;ctx.fillRect(p.x-a,p.y-b,2*a,2*b);ctx.fillRect(p.x-b,p.y-a,2*b,2*a)}}
+      else if(k==='field'){ctx.fillStyle=SEASON===2?'#e6eaee':SEASON===1?'#6e8a3c':'#4a8c3a';ctx.fillRect(p.x,p.y,p.w,p.h);matRect(ctx,'grass',s,SEASON===2?0.15:0.55,p.x,p.y,p.w,p.h,0,0);ctx.fillStyle='rgba(255,255,255,0.06)';for(let q=0;q<p.w;q+=p.w/8)ctx.fillRect(p.x+q,p.y,p.w/16,p.h);
+        if(s>0.8){ctx.strokeStyle='rgba(255,255,255,0.85)';ctx.lineWidth=0.14;ctx.strokeRect(p.x+2,p.y+2,p.w-4,p.h-4);ctx.beginPath();ctx.moveTo(p.x+p.w/2,p.y+2);ctx.lineTo(p.x+p.w/2,p.y+p.h-2);ctx.stroke();ctx.beginPath();ctx.arc(p.x+p.w/2,p.y+p.h/2,p.h*0.14,0,TAU);ctx.stroke();
+          ctx.strokeRect(p.x+2,p.y+p.h*0.3,p.w*0.14,p.h*0.4);ctx.strokeRect(p.x+p.w-2-p.w*0.14,p.y+p.h*0.3,p.w*0.14,p.h*0.4)}}
+      else if(k==='court'){ctx.fillStyle='#d8d6cc';ctx.
+######## mkRoad @9472
+function mkRoad(k,pts,extra){
+  const n=pts.length/2;if(n<2)return null;
+  const cum=new Float64Array(n);let L=0;let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  for(let i=0;i<n;i++){const x=pts[i*2],y=pts[i*2+1];if(i>0)L+=M.hypot(x-pts[i*2-2],y-pts[i*2-1]);cum[i]=L;
+    if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}
+  if(L<20)return null;
+  const r={id:roads.length,k,pts:new Float64Array(pts),cum,L,n,bb:[x0,y0,x1,y1],br:null,_s:0};
+  if(extra)Object.assign(r,extra);
+  roads.push(r);
+  for(let i=0;i<n-1;i++){const ax=pts[i*2],ay=pts[i*2+1],bx=pts[i*2+2],by=pts[i*2+3];
+    const a=clamp(M.floor(M.min(ax,bx)/RC-0.05),0,RNC-1),b=clamp(M.floor(M.max(ax,bx)/RC+0.05),0,RNC-1),c=clamp(M.floor(M.min(ay,by)/RC-0.05),0,RNC-1),d=clamp(M.floor(M.max(ay,by)/RC+0.05),0,RNC-1);
+    for(let j=c;j<=d;j++)for(let q=a;q<=b;q++){const id=j*RNC+q;let A=gridR[id];if(!A)A=gridR[id]=[];if(A[A.length-1]!==r.id)A.push(r.id)}}
+  return r;
+}
+let stampR=1;
+function queryRoads(x0,y0,x1,y1){stampR++;const out=[];const a=clamp(M.floor(x0/RC),0,RNC-1),b=clamp(M.floor(x1/RC),0,RNC-1),c=clamp(M.floor(y0/RC),0,RNC-1),d=clamp(M.floor(y1/RC),0,RNC-1);
+  for(let j=c;j<=d;j++)for(let i=a;i<=b;i++){const A=gridR[j*RNC+i];if(!A)continue;for(let k=0;k<A.length;k++){const r=roads[A[k]];if(r._s===stampR)continue;r._s=stampR;
+    if(r.bb[2]<x0-40||r.bb[0]>x1+40||r.bb[3]<y0-40||r.bb[1]>y1+40)continue;out.push(r)}}return out}
+function bridgesOf(r){ // water intervals along road
+  r._b=1;
+  if(r.n===2){const mx=(r.pts[0]+r.pts[2]
+######## dropCrowns @196421
+function dropCrowns(P){const G=mkBins();let nb=0;for(const p of P)if(p.k==='b'||p.k==='cyl'){binAdd(G,p,fpBox(p));nb++}if(!nb)return P;let cut=false;
+  for(const p of P){if(p.k!=='t')continue;const r=p.d*0.45-0.4;for(const b of binGet(G,p.x-r,p.y-r,p.x+r,p.y+r)){let tx=p.x,ty=p.y;if(b.a){const cx=b.x+b.w/2,cy=b.y+b.h/2,c=M.cos(b.a),sn=M.sin(b.a);tx=cx+(p.x-cx)*c+(p.y-cy)*sn;ty=cy-(p.x-cx)*sn+(p.y-cy)*c}
+    const d=b.k==='b'?M.hypot(tx-clamp(tx,b.x,b.x+b.w),ty-clamp(ty,b.y,b.y+b.h)):M.hypot(p.x-b.x,p.y-b.y)-b.r;if(d<r){p._x=1;cut=true;break}}}
+  return cut?P.filter(p=>!p._x):P}
+// street trees
+######## \.rings
+--- @47655
+&&landE(p[p.length-2],p[p.length-1],0)<0)p.length-=2;while(p.length>4&&landE(p[0],p[1],0)<0)p.splice(0,2)} // a ring piece never ends in the water
+  c.rings=[];for(const p of runs){if(p.length<2*14)continue;const r=mkRoad(0,p,{ring:1});if(!r)continue;bridgesOf(r);c.rings.push(r);
+    if(runs.length>1||st>=0)for(const e of [0,r.n-1]){const x=r.pts[e*2],y=r.pts[e*2+1],a0=M.atan2(y-c.y,x-c.x);
+      
+--- @47770
+g piece never ends in the water
+  c.rings=[];for(const p of runs){if(p.length<2*14)continue;const r=mkRoad(0,p,{ring:1});if(!r)continue;bridgesOf(r);c.rings.push(r);
+    if(runs.length>1||st>=0)for(const e of [0,r.n-1]){const x=r.pts[e*2],y=r.pts[e*2+1],a0=M.atan2(y-c.y,x-c.x);
+      for(const [f,da] of [[0.85,0],[0.85,0.25],[0.85,-0.25],[0.7,0],[0.7,0.4],[0.7,-0.4],[0.55,0]]){const q=snapNode(c,c
+--- @57505
+=r.cum[i]+t*M.sqrt(l2)}}return [M.sqrt(best),bs]}
+for(const [c,jx,jy,hx,hy,hr0] of JUNC){if(landE(jx,jy,0)<0)continue;let ringR0=null;for(const r of c.rings||[]){const [d]=nearestS(r,jx,jy);if(d<120){ringR0=r;break}}const L=M.hypot(jx-c.x,jy-c.y);const nx=(jx-c.x)/L,ny=(jy-c.y)/L;
+  // half cloverleaf only where the highway meets the ring almost radially and on dry land
+  const hl=M.hypot(hx,hy)||
+--- @58114
+
+  {const e=snapNode(c,c.x+(jx-c.x)*0.8,c.y+(jy-c.y)*0.8);const pts=trimAlong([jx,jy,e[0],e[1]],2,true,false);if(pts)mkRoad(2,pts)}
+  for(const r of c.rings||[]){const [d,s]=nearestS(r,jx,jy);if(d<120){(r.ov=r.ov||[]).push([s-42,s+42]);break}}}
+// grade-separated crossings ----------------------------------------------
+{const SC=512,SN=WORLD/SC;const cells=new Map();
+  for(const r of roads){if(r.k
+######## \.ring\b
+--- @60386
+up=ra;lo=rb;su=sA}else{up=rb;lo=ra;su=sB}
+      const hw=RW[lo.k]/2+24;(up.ov=up.ov||[]).push([su-hw,su+hw,lo.id]);
+      if(!wet&&ka===0&&kb===0&&!ra.ring&&!rb.ring&&M.min(sA,ra.L-sA,sB,rb.L-sB)>420){const l1=M.hypot(r1x,r1y),l2=M.hypot(r2x,r2y);const cosA=M.abs((r1x*r2x+r1y*r2y)/(l1*l2));let dry=cosA<0.3;for(const c of live)if(M.hypot(c.x-X,c.y-Y)<c.R*1.35+300){dry=false;break}for(let q=0;q<16&&
+--- @60396
+b;su=sA}else{up=rb;lo=ra;su=sB}
+      const hw=RW[lo.k]/2+24;(up.ov=up.ov||[]).push([su-hw,su+hw,lo.id]);
+      if(!wet&&ka===0&&kb===0&&!ra.ring&&!rb.ring&&M.min(sA,ra.L-sA,sB,rb.L-sB)>420){const l1=M.hypot(r1x,r1y),l2=M.hypot(r2x,r2y);const cosA=M.abs((r1x*r2x+r1y*r2y)/(l1*l2));let dry=cosA<0.3;for(const c of live)if(M.hypot(c.x-X,c.y-Y)<c.R*1.35+300){dry=false;break}for(let q=0;q<16&&dry;q++){c
+--- @60998
+--------------------------------
+var GASOFF=40,GASHW=false;
+{const base=roads.length;for(let i=0;i<base;i++){const r=roads[i];if((r.k!==0&&r.k!==1)||r.ring||r.L<5000)continue;const R=rng(hh(r.id,5,55));
+  for(let s=2000+R()*3000;s<r.L-2000;s+=7000+R()*6000){const p=posAt(r,s);const dx=p[2],dy=p[3];const off=RW[r.k]/2+34;const x=p[0]-dy*off,y=p[1]+dx*off;
+    if(landE(x,y,0.004)<0||landE(x+dx*40,y+
+--- @65298
+ of [1,0]){const x=e?r.pts[r.n*2-2]:r.pts[0],y=e?r.pts[r.n*2-1]:r.pts[1];let H=null;
+    for(const o of queryRoads(x-20,y-20,x+20,y+20)){if(o.k!==0||o.ring)continue;const [d]=nearestS(o,x,y);if(d<RW[0]/2+RW[r.k]/2){H=o;break}}if(!H)continue;
+    let d=0;while(d<r.L*0.5){const p=posAt(r,e?r.L-d:d);if(nearestS(H,p[0],p[1])[0]>RW[0]/2+14)break;d+=4}
+    if(d<r.L*0.5&&r.L-d>60){if(e)trimRoad(r,0,r.L-d
+--- @121334
+(NOLINK[z.zk])return;const cand=[];
+  for(const r of queryRoads(z.x-4000,z.y-4000,z.x+4000,z.y+4000)){if(r.dead||r.k===0||r.k===5||r.k===6||r.k===8||r.ring)continue;
+    const q=projOn(r,z.x,z.y),d=M.hypot(q[0]-z.x,q[1]-z.y);if(d>z.rad*0.5&&d<4000)cand.push([d,q[0],q[1],r])}
+  cand.sort((a,b)=>a[0]-b[0]);
+  const go=(tx,ty,k,wc)=>{const L=M.hypot(tx-z.x,ty-z.y);if(L<1)return true;const ux=(tx-z.x)
+######## \.dgl
+--- @15879
+(us[i]+us[i+1])/2)**2+((vs[j]+vs[j+1])/2)**2;if(d<bd){bd=d;bk=j*BD+i}}if(bk>=0)bl[bk]=21}
+  if(c.mrg)mergeBlocks(c);
+  if(c.kU){gridStreets(c,ok);if(c.dgl)for(const p of c.dgl){const r=mkRoad(7,p,{city:c.id,dg:1});if(r)bridgesOf(r)}return}
+  const blk=(i,j)=>i>=0&&j>=0&&i<BD&&j<BD&&bl[j*BD+i]>0;
+  // streets along U (fixed j)
+  const eU=c.eU=new Uint8Array(D*D),eV=c.eV=new Uint8Array(D*D);
+  // an
+--- @15900
++((vs[j]+vs[j+1])/2)**2;if(d<bd){bd=d;bk=j*BD+i}}if(bk>=0)bl[bk]=21}
+  if(c.mrg)mergeBlocks(c);
+  if(c.kU){gridStreets(c,ok);if(c.dgl)for(const p of c.dgl){const r=mkRoad(7,p,{city:c.id,dg:1});if(r)bridgesOf(r)}return}
+  const blk=(i,j)=>i>=0&&j>=0&&i<BD&&j<BD&&bl[j*BD+i]>0;
+  // streets along U (fixed j)
+  const eU=c.eU=new Uint8Array(D*D),eV=c.eV=new Uint8Array(D*D);
+  // an edge with blocks on 
+--- @29629
+ the road itself is laid after the streets)
+function addDiag(c){const R=rng(c.seed^0xd1a9),base=c.ang+PI/4+(R()-0.5)*0.35,BD=c.D-1,N=c.N,bl=c.blocks;c.dgl=[];
+  const inner=(i,j)=>i>0&&j>0&&i<BD&&j<BD&&bl[(j-1)*BD+i-1]&&bl[(j-1)*BD+i]&&bl[j*BD+i-1]&&bl[j*BD+i];
+  const snap=(x,y)=>{const q=cU(c,x,y),bi=bsr(c.us,q[0]),bj=bsr(c.vs,q[1]);let best=null,bd=1e18;for(let j=bj-3;j<=bj+4;j++)for(let i=bi-3
+--- @30630
+|M.hypot(B[0]-A[0],B[1]-A[1])<600)continue;
+      const pts=[A[0],A[1],B[0],B[1]];if(!waterRunOK(pts,60,0.05))continue;throughClear({k:7,pts,n:2},c);c.dgl.push(pts)}}}
+// radial and fan towns: rings at growing steps, rays (a multiple of 16); near the centre neighbouring cells merge
+// along the ring (2, 4, 8, 16 of them) so blocks keep a sensible width
+function buildPolar(c){const P=c.pol,R=rng(c.
+######## addDiag\(c\)
+--- @15572
+  const Rb=rng(hh(c.id,i*977+j,51));let t=pickType(c,cityF(c,x,y),Rb);if(t===9){if(stad)t=5;else stad=true}
+    if(c.lay){const f=blkFrame(c,i,j);if(M.min(f[4],f[5])<34)t=Rb()<0.6?5:23} // a narrow block of a bent grid: a garden or a small square
+    bl[j*BD+i]=t;cnt++}
+  c.nblocks=cnt;
+  if(c.diag)addDiag(c);
+  if(c.cap!==undefined){let bd=1e18,bk=-1;for(let j=0;j<BD;j++)for(let i=0;i<BD;i++){if(!bl[j*BD+i]||(c.diag&&bl[j*BD+i]===20))continue;const d=((us[i]+us[i+1])/2)**2+((vs[j]+vs[j+1])/2)**2;if(d<bd){bd=d;bk=j*BD+i}}if(bk>=0)bl[bk]=21}
+  if(c.mrg)mergeBlocks(c);
+  if(c.kU){gridStreets(c,o
+--- @29532
+f(M.hypot(g[0]-x,g[1]-y)>2.5)return false}}return true}
+// diagonal boulevards across a straight grid (1 or 2, through the centre): the blocks they cut become green strips
+// (both ends on grid nodes inside the built-up area, so they meet streets; the road itself is laid after the streets)
+function addDiag(c){const R=rng(c.seed^0xd1a9),base=c.ang+PI/4+(R()-0.5)*0.35,BD=c.D-1,N=c.N,bl=c.blocks;c.dgl=[];
+  const inner=(i,j)=>i>0&&j>0&&i<BD&&j<BD&&bl[(j-1)*BD+i-1]&&bl[(j-1)*BD+i]&&bl[j*BD+i-1]&&bl[j*BD+i];
+  const snap=(x,y)=>{const q=cU(c,x,y),bi=bsr(c.us,q[0]),bj=bsr(c.vs,q[1]);let best=null,bd
