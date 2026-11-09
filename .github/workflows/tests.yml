@@ -1,15 +1,19 @@
 name: tests
 on:
   pull_request:
+    paths-ignore: ['patches/**']
   workflow_dispatch:
 permissions:
   contents: read
   pull-requests: write
   issues: write
+concurrency:
+  group: tests-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,28 +33,38 @@ jobs:
         run: set -o pipefail; npm run test:browser 2>&1 | tee browser.log
       - name: perf-branch
         continue-on-error: true
-        run: set -o pipefail; timeout 600 node tools/perf.mjs 2>&1 | tee perf-branch.log
+        run: |
+          set -o pipefail
+          timeout 600 node tools/perf.mjs 2>&1 | tee perf-branch.log
+          if [ -f tests/perf-fly.mjs ]; then timeout 600 node tests/perf-fly.mjs 2>&1 | tee fly-branch.log; fi
       - name: perf-main
         continue-on-error: true
         run: |
           set -o pipefail
           git worktree add ../base origin/main
+          if [ -f tests/perf-fly.mjs ]; then cp tests/perf-fly.mjs ../base/tests/; fi
           cd ../base
           (npm ci || npm install)
           timeout 600 node tools/perf.mjs 2>&1 | tee "$GITHUB_WORKSPACE/perf-main.log"
+          if [ -f tests/perf-fly.mjs ]; then timeout 600 node tests/perf-fly.mjs 2>&1 | tee "$GITHUB_WORKSPACE/fly-main.log"; fi
       - name: report
-        if: always() && github.event_name == 'pull_request'
+        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          PR="${{ github.event.pull_request.number }}"
+          if [ -z "$PR" ]; then PR=$(gh pr list --head "$GITHUB_REF_NAME" --state open --json number -q '.[0].number'); fi
+          if [ -z "$PR" ]; then echo "no PR"; exit 0; fi
           {
-            echo "unit: ${{ steps.unit.outcome }}, browser: ${{ steps.browser.outcome }}"
-            for f in unit browser perf-branch perf-main; do
+            echo "sha: $(git rev-parse --short HEAD) · $GITHUB_EVENT_NAME · unit: ${{ steps.unit.outcome }} · browser: ${{ steps.browser.outcome }}"
+            for f in unit browser perf-branch perf-main fly-branch fly-main; do
+              [ -f "$f.log" ] || continue
+              n=5000; [ "$f" = unit ] && n=2500; [ "$f" = browser ] && n=9000
               echo "### $f"; echo '~~~'
-              tail -c 12000 "$f.log" 2>/dev/null || echo "нет лога"
+              tail -c $n "$f.log"
               echo '~~~'
             done
           } > report.md
-          gh pr comment ${{ github.event.pull_request.number }} --body-file report.md
+          gh pr comment "$PR" --body-file report.md
       - if: steps.unit.outcome == 'failure' || steps.browser.outcome == 'failure'
         run: exit 1

@@ -31,7 +31,7 @@ const opt=Object.assign({clouds:true,labels:true,traffic:true},cfg.view||{});
 // cache: day tiles of the current season; stale: previous season (fallback while re-rendering); lcache: night-light tiles
 const cache=new Map(),pending=new Set();const LCS=[null,new Map(),new Map(),new Map()],LPS=[null,new Set(),new Set(),new Set()],lcache=LCS[1];const LHB=[0,0,2,2];let stale=new Map(),staleT=0;let frameNo=0,queue=[];
 const workers=[];let mainRender=false;
-const NW=M.max(2,M.min(5,(navigator.hardwareConcurrency||4)-2));
+const NW=M.max(2,M.min((navigator.deviceMemory||4)>=8?7:5,(navigator.hardwareConcurrency||4)-2)); // stage 5.12: up to 7 workers on 8+ GB machines
 const wsrc=(typeof FlagArt==='function'?FlagArt.toString():'')+WorldGen.toString()+`
 let G=null;
 onmessage=function(e){const m=e.data;
@@ -236,6 +236,10 @@ let vx0,vy0,vx1,vy1;
 function inView(x,y,r){return x>vx0-r&&x<vx1+r&&y>vy0-r&&y<vy1+r}
 function setRot(x,y,hx,hy,k){ctx.setTransform(DPR*k*hx,DPR*k*hy,-DPR*k*hy,DPR*k*hx,DPR*x,DPR*y)}
 function tileZ(){const md=cam.m/M.min(DPR,1.5);let z=M.ceil(M.log2(WORLD/(256*md))-0.25);return clamp(z,0,12)}
+function tileZAt(m){const md=m/M.min(DPR,1.5);return clamp(M.ceil(M.log2(WORLD/(256*md))-0.25),0,12)}
+// stage 5.12: the goal of a flight (flyTo) or of a wheel zoom — its tiles are rendered first, so the view is sharp on arrival
+function camGoal(){if(fly)return [fly.x1,fly.y1,M.exp(fly.l1),-5e5];if(zoomT){const wx=cam.x+(zoomT.sx-VW/2)*cam.m,wy=cam.y+(zoomT.sy-VH/2)*cam.m;return [wx-(zoomT.sx-VW/2)*zoomT.m,wy-(zoomT.sy-VH/2)*zoomT.m,zoomT.m,-50]}return null}
+function preRect(zt,cx,cy,m,p,L){const nt=1<<zt,tt=WORLD/nt,hw=VW/2*m,hh=VH/2*m;for(let y=M.max(0,M.floor((cy-hh)/tt));y<=M.min(nt-1,M.floor((cy+hh)/tt));y++)for(let x=M.max(0,M.floor((cx-hw)/tt));x<=M.min(nt-1,M.floor((cx+hw)/tt));x++){const d=M.hypot((x+0.5)*tt-cx,(y+0.5)*tt-cy)/tt;if(L)requestL(zt,x,y,p+d,L);else request(zt,x,y,p+d)}}
 function tileRect(tx,ty,ts){return [M.round(((tx*ts-cam.x)/cam.m+VW/2)*DPR),M.round((((tx+1)*ts-cam.x)/cam.m+VW/2)*DPR),M.round(((ty*ts-cam.y)/cam.m+VH/2)*DPR),M.round((((ty+1)*ts-cam.y)/cam.m+VH/2)*DPR)]}
 function ancestor(mp,z,tx,ty,X0,Y0,X1,Y1,md){for(let d=1;d<=M.min(z,md||99);d++){const ax=tx>>d,ay=ty>>d;const a=mp.get(tkey(z-d,ax,ay));if(a&&a.b){a.f=frameNo;const sz=256/(1<<d);ctx.drawImage(a.b,(tx-(ax<<d))*sz,(ty-(ay<<d))*sz,sz,sz,X0,Y0,X1-X0,Y1-Y0);return true}}return false}
 function drawTiles(){
@@ -250,6 +254,7 @@ function drawTiles(){
     const cxp=(tx+0.5)*ts-cam.x,cyp=(ty+0.5)*ts-cam.y;request(z,tx,ty,M.hypot(cxp,cyp)/ts);
     const st=stale.get(k);if(st){ctx.drawImage(st.b,X0,Y0,X1-X0,Y1-Y0);continue}
     if(!ancestor(cache,z,tx,ty,X0,Y0,X1,Y1))ancestor(stale,z,tx,ty,X0,Y0,X1,Y1)}
+  {const g=camGoal();if(g){const zt=tileZAt(g[2]);if(zt!==z)preRect(zt,g[0],g[1],g[2],g[3],0)}}
   if(z<12&&queue.length<4){const z2=z+1,n2=1<<z2,t2=WORLD/n2;const cx=M.floor(cam.x/t2),cy=M.floor(cam.y/t2);for(let y=cy-1;y<=cy+1;y++)for(let x=cx-1;x<=cx+1;x++)if(x>=0&&y>=0&&x<n2&&y<n2)request(z2,x,y,1e5)}
   return z}
 // night lights: sharp layer at the current LOD + two blurred "bloom" layers from coarser LODs
@@ -263,6 +268,7 @@ function drawLights(z,a){if(a<0.01)return;ctx.setTransform(1,0,0,1,0,0);ctx.glob
   requestL(0,0,0,-1e9,1);
   const far=1-smooth(15,200,cam.m)*0.55;lightLevel(M.max(0,z-2),a*(lowQ?0.7:0.45)*fogB*far,3,-2e5);if(!lowQ)lightLevel(M.max(0,z-1),a*0.42*fogB,2,-1e5);
   lightLevel(z,a*(1-wcur.fog*0.3),1,0.3);
+  {const g=camGoal();if(g){const zt=tileZAt(g[2]);if(zt!==z){preRect(M.max(0,zt-2),g[0],g[1],g[2],g[3],3);if(!lowQ)preRect(M.max(0,zt-1),g[0],g[1],g[2],g[3]+20,2);preRect(zt,g[0],g[1],g[2],g[3]+40,1)}}}
   ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}
 
 // traffic -------------------------------------------------------------------------
@@ -390,18 +396,22 @@ function drawClouds(shadowPass){const H=camH();const cloudFar=1; // clouds are s
   // the layer is a margin larger than the screen: a pan (the shadows always, the clouds when seen from far above, where
   // they have no parallax) only shifts the old picture until it would show its edge
   const PAD=64,L=CLL[shadowPass?0:1],q=3/cam.m,lw=M.max(4,M.ceil((VW+PAD*2)*DPR)),lh=M.max(4,M.ceil((VH+PAD*2)*DPR));
-  const key=[cam.m.toFixed(5),M.round(T*9*q),M.round(wcur.cover*60),shadowPass?M.round(LG.day*60):cloudTint,lw,lh,LITE?1:0].join('|');
-  const ox=(L.cx-cam.x)/cam.m,oy=(L.cy-cam.y)/cam.m,flat=shadowPass||H>90000;
-  if(key!==L.key||(flat?M.abs(ox)>PAD*0.9||M.abs(oy)>PAD*0.9:M.abs(ox)>0.34||M.abs(oy)>0.34)){L.key=key;L.cx=cam.x;L.cy=cam.y;if(L.c.width!==lw||L.c.height!==lh){L.c.width=lw;L.c.height=lh}const x2=L.c.getContext('2d');x2.setTransform(1,0,0,1,0,0);x2.clearRect(0,0,lw,lh);x2.setTransform(DPR,0,0,DPR,PAD*DPR,PAD*DPR);x2.imageSmoothingEnabled=true;let n=0;
+  const fl=clamp(384/M.max(1,(L.ms||0)*DPR),0.25,1),f=M.round((CAMMV&&(L.ms||0)*DPR>96?M.max(0.25,fl*0.5):fl)*16)/16; // stage 5.12
+  const flat=shadowPass||H>90000,key=[flat?'f':cam.m.toFixed(5)+'|'+M.round(T*9*q),M.round(wcur.cover*60),shadowPass?M.round(LG.day*60):cloudTint,lw,lh,LITE?1:0,f].join('|');
+  const ox=(L.cx-cam.x)/cam.m,oy=(L.cy-cam.y)/cam.m;
+  // stage 5.12: a flat layer is reused while the camera zooms (scaled, up to 8 %) and while the wind drifts it (shifted);
+  // it is redrawn when the scale drifts further, its edge would show or the camera stops (then at the exact scale)
+  let need=key!==L.key;if(!need){if(flat){const r=L.m/cam.m,X0=ox+(-PAD-VW/2)*r+VW/2+(T-L.T)*9/cam.m,Y0=oy+(-PAD-VH/2)*r+VH/2;need=M.abs(M.log(r))>(CAMMV?0.08:0.002)||X0>-2||Y0>-2||X0+(VW+PAD*2)*r<VW+2||Y0+(VH+PAD*2)*r<VH+2}else need=M.abs(ox)>0.34||M.abs(oy)>0.34}
+  if(need){L.key=key;L.cx=cam.x;L.cy=cam.y;L.m=cam.m;L.T=T;if(L.c.width!==lw||L.c.height!==lh){L.c.width=lw;L.c.height=lh}const x2=L.c.getContext('2d');x2.setTransform(1,0,0,1,0,0);x2.clearRect(0,0,M.min(lw,M.ceil(lw*f)+2),M.min(lh,M.ceil(lh*f)+2));x2.setTransform(DPR*f,0,0,DPR*f,PAD*DPR*f,PAD*DPR*f);x2.imageSmoothingEnabled=true;let n=0,ms=1e9;L.f=f;
     for(let ci=0;ci<clouds.length;ci++){const c=clouds[ci];const vis=clamp((wcur.cover-c.g)*14,0,1);if(vis<=0)continue;
       let x=((c.x+T*9+WORLD*0.15)%span+span)%span-WORLD*0.15,y=c.y;
       if(LITE&&ci%2)continue;
-      if(shadowPass){const sx=x+W.SUNX*c.alt,sy=y+W.SUNY*c.alt;if(!inView(sx,sy,c.s+PAD*cam.m*2))continue;const sz=c.s/cam.m;const sa=0.2*vis*LG.day*(1-0.45*smooth(0.6,1,wcur.cover))*cloudFar;if(sa<0.02)continue;x2.globalAlpha=sa;x2.drawImage(CLS[c.v][1],sxw(sx)-sz/2,syw(sy)-sz/2,sz,sz);n++;continue}
+      if(shadowPass){const sx=x+W.SUNX*c.alt,sy=y+W.SUNY*c.alt;if(!inView(sx,sy,c.s+PAD*cam.m*2))continue;const sz=c.s/cam.m;const sa=0.2*vis*LG.day*(1-0.45*smooth(0.6,1,wcur.cover))*cloudFar;if(sa<0.02)continue;x2.globalAlpha=sa;x2.drawImage(CLS[c.v][1],sxw(sx)-sz/2,syw(sy)-sz/2,sz,sz);n++;if(sz<ms)ms=sz;continue}
       if(H<c.alt*1.12)continue;const kk=H/(H-c.alt);let a=smooth(c.alt*1.12,c.alt*2.6,H)*(MODE==='game'?smooth(c.alt*3,c.alt*6,H)*0.85:1);if(a<=0.01)continue; // game: no white-out when the camera comes down through the cloud layer
       const X=VW/2+(x-cam.x)/cam.m*kk,Y=VH/2+(y-cam.y)/cam.m*kk,sz=c.s/cam.m*kk;if(X+sz/2<-PAD||Y+sz/2<-PAD||X-sz/2>VW+PAD||Y-sz/2>VH+PAD)continue;
-      const ca=a*0.95*vis*cloudFar*(MODE==='game'?smooth(VW*2.4,VW*1.3,sz):1);if(ca<0.02)continue;/* game: no screen-filling cloud sprites */x2.globalAlpha=ca;x2.drawImage(CLS[c.v][2],X-sz/2,Y-sz/2,sz,sz);n++}
-    L.n=n}
-  if(!L.n)return;const dx=(L.cx-cam.x)/cam.m,dy=(L.cy-cam.y)/cam.m;ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.drawImage(L.c,M.round((dx-PAD)*DPR),M.round((dy-PAD)*DPR));ctx.setTransform(DPR,0,0,DPR,0,0)}
+      const ca=a*0.95*vis*cloudFar*(MODE==='game'?smooth(VW*2.4,VW*1.3,sz):1);if(ca<0.02)continue;/* game: no screen-filling cloud sprites */x2.globalAlpha=ca;x2.drawImage(CLS[c.v][2],X-sz/2,Y-sz/2,sz,sz);n++;if(sz<ms)ms=sz}
+    L.n=n;L.ms=ms}
+  if(!L.n)return;const dx=(L.cx-cam.x)/cam.m,dy=(L.cy-cam.y)/cam.m;ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;{const lf=L.f||1,r=flat?L.m/cam.m:1,X0=dx+(-PAD-VW/2)*r+VW/2+(flat?(T-L.T)*9/cam.m:0),Y0=dy+(-PAD-VH/2)*r+VH/2;if(lf>=1&&!flat)ctx.drawImage(L.c,M.round(X0*DPR),M.round(Y0*DPR));else ctx.drawImage(L.c,0,0,lw*lf,lh*lf,X0*DPR,Y0*DPR,lw*r,lh*r)}ctx.setTransform(DPR,0,0,DPR,0,0)}
 function drawFog(){const f=wcur.fog;if(f<0.01)return;ctx.setTransform(DPR,0,0,DPR,0,0);
   for(let l=0;l<2;l++){const P=l?1700:5200,sc=P/256/cam.m;const ox=VW/2-(cam.x-T*(l?9:5))/cam.m,oy=VH/2-(cam.y+T*(l?3:-2))/cam.m;
     FOG.setTransform(new DOMMatrix([sc,0,0,sc,ox+l*91,oy+l*57]));ctx.fillStyle=FOG;ctx.globalAlpha=f*(l?0.42:0.6);ctx.fillRect(0,0,VW,VH)}
@@ -477,7 +487,7 @@ function drawSel(){if(!sel)return;ctx.setTransform(DPR,0,0,DPR,0,0);const o=sel.
   ctx.stroke();ctx.setLineDash([])}
 
 // ------------------------------------------------------------ main loop
-let last=performance.now(),fpsA=60,hudT=0,zNow=0,lowQ=false,qT=0,pfT=0;
+let last=performance.now(),fpsA=60,hudT=0,zNow=0,lowQ=false,qT=0,pfT=0,CAMMV=false,pcm=0;
 const PROF={};function pf(n){const t=performance.now();PROF[n]=(PROF[n]||0)*0.97+(t-pfT)*0.03;pfT=t}
 const hud={alt:document.getElementById('alt'),scale:document.getElementById('scalebar'),scaleT:document.getElementById('scalet'),pos:document.getElementById('pos'),fps:document.getElementById('fps'),load:document.getElementById('loading'),clock:null};
 const mini=document.getElementById('mini'),mctx=mini.getContext('2d');
@@ -485,7 +495,7 @@ let frameErr=0;
 function frame(now){if(!alive)return;try{frameBody(now)}catch(e){if(frameErr++<3)console.error('frame:',e);ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}requestAnimationFrame(frame)}
 function frameBody(now){const dt=M.min(0.06,(now-last)/1000);last=now;T+=dt;frameNo++;fpsA=fpsA*0.95+(1/M.max(dt,1e-3))*0.05;
   if(!todDrag&&DN)tod=(tod+(todRate!==null?todRate:SPEEDS[tSpeed])*dt)%24;if(HK.frame)hk('frame',dt);if(MODE==='bg')bgCam(dt);updWeather(dt);updLight();
-  pfT=performance.now();updateCam(dt);
+  pfT=performance.now();updateCam(dt);CAMMV=!!(fly||zoomT||pinch)||M.abs(cam.m-pcm)>cam.m*1e-4;pcm=cam.m;
   vx0=cam.x-VW/2*cam.m;vy0=cam.y-VH/2*cam.m;vx1=cam.x+VW/2*cam.m;vy1=cam.y+VH/2*cam.m;
   const A=LG.amb,NL=LG.lights;
   ctx.setTransform(DPR,0,0,DPR,0,0);ctx.fillStyle='#0e2e52';ctx.fillRect(0,0,VW,VH);
