@@ -230,7 +230,8 @@ function startRail(s,a,b,L){const cost=M.round(L*RAILK),c=creative()&&s.isP?0:co
 const RAILK=0.9,byUid=(s,u)=>s.builds.find(q=>q.uid===u),fmtKm=m=>(m/1000).toFixed(1).replace('.',',')+' км';
 // construction finished: the world gets the new town or zone (same op in all workers)
 function finishBuild(s,q){q.done=true;
-  if(q.k==='rail'){const A=byUid(s,q.a),B=byUid(s,q.b);q.id=A&&B&&A.id>=0&&B.id>=0?api.op('addRail',{a:A.id,b:B.id,st:s.id}):-1;if(q.id<0){q.failed=true;if(s.isP)toast('ЖД путь не удалось проложить','ic-b-rail');return}
+  if(q.k==='rail'){const A=byUid(s,q.a),B=byUid(s,q.b);let P=null;if(A&&B&&A.id>=0&&B.id>=0){P=W.railPts(W.zones[A.id],W.zones[B.id],railBlk(s));if(typeof P==='string')P=null}
+    q.id=P?api.op('addRail',{a:A.id,b:B.id,st:s.id,P:P.map(v=>M.round(v*10)/10)}):-1;if(q.id<0){q.failed=true;if(s.isP)toast('ЖД путь не удалось проложить','ic-b-rail');return}
     if(s.isP){toast(`Построено: <b>ЖД путь</b> ${fmtKm(q.L)}`,'ic-b-rail');onBuilt('rail',true)}return}
   const b=BLD[q.k];
   if(q.k==='city'||q.k==='village'){let p=s.places.find(o=>o.bq===q.uid);if(!p){placeNow(s,q);p=s.places.find(o=>o.bq===q.uid)}
@@ -838,10 +839,12 @@ function railEval(A,x,y,sx,sy){const p=player(),za=W.zones[A.id],B=stationAtScre
   let zb,nb=null,cost=0;
   if(B){if(p.builds.some(r=>r.k==='rail'&&((r.a===A.uid&&r.b===B.uid)||(r.a===B.uid&&r.b===A.uid))))return {bad:'Эти вокзалы уже соединены',B};zb=W.zones[B.id]}
   else{const ang=M.atan2(y-za.y,x-za.x),why=canBuild(p,'station',x,y,ang);nb={x,y,ang};if(why)return {bad:why,nb,x,y};zb={x,y,ca:M.cos(ang),sa:M.sin(ang),W:BLD.station.W,H:BLD.station.H};cost+=BLD.station.cost}
-  const P=W.railPts(za,zb);if(typeof P==='string')return {bad:P,nb,x,y,B};
+  const P=W.railPts(za,zb,railBlk(p));if(typeof P==='string')return {bad:P,nb,x,y,B};
   for(let i=0;i<P.length;i+=12){const o=ownerAt(P[i],P[i+1]);if(o&&o!==p.id+1)return {bad:'Путь идёт по чужой земле',P,nb,B}}
   let L=0;for(let i=2;i<P.length;i+=2)L+=M.hypot(P[i]-P[i-2],P[i+1]-P[i-1]);cost+=M.round(L*RAILK);
   if(p.res.money<cost&&!creative())return {bad:'Не хватает денег: нужно '+fmt(cost),P,L,cost,nb,B};return {P,L,cost,B,nb,A}}
+// the line keeps to the state's own land and neutral land (foreign land is closed to the route search)
+const railBlk=s=>(x,y)=>{const o=ownerAt(x,y);return !!o&&o!==s.id+1};
 function buildRailway(ev){const p=player();if(!ev||ev.bad)return false;let b=ev.B;
   if(!b){if(!startBuild(p,'station',ev.nb.x,ev.nb.y,ev.nb.ang))return false;b=p.builds[p.builds.length-1]}
   return startRail(p,ev.A.uid,b.uid,ev.L)}

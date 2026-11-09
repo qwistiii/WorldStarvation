@@ -2,7 +2,7 @@
 // поля без колец, месторождения уходят из-под города, туман прячет постройки, железные дороги, улучшения построек.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { world, audit, inWater, label, where, levelCrossings, railEnds } from './audit.mjs';
+import { world, audit, inWater, label, where, levelCrossings, railEnds, groundClash, deadEnds } from './audit.mjs';
 
 // ---- классический мир (без параметров) не изменился ни в одной точке дорог, кварталов и зон
 test('классический мир бит в бит прежний (контрольная сумма дорог, кварталов и зон seed 1337)', () => {
@@ -127,23 +127,49 @@ test('мир с постройками и поселениями игры про
   }
 });
 
-test('города игры — разные планировки: изогнутые сетки, свои пропорции кварталов; кварталы лежат точно в сетке', () => {
-  const towns = [P1, P2].flatMap((P) => P.D.cities.filter((c) => c.type >= 2));
-  assert.ok(towns.filter((c) => c.wp).length >= 3, 'изогнутых сеток: ' + towns.filter((c) => c.wp).length + ' из ' + towns.length);
-  const asp = towns.map((c) => c.bu / c.bv); assert.ok(Math.max(...asp) / Math.min(...asp) > 1.4, 'пропорции кварталов различаются');
-  for (const c of towns.filter((q) => q.wp)) {
-    const W = P1.D.cities.includes(c) ? P1.D : P2.D, BD = c.D - 1;
+test('города игры — разные планировки: кольца и лучи, веер, прямые и изогнутые сетки, суперкварталы, диагонали', () => {
+  const towns = [P1, P2].flatMap((P) => P.D.cities.filter((c) => c.type >= 2).map((c) => [P.D, c]));
+  const fams = new Set(towns.map(([, c]) => c.lay));
+  assert.ok(fams.size >= 4, 'семейств планировок: ' + [...fams].join(', '));
+  for (const P of [P1, P2]) { const L = P.D.cities.filter((c) => c.cap !== undefined).map((c) => c.lay); assert.equal(new Set(L).size, L.length, 'у столиц одной партии разные планировки: ' + L); }
+  assert.ok(towns.some(([, c]) => c.pol && c.pol.full) && towns.some(([, c]) => c.pol && !c.pol.full), 'есть радиально-кольцевые и веерные города');
+  assert.ok(towns.filter(([, c]) => !c.pol && c.msi + c.msj > 0).length >= 3, 'в сетках есть суперкварталы');
+  for (const [W, c] of towns) {
+    const BD = c.D - 1, RW = W._dbg.RW, own = W.roads.filter((r) => r.city === c.id && !r.dg);
     // обратное отображение возвращает в ту же точку сетки
-    for (let q = 0; q < 40; q++) { const u = (q % 7 - 3) * c.R * 0.3, v = ((q / 7 | 0) - 3) * c.R * 0.3, w = W.cW(c, u, v), b = W.cU(c, w[0], w[1]); assert.ok(Math.hypot(b[0] - u, b[1] - v) < 0.05, 'cU(cW) = id'); }
-    // углы квартала (по сетке) почти совпадают с углами его прямоугольника в собственной рамке: блоки не разъезжаются
-    let worst = 0;
-    for (let bj = 0; bj < BD; bj += 2) for (let bi = 0; bi < BD; bi += 2) {
-      if (!c.blocks[bj * BD + bi]) continue; const [x, y, ca, sa, hu, hv] = W.blkFrame(c, bi, bj);
-      for (const [i, j, su, sv] of [[bi, bj, -1, -1], [bi + 1, bj, 1, -1], [bi + 1, bj + 1, 1, 1], [bi, bj + 1, -1, 1]]) {
-        const g = W.cW(c, c.us[i], c.vs[j]), rx = x + su * hu * ca - sv * hv * sa, ry = y + su * hu * sa + sv * hv * ca; worst = Math.max(worst, Math.hypot(g[0] - rx, g[1] - ry));
+    for (let q = 0; q < 30; q++) { const i = 1 + (q * 7) % (BD - 2), j = 1 + (q * 13) % (BD - 2), u = (c.us[i] + c.us[i + 1]) / 2, v = (c.vs[j] + c.vs[j + 1]) / 2; if (c.pol && j >= c.nr) continue;
+      const w = W.cW(c, u, v), b = W.cU(c, w[0], w[1]); assert.ok(Math.hypot(b[0] - u, (b[1] - v) * (c.pol ? u / c.prr : 1)) < 0.05, c.name + ': cU(cW) = id'); }
+    let worst = 0, inner = 0, merged = 0;
+    for (let bj = 0; bj < BD; bj++) for (let bi = 0; bi < BD; bi++) {
+      if (!c.blocks[bj * BD + bi]) continue; const q = c.sp ? c.sp[bj * BD + bi] : 0, si = (q & 15) + 1, sj = (q >> 4) + 1;
+      const [x, y, ca, sa, hu, hv] = W.blkFrame(c, bi, bj);
+      for (const [su, sv] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+        const rx = x + su * hu * ca - sv * hv * sa, ry = y + su * hu * sa + sv * hv * ca;
+        if (c.pol) { // угол прямоугольника лежит в своём секторе: между лучами и между дугами
+          const [u, v0] = W.cU(c, rx, ry), e = 0.6 / Math.max(u, 1) * c.prr, per = 2 * Math.PI * c.prr, v = v0 + Math.round(((c.vs[bj] + c.vs[bj + sj]) / 2 - v0) / per) * per;
+          if (u < c.us[bi] - 0.3 || u > c.us[bi + si] + 0.3 || v < c.vs[bj] - e || v > c.vs[bj + sj] + e) worst = Math.max(worst, 99);
+        } else { const gi = su < 0 ? bi : bi + si, gj = sv < 0 ? bj : bj + sj, g = W.cW(c, c.us[gi], c.vs[gj]); worst = Math.max(worst, Math.hypot(g[0] - rx, g[1] - ry)); }
       }
+      // внутри суперквартала улиц нет: середина внутренней линии сетки далеко от улиц города
+      if (si > 1 || sj > 1) { merged++; const m = si > 1 ? W.cW(c, c.us[bi + (si >> 1)], (c.vs[bj] + c.vs[bj + sj]) / 2) : W.cW(c, (c.us[bi] + c.us[bi + si]) / 2, c.vs[bj + (sj >> 1)]);
+        for (const r of own) { const p = W._dbg.projOn(r, m[0], m[1]); if (Math.hypot(p[0] - m[0], p[1] - m[1]) < RW[r.k] / 2 + 2) { inner++; break; } } }
     }
-    assert.ok(worst < 4.5, `${c.name}: углы кварталов отходят от сетки на ${worst.toFixed(1)} м`);
+    assert.ok(worst < 4.5, `${c.name} (${c.lay}): углы кварталов отходят от сетки на ${worst.toFixed(1)} м`);
+    assert.equal(inner, 0, `${c.name}: улица внутри суперквартала (${inner} из ${merged})`);
+    if (c.diag) assert.ok(W.roads.some((r) => r.city === c.id && r.dg && r.k === 7), c.name + ': диагональный бульвар');
+  }
+  // у сетки — свои проспекты: шаг главных линий различается
+  const gaps = new Set(); for (const [, c] of towns) if (c.kU && !c.pol) { let last = -1; for (let i = 0; i < c.D; i++) if (c.kU[i] !== 3) { if (last >= 0) gaps.add(i - last); last = i; } }
+  assert.ok(gaps.size >= 3, 'расстояния между проспектами: ' + [...gaps]);
+});
+
+test('новые кварталы (микрорайоны, площади) без наложений; улицы городов игры не обрываются в пустоте', () => {
+  for (const P of [P1, P2]) {
+    assert.deepEqual(groundClash(P.D).slice(0, 6), []);
+    const dead = deadEnds(P.D).filter((e) => e.r.city !== undefined && P.D.cities[e.r.city].lay);
+    assert.deepEqual(dead.slice(0, 6).map((e) => `k=${e.r.k} @${Math.round(e.x)},${Math.round(e.y)}`), []);
+    const T = new Set(); for (const c of P.D.cities) if (c.lay) for (const t of c.blocks) T.add(t);
+    assert.ok(T.has(22) && T.has(23), 'есть микрорайоны и площади');
   }
 });
 
@@ -195,11 +221,38 @@ test('железная дорога игры: от вокзала до вокз�
 
 test('улучшения цеха БПЛА: та же планировка, плюс сетка, бетон и солнечные панели', () => {
   const { D, zones } = P2; const z = D.zones.find((q) => zones.includes(q.id) && q.zk === 'dfab'); assert.ok(z, 'цех стоит');
-  const base = z.prims.map((p) => p.k + ':' + Math.round(p.x || 0)).join(',');
+  const base = z.prims.filter((p) => !p.fz).map((p) => p.k + ':' + Math.round(p.x || 0)).join(',');
   D.zoneUp([z.id, 'net']); D.zoneUp([z.id, 'con']); D.zoneUp([z.id, 'sol']);
   assert.ok(z.prims.some((p) => p.net), 'сетка над корпусами');
   assert.ok(z.prims.filter((p) => p.k === 'twall').length >= 2, 'бетонные стены');
   assert.ok(z.prims.filter((p) => p.k === 'pv').length >= 3, 'ряды солнечных панелей');
-  assert.ok(z.prims.length > base.split(',').length, 'добавились детали');
+  assert.ok(z.prims.filter((p) => !p.fz).length > base.split(',').length, 'добавились детали');
+  assert.ok(z.prims.filter((p) => p.fz).length > 20, 'свободные места площадки заняты деталями');
   const A = audit(D); assert.deepEqual(A.overlapSame.filter((it) => it.a.zone === z).slice(0, 4).map((it) => label(it.a)), []);
+});
+
+test('постройки игры без пустых площадок: свободные части заняты деталями своего дела, ничего не налезает', () => {
+  const K = { ind: 30, pow: 30, ref2: 20, saw: 10, mine: 10, mil: 15, dport: 8, dfab: 15, farm: 8 };
+  for (const P of [P1, P2]) for (const id of P.zones) {
+    const z = P.D.zones[id]; if (!K[z.zk]) continue;
+    const n = z.prims.filter((p) => p.fz).length;
+    assert.ok(n >= K[z.zk], `${z.zk}#${z.id}: деталей ${n}`);
+    for (const p of z.prims) if (p.fz && p.k === 'b') assert.ok(p.x >= -z.W / 2 && p.x + p.w <= z.W / 2 && p.y >= -z.H / 2 && p.y + p.h <= z.H / 2, `${z.zk}: деталь за краем площадки`);
+  }
+});
+
+test('железная дорога сама огибает город: вокзалы по разные стороны столицы — путь идёт вокруг застройки дугой', () => {
+  const W = play(1337), c0 = W.c0, D = W.D, d = c0.R * 1.3 + 900; let done = 0;
+  for (const a of [0, 0.5, 1, 1.5, 2, 2.5, 3]) {
+    const st = []; for (const s of [0, 1]) { const aa = a + s * Math.PI, x = c0.x + Math.cos(aa) * d, y = c0.y + Math.sin(aa) * d; if (D.landE(x, y, 0.004) < 0) break; if (D.zones.some((z) => !z.dead && Math.hypot(z.x - x, z.y - y) < z.rad + 500)) break; const id = D.addZone({ zk: 'rst', x, y, a: aa + Math.PI / 2, city: c0.id, st: 0 }); if (id >= 0) st.push(id); }
+    if (st.length < 2) continue;
+    const P = D.railPts(D.zones[st[0]], D.zones[st[1]]); assert.ok(Array.isArray(P), 'путь найден: ' + P);
+    let minF = 9, turn = 0; for (let i = 0; i < P.length; i += 2) minF = Math.min(minF, Math.hypot(P[i] - c0.x, P[i + 1] - c0.y) / c0.R);
+    for (let i = 2; i < P.length - 2; i += 2) { const a1 = Math.atan2(P[i + 1] - P[i - 1], P[i] - P[i - 2]), a2 = Math.atan2(P[i + 3] - P[i + 1], P[i + 2] - P[i]); let da = Math.abs(a2 - a1); if (da > Math.PI) da = 2 * Math.PI - da; turn = Math.max(turn, da); }
+    assert.ok(minF > 1, `путь не заходит в застройку (ближе всего ${minF.toFixed(2)} R)`);
+    assert.ok(turn < 0.5, `путь плавный (излом ${turn.toFixed(2)} рад)`);
+    const id = D.addRail({ a: st[0], b: st[1], st: 0 }); assert.ok(id >= 0 && D.roads[id].k === 5, 'путь в мире');
+    if (++done >= 2) break;
+  }
+  assert.ok(done >= 1, 'проверено путей: ' + done);
 });

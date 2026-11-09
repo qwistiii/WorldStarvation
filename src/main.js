@@ -434,10 +434,10 @@ function drawLabels(){ctx.setTransform(DPR,0,0,DPR,0,0);const m=cam.m;const boxe
 
 // ------------------------------------------------------------ inspector
 let sel=null;
-const BPOP=[0,3200,950,1700,60,0,0,0,0,0,40,0,180,45,0,0,0,0,300,0,0,200];
+const BPOP=[0,3200,950,1700,60,0,0,0,0,0,40,0,180,45,0,0,0,0,300,0,0,200,1500,0];
 function cityStats(c){if(c._st)return c._st;let pop=0,area=0;const cnt={};
   if(c.type===0){let L=0;for(const s of c.vst)L+=s.L;const houses=M.round(L/31*2*0.84);pop=houses*3;cnt.houses=houses;area=L*90}
-  else{const BD=c.D-1;for(let j=0;j<BD;j++)for(let i=0;i<BD;i++){const t=c.blocks[j*BD+i];if(!t||t===20)continue;const a=(c.us[i+1]-c.us[i])*(c.vs[j+1]-c.vs[j]);area+=a;pop+=BPOP[t]*a/14000;cnt[t]=(cnt[t]||0)+1}}
+  else{const BD=c.D-1;for(let j=0;j<BD;j++)for(let i=0;i<BD;i++){const t=c.blocks[j*BD+i];if(!t||t===20)continue;const a=c.sp||c.pol?(f=>4*f[4]*f[5])(W.blkFrame(c,i,j)):(c.us[i+1]-c.us[i])*(c.vs[j+1]-c.vs[j]);area+=a;pop+=BPOP[t]*a/14000;cnt[t]=(cnt[t]||0)+1}}
   const zs=W.zones.filter(z=>z.city===c);const roads=[0,0,0,0,0,0];
   c._st={pop:pop<1000?M.round(pop/10)*10:pop<1e5?M.round(pop/100)*100:M.round(pop/1000)*1000,area,cnt,zs};return c._st}
 const fmtN=n=>String(M.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g,' ');
