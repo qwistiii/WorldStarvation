@@ -2,7 +2,7 @@
 (function(){
 'use strict';
 const $=id=>document.getElementById(id);
-const VERSION='5.9';
+const VERSION='5.10';
 let bg=null,C=null,prevWorker=null,prevId=0,prevT=0,setFrom=null,paused=null;
 
 // ---------------------------------------------------------------- settings
