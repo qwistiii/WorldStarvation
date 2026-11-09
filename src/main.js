@@ -29,7 +29,8 @@ const opt=Object.assign({clouds:true,labels:true,traffic:true},cfg.view||{});
 
 // ------------------------------------------------------------ workers / tile caches
 // cache: day tiles of the current season; stale: previous season (fallback while re-rendering); lcache: night-light tiles
-const cache=new Map(),pending=new Set();const LCS=[null,new Map(),new Map(),new Map()],LPS=[null,new Set(),new Set(),new Set()],lcache=LCS[1];const LHB=[0,0,2,2];let stale=new Map(),staleT=0,lastArr=-9;const LST=[null,new Map(),new Map(),new Map()]; // stage 5.13: LST = previous light tiles of a redrawn area, shown until the new ones arrivelet frameNo=0,queue=[];
+const cache=new Map(),pending=new Set();const LCS=[null,new Map(),new Map(),new Map()],LPS=[null,new Set(),new Set(),new Set()],lcache=LCS[1];const LHB=[0,0,2,2];let stale=new Map(),staleT=0,lastArr=-9;const LST=[null,new Map(),new Map(),new Map()]; // stage 5.13: LST = previous light tiles of a redrawn area, shown until the new ones arrive
+let frameNo=0,queue=[];
 const workers=[];let mainRender=false;
 const NW=M.max(2,M.min((navigator.deviceMemory||4)>=8?7:5,(navigator.hardwareConcurrency||4)-2)); // stage 5.12: up to 7 workers on 8+ GB machines
 const wsrc=(typeof FlagArt==='function'?FlagArt.toString():'')+WorldGen.toString()+`
