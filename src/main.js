@@ -353,11 +353,14 @@ function drawTurbines(lp){const m=cam.m;if(m>(lp?60:12))return;const k=1/m;ctx.s
   ctx.lineCap='butt';ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}
 function camH(){return cam.m*VH*0.9}
 const FLB=[];
+// GFL: flights of the game (stage 5.11) — one trip each; the game sets f.s (metres flown) every frame
+const GFL=[];
 function drawFlights(){const H=camH();ctx.setTransform(DPR,0,0,DPR,0,0);FLB.length=0;
-  for(const f of W.flights){if(f.city!==undefined&&(W.growOf(f.city)<0.95||(f.city2!==undefined&&W.growOf(f.city2)<0.95)))continue;const tot=f.L+(f.kind?0:900*f.v/78);const s=(T*f.v+f.ph)%tot;if(s>f.L)continue;
+  for(const f of GFL.length?W.flights.concat(GFL):W.flights){if(f.city!==undefined&&(W.growOf(f.city)<0.95||(f.city2!==undefined&&W.growOf(f.city2)<0.95)))continue;let s;
+    if(f.s!==undefined){s=f.s;if(s<0||s>f.L)continue}else{const tot=f.L+(f.kind?0:900*f.v/78);s=(T*f.v+f.ph)%tot;if(s>f.L)continue}
     let i=1;while(i<f.n-1&&f.cum[i]<s)i++;const t=(s-f.cum[i-1])/(f.cum[i]-f.cum[i-1]||1);const ax=f.pts[i*2-2],ay=f.pts[i*2-1],bx=f.pts[i*2],by=f.pts[i*2+1];
     const x=ax+(bx-ax)*t,y=ay+(by-ay)*t;let hx=bx-ax,hy=by-ay;const hl=M.hypot(hx,hy)||1;hx/=hl;hy/=hl;
-    let alt=f.alt;if(!f.kind){const td=f.cum[4]+300;alt=clamp(M.min((s-1900)*0.11,(td-s)*0.055),0,f.alt)}
+    let alt=f.alt;if(!f.kind){const td=f.cum[4]+300;alt=clamp(M.min((s-(f.lift||1900))*0.11,(td-s)*0.055),0,f.alt)}
     const sx=x+W.SUNX*alt,sy=y+W.SUNY*alt;
     if(LG.day>0.05&&inView(sx,sy,200)&&cam.m<60){const X=sxw(sx),Y=syw(sy),sz=64/cam.m;if(sz>1.5){ctx.globalAlpha=0.28*LG.day*(1-wcur.cover*0.5);ctx.save();ctx.translate(X,Y);ctx.rotate(M.atan2(hy,hx));ctx.drawImage(PLANESH[f.c],-sz/2,-sz/2,sz,sz);ctx.restore();ctx.globalAlpha=1}}
     if(alt>H*0.9)continue;const kk=H/(H-alt);const X=VW/2+(x-cam.x)/cam.m*kk,Y=VH/2+(y-cam.y)/cam.m*kk;if(X<-200||Y<-200||X>VW+200||Y>VH+200)continue;
@@ -419,8 +422,8 @@ function drawPrecip(dt){const rain=wcur.rain,snow=wcur.snow,H=camH();const vis=s
     else{const qb=p.q*0.93;const X0=VW/2+(p.dx-wx*0.03*p.q)/(m*qb),Y0=VH/2+(p.dy-wy*0.03*p.q)/(m*qb);ctx.moveTo(X0,Y0);ctx.lineTo(X,Y)}}
   if(!isSnow)ctx.stroke();ctx.globalAlpha=1}
 const ZDYN={ref2:'НПЗ',farm:'Колхоз',ind:'Завод товаров',pow:'ТЭЦ',saw:'Лесопилка',oil:'Нефтевышка',ref:'НПЗ',port:'Порт',mil:'Военная часть',sam:'ПВО',
-  sol2:'Солнечные панели',mine:'Рудник',gasw:'Газовая скважина',rst:'Вокзал',dport:'Дронопорт',dramp:'Пусковая рампа',drwy:'ВПП',dstore:'Склад БПЛА',dfab:'Цех БПЛА'};
-const ZNAME={ref2:'НПЗ',saw:'Лесопилка',oil:'Нефтевышка',sam:'ПВО',mil:'Военная база',air:'Аэропорт',ref:'НПЗ',pow:'ТЭЦ',port:'Порт',ind:'Промзона',solar:'Солнечная электростанция',agro:'Тепличный комбинат',farm:'Ферма',dacha:'СНТ',cem:'Кладбище',quarry:'Карьер',gas:'АЗС',stn:'Вокзал',sol2:'Солнечные панели',mine:'Рудник',gasw:'Газовая скважина',rst:'Вокзал',dport:'Дронопорт',dramp:'Пусковая рампа',drwy:'ВПП',dstore:'Склад БПЛА',dfab:'Цех БПЛА'};
+  sol2:'Солнечные панели',mine:'Рудник',gasw:'Газовая скважина',rst:'Вокзал',dport:'Дронопорт',dramp:'Пусковая рампа',drwy:'ВПП',dstore:'Склад БПЛА',dfab:'Цех БПЛА',air2:'Аэропорт'};
+const ZNAME={air2:'Аэропорт',ref2:'НПЗ',saw:'Лесопилка',oil:'Нефтевышка',sam:'ПВО',mil:'Военная база',air:'Аэропорт',ref:'НПЗ',pow:'ТЭЦ',port:'Порт',ind:'Промзона',solar:'Солнечная электростанция',agro:'Тепличный комбинат',farm:'Ферма',dacha:'СНТ',cem:'Кладбище',quarry:'Карьер',gas:'АЗС',stn:'Вокзал',sol2:'Солнечные панели',mine:'Рудник',gasw:'Газовая скважина',rst:'Вокзал',dport:'Дронопорт',dramp:'Пусковая рампа',drwy:'ВПП',dstore:'Склад БПЛА',dfab:'Цех БПЛА'};
 const ZLIM={mil:12,gas:2.5,farm:5,cem:5,dacha:6,stn:5,sol2:2.5,dramp:2,gasw:4,dstore:4,drwy:5};
 function drawLabels(){ctx.setTransform(DPR,0,0,DPR,0,0);const m=cam.m;const boxes=[];ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineJoin='round';
   const lim=[9,32,95,380],fs=[11,12.5,15,19];const nl=LG.night;
@@ -547,7 +550,7 @@ function bgCam(dt){bgA+=dt*0.02;const r=bgC.R*0.5;cam.x=bgC.x+M.cos(bgA)*r;cam.y
 if(MODE==='bg')bgCam(0);
 function destroy(){if(!alive)return;alive=false;AC.abort();clearInterval(lowT);clearTimeout(introT);clearTimeout(clickT);for(const w of workers)w.terminate();if(wurl)URL.revokeObjectURL(wurl);
   for(const mp of [cache,stale,LCS[1],LCS[2],LCS[3]])for(const v of mp.values())if(v.b&&v.b.close)v.b.close();closeInsp();if(window.__world&&window.__world.W===W)window.__world=null}
-const API={get ops(){return OPS},op,W,cam,setHidden,flyTo,zoomAt,maxM,opt,LG,wcur,hover,setGrow,invalidate,setTod,setSpeed,setSeason,destroy,closeInsp,pick,
+const API={gflights:GFL,get ops(){return OPS},op,W,cam,setHidden,flyTo,zoomAt,maxM,opt,LG,wcur,hover,setGrow,invalidate,setTod,setSpeed,setSeason,destroy,closeInsp,pick,
   get VW(){return VW},get VH(){return VH},get DPR(){return DPR},get T(){return T},get tod(){return tod},get fps(){return fpsA},get ready(){return readyFired},
   sxw,syw,toWorld:(sx,sy)=>[cam.x+(sx-VW/2)*cam.m,cam.y+(sy-VH/2)*cam.m],setTodRate:r=>{todRate=r},isNight,
   showCity:c=>{sel={k:'city',o:c};showInsp()},

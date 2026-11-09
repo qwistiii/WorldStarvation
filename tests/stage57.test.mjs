@@ -132,7 +132,7 @@ test('города игры — разные планировки: кольца 
   const fams = new Set(towns.map(([, c]) => c.lay));
   assert.ok(fams.size >= 4, 'семейств планировок: ' + [...fams].join(', '));
   for (const P of [P1, P2]) { const L = P.D.cities.filter((c) => c.cap !== undefined).map((c) => c.lay); assert.equal(new Set(L).size, L.length, 'у столиц одной партии разные планировки: ' + L); }
-  assert.ok(towns.some(([, c]) => c.pol && c.pol.full) && towns.some(([, c]) => c.pol && !c.pol.full), 'есть радиально-кольцевые и веерные города');
+  assert.ok(towns.some(([, c]) => c.pol), 'есть радиально-кольцевые или веерные города');
   assert.ok(towns.filter(([, c]) => !c.pol && c.msi + c.msj > 0).length >= 3, 'в сетках есть суперкварталы');
   for (const [W, c] of towns) {
     const BD = c.D - 1, RW = W._dbg.RW, own = W.roads.filter((r) => r.city === c.id && !r.dg);

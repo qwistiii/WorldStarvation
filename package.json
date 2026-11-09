@@ -8,7 +8,7 @@
     "start": "node tools/serve.mjs",
     "build": "node tools/build.mjs",
     "test": "node --test tests/gen.test.mjs tests/geometry.test.mjs tests/game.test.mjs tests/stage57.test.mjs",
-    "test:browser": "node tools/build.mjs && node tests/smoke.mjs && node tests/visual.mjs && node tests/game.mjs && node tests/game57.mjs && node tests/game58.mjs && node tests/game59.mjs"
+    "test:browser": "node tools/build.mjs && node tests/smoke.mjs && node tests/visual.mjs && node tests/game.mjs && node tests/game57.mjs && node tests/game58.mjs && node tests/game59.mjs && node tests/game511.mjs"
   },
   "engines": {
     "node": ">=18"
