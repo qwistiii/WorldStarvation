@@ -175,10 +175,13 @@ function canBuild(s,k,x,y,ang){const b=BLD[k];if(!b)return 'Неизвестна
   const o=ownerAt(x,y),mine=o===s.id+1;const rad=b.R?b.R*1.3:M.hypot(b.W||600,b.H||600)/2;
   for(const c of W.cities){const d=M.hypot(c.x-x,c.y-y);if(k==='city'||k==='village'){if(d<c.R*1.2+rad+400)return 'Слишком близко к '+c.name}else if(c.type>=1&&cityF(c,x,y)<1.1+rad/c.R)return 'Здесь кварталы '+c.name}
   const hw=b.zk?b.W/2:(b.R?b.R*1.3:400),hh=b.zk?b.H/2:hw;
-  for(const z of W.zones)if(!z.dead&&rectHit(z,x,y,hw+30,hh+30,a))return 'Занято: мешает «'+(ZLBL[z.zk]||'объект')+'»';
+  const gap=b.zk?8:30;for(const z of W.zones)if(!z.dead&&rectHit(z,x,y,hw+gap,hh+gap,a))return 'Занято: мешает «'+(ZLBL[z.zk]||'объект')+'»';
   if(b.zk&&k!=='port'){const f=footBad(x,y,b.W,b.H,a);if(f)return f}
   for(const d of G.dep)if(d.used<0&&b.zk&&b.area!=='ore'&&b.area!=='gas'&&k!=='oil'&&rectHit({x,y,ca:M.cos(a),sa:M.sin(a),W:b.W,H:b.H},d.x,d.y,120,120))return 'Здесь месторождение — для него рудник, скважина или вышка';
-  for(const st of G.states)for(const q of st.builds)if(!q.done&&M.hypot(q.x-x,q.y-y)<rad+600)return 'Рядом идёт стройка';
+  // another construction site: their footprints must not touch (8 m apart), towns keep their radius
+  for(const st of G.states)for(const q of st.builds){if(q.done||q.k==='rail')continue;const c=BLD[q.k];if(!c)continue;
+    if(c.zk&&b.zk){const qa=q.k==='station'?(q.ang||0):0;if(rectHit({x:q.x,y:q.y,ca:M.cos(qa),sa:M.sin(qa),W:c.W,H:c.H},x,y,hw+8,hh+8,a))return 'Рядом идёт стройка: «'+c.n+'»'}
+    else if(M.hypot(q.x-x,q.y-y)<(c.R?c.R*1.3:c.zk?M.hypot(c.W,c.H)/2:400)+rad+60)return 'Рядом идёт стройка: «'+c.n+'»'}
   if(b.area==='near'){if(o&&!mine)return 'Чужая территория';if(!mine&&distOwn(s,x,y)>(k==='city'?14000:10000))return 'Слишком далеко от ваших земель';return null}
   if(!mine)return 'Только на своей территории';
   if(b.area==='village'){const v=s.places.find(p=>p.k==='village'&&M.hypot(p.x-x,p.y-y)<1400);return v?null:'Колхоз — только в области села'}
@@ -216,7 +219,10 @@ function startBuild(s,k,x,y,ang){const b=BLD[k],c=creative()&&s.isP?0:b.cost;if(
   if(k==='station')q.a=ang!=null?ang:stationAng(s,x,y);
   if(b.mod){const p=portNear(s,x,y,1100);if(p)q.port=p.uid}
   if(k==='dronefab'){q.queue=[];q.pt=0;q.up={}}
-  s.builds.push(q);if(s.isP)onBuilt(k,false);return true}
+  s.builds.push(q);if(k==='city'||k==='village')placeNow(s,q);if(s.isP)onBuilt(k,false);return true}
+// a town or a village appears on the map at once and grows while it is being built (stage 5.9), as the capitals do
+function placeNow(s,q){const b=BLD[q.k],name=NAMES.capital(rngS(hsh(q.x|0,q.y|0)*1e9));const id=api.op('addPlace',{k:q.k,x:q.x,y:q.y,st:s.id,name,R:b.R});q.id=id;if(id<0)return;
+  const p={k:q.k,id,x:q.x,y:q.y,grow:0.05,growQ:-1,name,st:s,t0:G.t,bq:q.uid};s.places.push(p);syncPlace(p);clearDeps(W.cities[id]);claimAll()}
 // a railway between two stations of the state (uid a, b): built after both stations stand; price by length
 function startRail(s,a,b,L){const cost=M.round(L*RAILK),c=creative()&&s.isP?0:cost;if(s.res.money<c)return false;if(s.res.money!==Infinity)s.res.money-=c;
   const q={k:'rail',a,b,x:0,y:0,t:0,time:M.max(10,L/250),done:false,id:-1,off:0,uid:++G.uid,cost,L:M.round(L)};const A=byUid(s,a),B=byUid(s,b);if(A&&B){q.x=(A.x+B.x)/2;q.y=(A.y+B.y)/2}
@@ -227,8 +233,8 @@ function finishBuild(s,q){q.done=true;
   if(q.k==='rail'){const A=byUid(s,q.a),B=byUid(s,q.b);q.id=A&&B&&A.id>=0&&B.id>=0?api.op('addRail',{a:A.id,b:B.id,st:s.id}):-1;if(q.id<0){q.failed=true;if(s.isP)toast('ЖД путь не удалось проложить','ic-b-rail');return}
     if(s.isP){toast(`Построено: <b>ЖД путь</b> ${fmtKm(q.L)}`,'ic-b-rail');onBuilt('rail',true)}return}
   const b=BLD[q.k];
-  if(q.k==='city'||q.k==='village'){const name=NAMES.capital(rngS(hsh(q.x|0,q.y|0)*1e9));const id=api.op('addPlace',{k:q.k,x:q.x,y:q.y,st:s.id,name,R:b.R});q.id=id;
-    const p={k:q.k,id,x:q.x,y:q.y,grow:q.k==='city'?0.12:1,growQ:-1,name,st:s,t0:G.t};s.places.push(p);if(q.k==='city')syncPlace(p);clearDeps(W.cities[id]);claimAll()}
+  if(q.k==='city'||q.k==='village'){let p=s.places.find(o=>o.bq===q.uid);if(!p){placeNow(s,q);p=s.places.find(o=>o.bq===q.uid)}
+    if(p){p.grow=q.k==='city'?M.max(p.grow,0.12):1;syncPlace(p)}}
   else{const h=homeOf(s,q.x,q.y);const o={zk:b.zk,x:q.x,y:q.y,city:h.id,st:s.id,W:b.W,H:b.H};if(q.a!=null)o.a=q.a;if(q.dep!=null)o.ore=G.dep[q.dep].k;
     q.id=api.op('addZone',o);if(q.id<0){q.failed=true}claimAll();
     if(q.k==='barracks'){const n=(s.armyN=(s.armyN||0)+1);s.armies.push(mkArmy(s,n,q))}
@@ -403,7 +409,8 @@ function sim(dt){G.t+=dt;
   for(const s of G.states){if(s.dead||!s.places.length)continue;
     for(const q of s.builds.slice())if(!q.done){if(q.k==='rail'){const A=byUid(s,q.a),B=byUid(s,q.b);if(!A||!B){s.builds.splice(s.builds.indexOf(q),1);continue}if(!A.done||!B.done)continue}q.t+=dt;if(q.t>=q.time)finishBuild(s,q)}
     if(s.grow<1&&s.cityId>=0&&s.cap){s.grow=M.min(1,s.grow+dt*0.005*(s.isP?1:[0.6,1,1.6][cfg.rules.botGrowth]));syncGrow(s)}
-    for(const p of s.places)if(p.k==='city'&&p.grow<1){p.grow=M.min(1,p.grow+dt*0.008);syncPlace(p)}
+    for(const p of s.places){if(p.grow>=1)continue;const q=p.bq&&s.builds.find(o=>o.uid===p.bq&&!o.done);
+      if(q){p.grow=M.max(p.grow,0.05+(q.k==='city'?0.07:0.95)*q.t/q.time);syncPlace(p)}else if(p.k==='city'){p.grow=M.min(1,p.grow+dt*0.008);syncPlace(p)}}
     econ(s,dt);for(const a of s.armies){recruit(s,a,dt);stepArmy(s,a,dt)}}
   stepDrones(dt);
   for(const s of G.states){if(s.isP||s.dead||!s.places.length)continue;s._dt=(s._dt||0)+dt;const iv=DIFF[s.diff].dec;if(s._dt>=iv){s._dt-=iv;botThink(s)}}
@@ -508,51 +515,30 @@ function drawCaps(ctx,A){const m=A.cam.m;if(m<3)return;for(const s of G.states){
     ctx.fillStyle='rgba(6,10,16,0.55)';ctx.fillRect(X-17,Y-12,34,24);ctx.drawImage(f,X-15,Y-10,30,20);ctx.strokeStyle=s.isP?'#ffd25a':'rgba(255,255,255,0.55)';ctx.lineWidth=s.isP?2:1;ctx.strokeRect(X-15.5,Y-10.5,31,21);
     ctx.fillStyle=s.isP?'#ffd25a':'#fff';star(ctx,X,Y+16,5.5)}}
 function star(ctx,x,y,r){ctx.beginPath();for(let i=0;i<10;i++){const a=-M.PI/2+i*M.PI/5,rr=i%2?r*0.45:r;ctx.lineTo(x+M.cos(a)*rr,y+M.sin(a)*rr)}ctx.closePath();ctx.fill();ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=1;ctx.stroke()}
-// deposit markers (stage 5.7): a bevelled steel hexagon with the material itself rendered inside — a glossy oil drop,
-// a blue gas flame, faceted coal, rusty hematite, copper with malachite, gold nuggets with a glint, a glowing uranium
-// pellet, lithium crystals; drawn once at 64 px
-function facet(x,pts,c,lit){x.beginPath();x.moveTo(pts[0],pts[1]);for(let i=2;i<pts.length;i+=2)x.lineTo(pts[i],pts[i+1]);x.closePath();const g=x.createLinearGradient(pts[0],pts[1],pts[4]||pts[2],pts[5]||pts[3]);
-  const k=lit;g.addColorStop(0,`rgb(${M.min(255,c[0]*k*1.25)|0},${M.min(255,c[1]*k*1.25)|0},${M.min(255,c[2]*k*1.25)|0})`);g.addColorStop(1,`rgb(${c[0]*k*0.7|0},${c[1]*k*0.7|0},${c[2]*k*0.7|0})`);x.fillStyle=g;x.fill();x.strokeStyle='rgba(0,0,0,0.35)';x.lineWidth=0.8;x.stroke()}
-function nugget(x,cx,cy,r,c,sd){const R=rngS(sd),n=7,P=[];for(let i=0;i<n;i++){const a=i/n*M.PI*2+R()*0.4,rr=r*(0.72+R()*0.4);P.push(cx+M.cos(a)*rr,cy+M.sin(a)*rr*0.86)}
-  facet(x,P,c,1);const L=[cx,cy-r*0.1];for(let i=0;i<n;i++){const j=(i+1)%n,lit=0.75+0.5*M.max(0,-M.sin((i+0.5)/n*M.PI*2+0.6));facet(x,[L[0],L[1],P[i*2],P[i*2+1],P[j*2],P[j*2+1]],c,lit)}}
-function oreIcon(k){if(ICONS['o'+k])return ICONS['o'+k];const S=64,c=document.createElement('canvas');c.width=c.height=S;const x=c.getContext('2d'),o=ORES[k],C=S/2;
-  const hex=(r)=>{x.beginPath();for(let i=0;i<6;i++){const a=i/6*M.PI*2+M.PI/6;x.lineTo(C+M.cos(a)*r,C+M.sin(a)*r)}x.closePath()};
-  // body: drop shadow, steel bevel, dark inset, tinted glass
-  x.save();x.shadowColor='rgba(0,0,0,0.55)';x.shadowBlur=5;x.shadowOffsetY=2;hex(28);x.fillStyle='#10151b';x.fill();x.restore();
-  let g=x.createLinearGradient(0,4,0,60);g.addColorStop(0,'#c9d1d8');g.addColorStop(0.45,'#6c7680');g.addColorStop(1,'#2a3036');hex(28);x.fillStyle=g;x.fill();
-  hex(24.5);g=x.createRadialGradient(C-6,C-8,2,C,C,26);g.addColorStop(0,'#2c3540');g.addColorStop(1,'#0b0f14');x.fillStyle=g;x.fill();
-  const oc=hexRgb(o.c);hex(24.5);x.strokeStyle=`rgba(${oc[0]},${oc[1]},${oc[2]},0.9)`;x.lineWidth=2;x.stroke();
-  x.save();hex(23.5);x.clip();
+// stage 5.9: deposits are map pins as in DroneFlames — a teardrop in the colour of the resource with a white glyph,
+// a dark outline; the point of the pin stands on the deposit (48 × 60, anchor at the bottom centre)
+function oreIcon(k){if(ICONS['o'+k])return ICONS['o'+k];const c=document.createElement('canvas');c.width=48;c.height=60;const x=c.getContext('2d'),o=ORES[k],C=24,Y=22,oc=hexRgb(o.c);
+  const pin=()=>{x.beginPath();x.arc(C,Y,17,M.PI*0.78,M.PI*2.22);x.lineTo(C,55);x.closePath()};
+  x.save();x.translate(0,2);pin();x.fillStyle='rgba(0,0,0,0.45)';x.fill();x.restore();
+  pin();x.lineWidth=5;x.strokeStyle='#1b120c';x.stroke();
+  const lt=v=>M.min(255,v*1.35+40)|0,dk=v=>v*0.62|0;let g=x.createLinearGradient(0,4,0,52);g.addColorStop(0,`rgb(${lt(oc[0])},${lt(oc[1])},${lt(oc[2])})`);g.addColorStop(1,`rgb(${dk(oc[0])},${dk(oc[1])},${dk(oc[2])})`);
+  pin();x.fillStyle=g;x.fill();x.lineWidth=1.5;x.strokeStyle='rgba(255,255,255,0.45)';x.beginPath();x.arc(C,Y,14.5,M.PI*1.05,M.PI*1.7);x.stroke();
+  x.beginPath();x.arc(C,Y,11.5,0,M.PI*2);x.fillStyle='rgba(16,12,8,0.38)';x.fill();
+  x.fillStyle='#fbf3e0';x.strokeStyle='#fbf3e0';x.lineJoin='round';x.lineCap='round';
   switch(o.k){
-  case 'oil':{x.fillStyle='rgba(60,50,40,0.6)';x.beginPath();x.ellipse(C,C+14,14,4,0,0,7);x.fill();
-    x.beginPath();x.moveTo(C,C-15);x.bezierCurveTo(C+4,C-6,C+12,C,C+12,C+6);x.bezierCurveTo(C+12,C+13,C+6,C+17,C,C+17);x.bezierCurveTo(C-6,C+17,C-12,C+13,C-12,C+6);x.bezierCurveTo(C-12,C,C-4,C-6,C,C-15);
-    g=x.createRadialGradient(C-4,C+2,1,C,C+5,15);g.addColorStop(0,'#3a3430');g.addColorStop(0.6,'#111012');g.addColorStop(1,'#000');x.fillStyle=g;x.fill();
-    g=x.createLinearGradient(C-10,C,C+10,C+14);g.addColorStop(0,'rgba(90,140,220,0.55)');g.addColorStop(0.35,'rgba(200,90,200,0.4)');g.addColorStop(0.7,'rgba(90,210,150,0.4)');g.addColorStop(1,'rgba(240,210,90,0.2)');x.fillStyle=g;x.beginPath();x.ellipse(C+1,C+9,9,5,-0.3,0,7);x.fill();
-    x.fillStyle='rgba(255,255,255,0.85)';x.beginPath();x.ellipse(C-5,C+1,1.8,4,0.4,0,7);x.fill();break}
-  case 'gas':{for(const [r,c0,c1] of [[15,'rgba(40,110,255,0.9)','rgba(20,40,160,0)'],[10,'rgba(120,200,255,1)','rgba(40,120,255,0)'],[5,'#f2fbff','rgba(160,220,255,0)']]){x.beginPath();x.moveTo(C,C-r*1.25);
-      x.bezierCurveTo(C+r*0.9,C-r*0.2,C+r*0.75,C+r*0.9,C,C+r);x.bezierCurveTo(C-r*0.75,C+r*0.9,C-r*0.9,C-r*0.2,C,C-r*1.25);g=x.createLinearGradient(0,C-r,0,C+r);g.addColorStop(0,c1);g.addColorStop(0.4,c0);g.addColorStop(1,c0);x.fillStyle=g;x.fill()}
-    x.fillStyle='#8a9098';x.fillRect(C-7,C+13,14,4);x.fillStyle='#c8ccd0';x.fillRect(C-7,C+13,14,1.2);break}
-  case 'coal':{nugget(x,C-6,C+5,9,[60,60,64],11);nugget(x,C+7,C+7,8,[48,48,52],12);nugget(x,C+1,C-6,9,[70,70,76],13);
-    x.fillStyle='rgba(255,255,255,0.7)';for(const [a,b] of [[C-3,C-10],[C+8,C+3],[C-9,C+2]]){x.beginPath();x.arc(a,b,1,0,7);x.fill()}break}
-  case 'iron':{nugget(x,C-3,C+3,13,[150,72,48],21);nugget(x,C+8,C-6,7,[120,124,130],22);x.strokeStyle='rgba(220,140,100,0.6)';x.lineWidth=1;x.beginPath();x.moveTo(C-12,C+8);x.lineTo(C-2,C-2);x.lineTo(C+6,C+6);x.stroke();break}
-  case 'copper':{nugget(x,C,C+2,13,[196,112,64],31);for(const [a,b,r] of [[C-6,C+6,3.5],[C+5,C-3,3],[C+3,C+9,2.4]]){g=x.createRadialGradient(a-1,b-1,0.5,a,b,r);g.addColorStop(0,'#8fe0b0');g.addColorStop(1,'#1f7a52');x.fillStyle=g;x.beginPath();x.arc(a,b,r,0,7);x.fill()}break}
-  case 'gold':{nugget(x,C-5,C+5,9,[214,160,40],41);nugget(x,C+7,C+4,7,[230,180,50],42);nugget(x,C+1,C-7,7,[200,150,30],43);
-    x.strokeStyle='rgba(255,255,240,0.95)';x.lineWidth=1.4;x.beginPath();const sx=C+9,sy=C-11;x.moveTo(sx-5,sy);x.lineTo(sx+5,sy);x.moveTo(sx,sy-5);x.lineTo(sx,sy+5);x.stroke();x.fillStyle='#fff';x.beginPath();x.arc(sx,sy,1.4,0,7);x.fill();break}
-  case 'uran':{g=x.createRadialGradient(C,C,1,C,C,20);g.addColorStop(0,'rgba(170,255,90,0.75)');g.addColorStop(1,'rgba(80,200,40,0)');x.fillStyle=g;x.fillRect(0,0,S,S);
-    x.fillStyle='rgba(20,30,10,0.85)';for(let i=0;i<3;i++){const a=-M.PI/2+i*M.PI*2/3;x.beginPath();x.moveTo(C,C);x.arc(C,C,15,a-0.52,a+0.52);x.closePath();x.fill()}
-    g=x.createRadialGradient(C-2,C-2,0.5,C,C,6);g.addColorStop(0,'#f4ffd0');g.addColorStop(0.5,'#a8f060');g.addColorStop(1,'#3a8a1a');x.fillStyle=g;x.beginPath();x.arc(C,C,5.5,0,7);x.fill();break}
-  case 'lith':{const cr=(cx,cy,h,w,a,c)=>{x.save();x.translate(cx,cy);x.rotate(a);facet(x,[0,-h,w,-h*0.7,w,h*0.5,0,h*0.7],c,1.15);facet(x,[0,-h,-w,-h*0.7,-w,h*0.5,0,h*0.7],c,0.78);facet(x,[0,-h,w,-h*0.7,0,-h*0.45,-w,-h*0.7],c,1.4);x.restore()};
-    cr(C-6,C+4,12,4.5,-0.35,[200,196,226]);cr(C+6,C+5,10,4,0.3,[214,220,236]);cr(C,C-2,15,5,0,[230,232,246]);break}
-  }
-  x.restore();
-  // glass highlight over the top half
-  x.save();hex(23.5);x.clip();g=x.createLinearGradient(0,8,0,C);g.addColorStop(0,'rgba(255,255,255,0.22)');g.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=g;x.fillRect(0,0,S,C);x.restore();
+  case 'oil':x.beginPath();x.moveTo(C,Y-9);x.bezierCurveTo(C+4,Y-2,C+7,Y+1,C+7,Y+4);x.arc(C,Y+4,7,0,M.PI);x.bezierCurveTo(C-7,Y+1,C-4,Y-2,C,Y-9);x.fill();break;
+  case 'gas':x.beginPath();x.moveTo(C,Y-10);x.bezierCurveTo(C+8,Y-2,C+7,Y+7,C,Y+8);x.bezierCurveTo(C-7,Y+7,C-8,Y-2,C,Y-10);x.fill();x.fillStyle=o.c;x.beginPath();x.moveTo(C,Y-2);x.bezierCurveTo(C+4,Y+2,C+3,Y+6,C,Y+6);x.bezierCurveTo(C-3,Y+6,C-4,Y+2,C,Y-2);x.fill();break;
+  case 'coal':for(const [a,b,r] of [[-4,3,5],[4,4,4.4],[0,-4,4.6]]){x.beginPath();for(let q=0;q<6;q++){const t=q/6*M.PI*2+0.3;x.lineTo(C+a+M.cos(t)*r,Y+b+M.sin(t)*r)}x.closePath();x.fill()}break;
+  case 'iron':case 'copper':for(const [a,b] of [[-5,4],[5,4],[0,-3]]){x.beginPath();x.moveTo(C+a-4,Y+b-2);x.lineTo(C+a+4,Y+b-2);x.lineTo(C+a+6,Y+b+3);x.lineTo(C+a-6,Y+b+3);x.closePath();x.fill()}break;
+  case 'gold':x.beginPath();x.moveTo(C-8,Y-3);x.lineTo(C-4,Y-8);x.lineTo(C+4,Y-8);x.lineTo(C+8,Y-3);x.lineTo(C,Y+8);x.closePath();x.fill();x.strokeStyle=o.c;x.lineWidth=1.2;x.beginPath();x.moveTo(C-8,Y-3);x.lineTo(C+8,Y-3);x.moveTo(C-4,Y-8);x.lineTo(C-2,Y-3);x.lineTo(C,Y+8);x.lineTo(C+2,Y-3);x.lineTo(C+4,Y-8);x.stroke();break;
+  case 'uran':x.beginPath();x.arc(C,Y,2.4,0,M.PI*2);x.fill();for(let q=0;q<3;q++){const a=-M.PI/2+q*M.PI*2/3;x.beginPath();x.moveTo(C+M.cos(a-0.5)*4,Y+M.sin(a-0.5)*4);x.arc(C,Y,9,a-0.5,a+0.5);x.lineTo(C+M.cos(a+0.5)*4,Y+M.sin(a+0.5)*4);x.closePath();x.fill()}break;
+  case 'lith':for(const [a,h,w] of [[-4,8,3],[4,7,3],[0,10,3.4]]){x.beginPath();x.moveTo(C+a,Y-h);x.lineTo(C+a+w,Y-h+3);x.lineTo(C+a+w,Y+7);x.lineTo(C+a-w,Y+7);x.lineTo(C+a-w,Y-h+3);x.closePath();x.fill()}break}
   return ICONS['o'+k]=c}
-function drawDeposits(ctx,A){const m=A.cam.m,fd=G.phase==='found';if(!fd&&(mapMode==='off'||(mapMode==='pol'&&m>40)))return;const z=mapMode==='res'||fd?1:smoothst(40,18,m);if(z<=0.02)return;ctx.globalAlpha=z;
+function drawDeposits(ctx,A){const m=A.cam.m,fd=G.phase==='found';if(!fd&&(mapMode==='off'||(mapMode==='pol'&&m>40)))return;const z=(mapMode==='res'||fd?1:smoothst(40,18,m))*smoothst(75,45,m);if(z<=0.02)return;ctx.globalAlpha=z;
   for(const d of G.dep){if(!d.known)continue;const X=A.sxw(d.x),Y=A.syw(d.y);if(X<-20||Y<-20||X>A.VW+20||Y>A.VH+20)continue;
-    const sz=mapMode==='res'?30:24;const ic=oreIcon(d.k);ctx.globalAlpha=z*(d.amt<=0?0.35:1);ctx.drawImage(ic,X-sz/2,Y-sz/2,sz,sz);
-    if(d.max!==Infinity&&mapMode==='res'){ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(X-10,Y+sz/2+1,20,3);ctx.fillStyle=ORES[d.k].c;ctx.fillRect(X-10,Y+sz/2+1,20*d.amt/d.max,3)}
-    const o=own?own[d.c]:0;if(o&&mapMode==='res'){ctx.fillStyle=G.states[o-1].color;ctx.beginPath();ctx.arc(X+sz/2-3,Y-sz/2+3,3.5,0,7);ctx.fill()}}ctx.globalAlpha=1}
+    if(d.used>=0&&mapMode!=='res'&&A.cam.m<12)continue;const sz=mapMode==='res'?26:21;const ic=oreIcon(d.k);ctx.globalAlpha=z*(d.amt<=0?0.35:d.used>=0?0.55:1)*(G.sel&&G.sel.dep===G.dep.indexOf(d)?1:1);ctx.drawImage(ic,X-sz/2,Y-sz*1.25,sz,sz*1.25);
+    if(d.max!==Infinity&&mapMode==='res'){ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(X-10,Y+2,20,3);ctx.fillStyle=ORES[d.k].c;ctx.fillRect(X-10,Y+2,20*d.amt/d.max,3)}
+    const o=own?own[d.c]:0;if(o&&mapMode==='res'){ctx.fillStyle=G.states[o-1].color;ctx.beginPath();ctx.arc(X+sz/2-2,Y-sz*1.15,3.5,0,7);ctx.fill()}}ctx.globalAlpha=1}
 function drawPlacement(ctx,A){if(pend){const X=A.sxw(pend.x),Y=A.syw(pend.y),r=M.max(12,2900/A.cam.m),q=(A.T*1.2)%1;ctx.save();ctx.strokeStyle='rgba(255,210,90,0.95)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(X,Y,r,0,M.PI*2);ctx.stroke();
     ctx.globalAlpha=1-q;ctx.beginPath();ctx.arc(X,Y,r*(1+q*0.8),0,M.PI*2);ctx.stroke();ctx.globalAlpha=1;ctx.fillStyle='#ffd25a';star(ctx,X,Y,7);ctx.restore();return}
   if(!placing||!A.hover.on)return;const [x,y]=A.toWorld(A.hover.x,A.hover.y);const bad=validSite(x,y);const r=2900/A.cam.m;const X=A.hover.x,Y=A.hover.y;
@@ -560,7 +546,7 @@ function drawPlacement(ctx,A){if(pend){const X=A.sxw(pend.x),Y=A.syw(pend.y),r=M
   ctx.beginPath();ctx.arc(X,Y,M.max(10,r),0,M.PI*2);ctx.fill();ctx.stroke();ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(X-8,Y);ctx.lineTo(X+8,Y);ctx.moveTo(X,Y-8);ctx.lineTo(X,Y+8);ctx.stroke();
   const t=bad||'Основать столицу здесь';ctx.font='600 12px system-ui,sans-serif';const w=ctx.measureText(t).width+16;ctx.fillStyle='rgba(10,15,23,0.85)';ctx.fillRect(X+14,Y+12,w,22);ctx.fillStyle=bad?'#ff9c8e':'#ffd25a';ctx.textBaseline='middle';ctx.fillText(t,X+22,Y+23);ctx.restore()}
 function drawMini(mx,s){if(!G||G.phase!=='play'||!own)return;const S=W.WORLD*s;if(polC){mx.globalAlpha=0.55;mx.imageSmoothingEnabled=true;mx.drawImage(polC,0,0,S,S);mx.globalAlpha=1}
-  for(const st of G.states){if(!st.cap||!seenAt(st.cap.x,st.cap.y))continue;mx.fillStyle=st.isP?'#ffd25a':'#fff';mx.fillRect(st.cap.x*s-2,st.cap.y*s-2,4,4)}}
+  drawMiniBuilds(mx,s);for(const st of G.states){if(!st.cap||!seenAt(st.cap.x,st.cap.y))continue;mx.fillStyle=st.isP?'#ffd25a':'#fff';mx.fillRect(st.cap.x*s-2,st.cap.y*s-2,4,4)}}
 
 // ---------- HUD and panels
 const $=id=>document.getElementById(id);
@@ -583,7 +569,7 @@ function updHUD(){const p=player(),r=p.res,f=p.flow||{};
   ee.parentNode.title=`Энергия: нужно ${fmt(en[1])} из ${fmt(en[0])}`+(p.batC?` · аккумулятор ${M.round((p.bat||0)/p.batC*100)} %`:'')+(en[3]>0?' · сейчас выручает аккумулятор':'');
   $('rpop-v').textContent=fmtS(p.pop);const sh=shortage(p),se=$('rstore');se.textContent=sh[0];se.className=sh[1]>0?'neg':sh[1]===0?'warn':'';
   const [d,hm]=clockParts(),lim=cfg.rules.timeLimit*60;$('gclock').textContent=hm;$('glimit').textContent='день '+d+(lim>0?' · ост. '+fmtT(M.max(0,lim-G.t)):'');
-  updRace(p);updPanel();updCatalog();updMyState();updStore();bbh()}
+  updRace(p);updPanel();updCatalog();updMyState();updStore();updOres();updHQ();bbh()}
 // the height of the bottom dock on the screen → --bbh (the minimap, the scale and the side windows stand above it)
 let bbH=-1;function bbh(){const h=M.round($('bbar').getBoundingClientRect().height);if(h!==bbH){bbH=h;document.documentElement.style.setProperty('--bbh',h+'px')}}
 // score and the race to victory (as in DroneFlames: «лидер 3,5/10 тыс.»)
@@ -614,8 +600,8 @@ const stat=(n,v)=>`<div class="stat"><span>${n}</span><b>${v}</b></div>`;
 const pcHead=(ic,t,sub)=>`<div class="pc-h"><span class="sl"><span class="ic ${ic}"></span></span><div class="pc-t"><b>${t}</b><small>${sub}</small></div><button class="xb" id="a-close" title="Закрыть (Esc)">✕</button></div>`;
 function updPanel(){const bd=document.body;bd.classList.toggle('ph-found',G.phase==='found');bd.classList.toggle('ph-play',G.phase==='play');
   if(G.phase==='found'){bd.classList.remove('sel');$('a-found').classList.toggle('on',placing);return}
-  const el=$('gpanel'),a=G.sel&&G.sel.army,sb=G.sel&&G.sel.build;bd.classList.toggle('sel',!!(a||sb));
-  if(a)return armyPanel(el,a);if(sb)return buildPanel(el,sb);if(panelSig){panelSig='';el.innerHTML=''}}
+  const el=$('gpanel'),a=G.sel&&G.sel.army,sb=G.sel&&G.sel.build,sd=G.sel&&G.sel.dep!=null;bd.classList.toggle('sel',!!(a||sb||sd));
+  if(a)return armyPanel(el,a);if(sb)return buildPanel(el,sb);if(sd)return depPanel(el,G.sel.dep);if(panelSig){panelSig='';el.innerHTML=''}}
 const closeSel=()=>{G.sel=null;G.mode=null;panelSig='';updPanel();updCatalog()};
 function armyPanel(el,a){const p=player();const sig='army'+a.id+'|'+a.tpl+'|'+a.units.join('')+'|'+(G.mode||'')+'|'+atWarAny()+'|'+p.uav.lancet;
   if(sig===panelSig)return;panelSig=sig;const comp={};for(const u of a.units)comp[u]=(comp[u]||0)+1;const war=atWarAny(),ln=p.uav.lancet||0;
@@ -785,9 +771,9 @@ function updDip(){const b=$('dipb');if(!$('dip').classList.contains('show')||!G)
 function updModes(){tabSig=''}
 
 // ---------- map objects: construction sites, build preview, armies, drones, hits
-function drawObjects(ctx,A){const m=A.cam.m,T=A.T;ctx.textAlign='center';ctx.textBaseline='middle';
+function drawObjects(ctx,A){const m=A.cam.m,T=A.T;drawPennants(ctx,A);ctx.textAlign='center';ctx.textBaseline='middle';
   const me=player(),mine=s=>s.isP||me.allies.includes(s.id);
-  for(const s of G.states)for(const q of s.builds){if(q.done||q.k==='rail'||(!mine(s)&&!seenNow(q.x,q.y)))continue;const X=A.sxw(q.x),Y=A.syw(q.y);if(X<-40||Y<-40||X>A.VW+40||Y>A.VH+40)continue;const b=BLD[q.k],r=M.max(9,M.min(60,(b.R||M.hypot(b.W,b.H)/2)/m));
+  for(const s of G.states)for(const q of s.builds){if(q.done||q.k==='rail'||(!mine(s)&&!seenNow(q.x,q.y)))continue;const X=A.sxw(q.x),Y=A.syw(q.y);if(X<-40||Y<-40||X>A.VW+40||Y>A.VH+40)continue;const b=BLD[q.k],r=M.max(9,M.min(60,(b.R||(b.W?M.hypot(b.W,b.H)/2:340))/m));
     ctx.fillStyle='rgba(10,15,23,0.55)';ctx.beginPath();ctx.arc(X,Y,r,0,7);ctx.fill();ctx.strokeStyle=s.isP?'#ffd25a':s.color;ctx.lineWidth=3;ctx.beginPath();ctx.arc(X,Y,r,-M.PI/2,-M.PI/2+M.PI*2*q.t/q.time);ctx.stroke();
     ctx.strokeStyle='rgba(255,255,255,0.25)';ctx.lineWidth=1;ctx.setLineDash([4,4]);ctx.lineDashOffset=-T*10;ctx.beginPath();ctx.arc(X,Y,r+5,0,7);ctx.stroke();ctx.setLineDash([]);
     const ic=bIcon(q.k);ctx.drawImage(ic,X-11,Y-11,22,22)}
@@ -860,6 +846,62 @@ function buildRailway(ev){const p=player();if(!ev||ev.bad)return false;let b=ev.
   if(!b){if(!startBuild(p,'station',ev.nb.x,ev.nb.y,ev.nb.ang))return false;b=p.builds[p.builds.length-1]}
   return startRail(p,ev.A.uid,b.uid,ev.L)}
 
+// ---------- stage 5.9: the left rail as in DroneFlames — ШТАБ (wars, threats, armies, drones, air defence) and ЗАЛЕЖИ
+// (free deposits on the own land: a filter by resource, the list; a row flies the camera there and opens the deposit card)
+const ORF=[['all','Все',null],['metal','Металл',[3,4]],['prec','Драгмет.',[5]],['uran','Уран',[6]],['oil','Нефть',[0]],['gas','Газ',[1]],['coal','Уголь',[2]],['lith','Литий',[7]]];
+let oreF='all',oreSig='';
+function oreCss(){if(document.getElementById('orecss'))return;const st=document.createElement('style');st.id='orecss';st.textContent=ORES.map((o,i)=>`.ic-o-${i}{background-image:url(${oreIcon(i).toDataURL()});background-size:contain;background-repeat:no-repeat;background-position:center}`).join('\n');document.head.appendChild(st)}
+const capOf=p=>p.places[0]||p.cap||{x:W.WORLD/2,y:W.WORLD/2};
+function freeDeps(p){const c=capOf(p);return G.dep.map((d,i)=>[d,i]).filter(([d])=>d.known&&d.used<0&&d.amt>0&&own&&own[d.c]===p.id+1).map(([d,i])=>[d,i,M.hypot(d.x-c.x,d.y-c.y)]).sort((a,b)=>a[2]-b[2])}
+const depAmt=d=>d.amt===Infinity?'∞':fmtK(d.amt);
+// which building takes the deposit
+const depBuild=d=>ORES[d.k].k==='oil'?'oil':ORES[d.k].k==='gas'?'gaswell':MINE[d.k]?'mine':null;
+const depBName=d=>{const k=depBuild(d);return k==='oil'?'Нефтевышка':k==='gaswell'?'Газ. скважина':ORES[d.k].k==='uran'?'Уран. шахта':'Рудник'};
+function updOres(){if(!G||G.phase!=='play')return;const p=player(),L=freeDeps(p);$('oren').textContent=L.length;$('oren').style.display=L.length?'':'none';
+  const op=$('orep');$('b-ores').classList.toggle('on',op.classList.contains('show'));$('b-hq').classList.toggle('on',$('hqp').classList.contains('show'));if(!op.classList.contains('show'))return;
+  const f=ORF.find(q=>q[0]===oreF),rows=L.filter(([d])=>!f[2]||f[2].includes(d.k)),sel=G.sel&&G.sel.dep;
+  const sig=oreF+'|'+sel+'|'+rows.map(([d,i])=>i+':'+M.round(d.amt)).join(',')+'|'+L.length;if(sig===oreSig)return;oreSig=sig;
+  $('oref').innerHTML=ORF.map(([k,n,ks])=>{const c=k==='all'?L.length:L.filter(([d])=>ks.includes(d.k)).length;return `<button data-f="${k}" class="${k===oreF?'on':''}" title="${c}">${ks?`<span class="ic ic-o-${ks[0]}"></span>`:''}${n} ${c}</button>`}).join('');
+  $('orel').innerHTML=rows.length?rows.map(([d,i,r])=>`<button data-dep="${i}" class="${sel===i?'on':''}"><span class="ic ic-o-${d.k}"></span><span><b>${ORES[d.k].n}</b> · запас ${depAmt(d)}</span><small>${(r/1000).toFixed(1).replace('.',',')} км</small></button>`).join('')
+    :`<p>${L.length?'Таких залежей на вашей земле нет.':'Все залежи на вашей земле уже добываются. Расширяйте границы городами и сёлами.'}</p>`;
+  for(const b of $('oref').children)b.onclick=()=>{oreF=b.dataset.f;oreSig='';updOres()};
+  for(const b of $('orel').querySelectorAll('[data-dep]'))b.onclick=()=>selDep(+b.dataset.dep,true)}
+function selDep(i,fly){const d=G.dep[i];if(!d)return;G.sel={dep:i};G.mode=null;setBuild(null);panelSig='';if(fly)api.flyTo(d.x,d.y,M.min(api.cam.m,4));updPanel();oreSig='';updOres()}
+function depPanel(el,i){const p=player(),d=G.dep[i];if(!d){G.sel=null;return}const o=own?own[d.c]:0,mine=o===p.id+1,bk=depBuild(d);const sig='d'+i+'|'+M.round(d.amt)+'|'+d.used+'|'+o+'|'+M.floor(p.res.money/100);if(sig===panelSig)return;panelSig=sig;
+  const land=mine?'ваша земля':o?'земля: '+esc(G.states[o-1].name):'ничья земля',max=d.max===Infinity?'':' из '+fmtK(d.max);
+  const gives=bk==='oil'?'Нефть +'+BLD.oil.prod.oil+' в секунду (для НПЗ)':bk==='gaswell'?'Топливо +3 и энергия +4 в секунду':MINE[d.k]?Object.entries(MINE[d.k]).map(([k,v])=>RESN[k]+' +'+v).join(', ')+' в секунду, руднику нужна энергия 3':'';
+  let keys='';const why=bk&&mine&&d.used<0?canBuild(p,bk,d.x,d.y):null;
+  if(bk&&mine&&d.used<0)keys+=card({id:'a-depb',n:depBName(d),tn:BLD[bk].n,sub:fmt(BLD[bk].cost),ic:'ic-b-'+bk,cls:p.res.money<BLD[bk].cost&&!creative()?'poor':'',dis:!!why,tip:why?why:'Поставить прямо на эту залежь'});
+  keys+=card({id:'a-depgo',n:'Показать',ic:'ic-scout',tip:'Камера к залежи'});
+  el.innerHTML=pcHead('ic-o-'+d.k,'Залежь: '+ORES[d.k].n.toLowerCase(),'месторождение · запас '+depAmt(d)+max+' · '+land+(d.used>=0?' · уже добывается':''))+`<div class="pc-s">Добыча</div><div class="pc-r">${keys}</div>`+
+    `<div class="pc-d">${gives?'<b>'+depBName(d)+'</b> даст: '+gives+'. ':''}${mine?(d.used>=0?'Залежь уже добывается.':why?'Сейчас нельзя: '+why+'.':''):'Добывать можно только на своей земле — расширяйте границы городами и сёлами.'}</div>`;
+  $('a-close').onclick=closeSel;$('a-depgo').onclick=()=>api.flyTo(d.x,d.y,M.min(api.cam.m,3));
+  const b=$('a-depb');if(b)b.onclick=()=>{const k=depBuild(d),bad=canBuild(p,k,d.x,d.y);if(bad){toast(bad);return}if(p.res.money<BLD[k].cost&&!creative()){toast('Не хватает денег: нужно '+fmt(BLD[k].cost));return}
+    if(startBuild(p,k,d.x,d.y)){toast(`Строится: <b>${BLD[k].n}</b> на залежи «${ORES[d.k].n}»`,'ic-b-'+k);closeSel();updHUD()}}}
+// the HQ: everything about the war in one window
+let hqSig='';
+function updHQ(){const w=$('hqp');if(!w.classList.contains('show')||!G||G.phase!=='play')return;const p=player(),u=p.uav||{};let h='';
+  const wars=G.states.filter(t=>atWar(p.id,t.id));h+=`<div class="pc-s">Войны</div>`+(wars.length?wars.map(t=>`<div class="hq-row"><span class="fl" data-st="${t.id}"></span><span><b>${esc(t.name)}</b><small>их армия ${fmt(strengthOf(t))} · наша ${fmt(strengthOf(p))}</small></span><button class="btn sm" data-peace="${t.id}">Мир</button></div>`).join(''):'<p class="note">Войн нет.</p>');
+  const thr=[];for(const t of wars)for(const a of t.armies)if(a.units.length&&own){const c=cellOf(a.x,a.y);if(c>=0&&own[c]===p.id+1||p.places.some(q=>M.hypot(q.x-a.x,q.y-a.y)<6000))thr.push([t,a])}
+  h+=`<div class="pc-s">Угрозы</div>`+(thr.length?thr.map(([t,a])=>`<div class="hq-row"><span class="ic ic-warn"></span><span><b>${esc(t.name)}: армия №${a.n}</b><small>${a.units.length} бойцов · сила ${fmt(strength(a))}</small></span><button class="btn sm" data-fly="${a.x|0},${a.y|0}">Показать</button></div>`).join(''):'<p class="note">Вражеских армий у ваших земель нет.</p>');
+  h+=`<div class="pc-s">Армии</div>`+(p.armies.length?p.armies.map((a,i)=>`<div class="hq-row"><span class="ic ic-b-army"></span><span><b>Армия №${a.n}</b><small>${a.units.length} / 12 · ${a.tpl?TPL[a.tpl].n:'без сборки'} · ${a.fight?'в бою':a.tx!==null?'на марше':'стоит'}</small></span><button class="btn sm" data-army="${i}">Выбрать</button></div>`).join(''):'<p class="note">Армий нет: постройте военную часть (вкладка «Армия»).</p>');
+  const sams=p.builds.filter(q=>q.k==='sam');h+=`<div class="pc-s">Дроны и ПВО</div>`+stat('Дроны на складах',uavN(p)+' / '+uavCap(p)+' · '+Object.keys(DRN).map(k=>DRN[k].n+' '+(u[k]||0)).join(', '))+stat('В воздухе',G.drones.filter(d=>d.st===p.id).length)+stat('ПВО',sams.length?sams.filter(q=>q.done&&q.off<=0).length+' на дежурстве из '+sams.length:'нет');
+  const b=$('hqb');if(h===hqSig)return;hqSig=h;b.innerHTML=h;for(const e of b.querySelectorAll('.fl'))e.replaceWith(flagCanvas(G.states[+e.dataset.st].flag,30,20));
+  for(const e of b.querySelectorAll('[data-peace]'))e.onclick=()=>{askPeace(G.states[+e.dataset.peace]);hqSig=''};
+  for(const e of b.querySelectorAll('[data-fly]'))e.onclick=()=>{const [x,y]=e.dataset.fly.split(',').map(Number);api.flyTo(x,y,4)};
+  for(const e of b.querySelectorAll('[data-army]'))e.onclick=()=>{const a=p.armies[+e.dataset.army];if(!a)return;G.sel={army:a};G.mode=null;panelSig='';updPanel();api.flyTo(a.x,a.y,M.min(api.cam.m,6))}}
+function leftWin(id){const w=$(id),on=!w.classList.contains('show');for(const k of ['orep','hqp','mystate'])$(k).classList.remove('show');if(on)w.classList.add('show');oreSig='';hqSig='';$('msb')._h='';updOres();updHQ();updMyState()}
+// a click on a deposit pin on the map opens its card
+function depAt(sx,sy){if(!G.dep||mapMode==='off')return -1;const m=api.cam.m;if(m>75)return -1;let best=-1,bd=1e9;
+  G.dep.forEach((d,i)=>{if(!d.known)return;if(d.used>=0&&mapMode!=='res'&&m<12)return;const X=api.sxw(d.x),Y=api.syw(d.y),h=mapMode==='res'?33:26;if(sx<X-11||sx>X+11||sy<Y-h||sy>Y+2)return;const e=M.abs(sx-X)+M.abs(sy-Y+h*0.6);if(e<bd){bd=e;best=i}});return best}
+// own buildings as small pennants on the map between the near and the far view (as in DroneFlames), and on the minimap
+const PCOL={factory:'#f2a52a',power:'#ffd050',solar:'#66b2f2',refinery:'#f2a52a',oil:'#2e2f36',gaswell:'#66b2f2',mine:'#a8743c',sawmill:'#7fcc4c',farm:'#7fcc4c',port:'#3a78c8',station:'#d9cfb6',
+  barracks:'#dc523d',sam:'#dc523d',droneport:'#b4bec8',dronefab:'#b4bec8',dramp:'#b4bec8',drwy:'#b4bec8',dstore:'#b4bec8'};
+function drawPennants(ctx,A){const m=A.cam.m,a=smoothst(4,8,m)*smoothst(70,48,m);if(a<=0.02)return;const p=player(),cell=new Set();ctx.save();ctx.globalAlpha=a;
+  for(const q of p.builds){if(!q.done||q.k==='rail'||BLD[q.k].mod)continue;const X=A.sxw(q.x),Y=A.syw(q.y);if(X<-20||Y<-30||X>A.VW+20||Y>A.VH+20)continue;const key=(X/22|0)+','+(Y/22|0);if(cell.has(key))continue;cell.add(key);
+    const s=18,x0=X-s/2,y0=Y-s-6;ctx.fillStyle='#131410';ctx.fillRect(x0-1,y0-1,s+2,s+2);ctx.fillStyle=q.off>0?'#6e2a20':'#2a2b27';ctx.fillRect(x0,y0,s,s);ctx.strokeStyle='#a88c5a';ctx.lineWidth=1;ctx.strokeRect(x0+0.5,y0+0.5,s-1,s-1);
+    ctx.fillStyle='#131410';ctx.beginPath();ctx.moveTo(X-4,y0+s);ctx.lineTo(X+4,y0+s);ctx.lineTo(X,Y-1);ctx.closePath();ctx.fill();ctx.drawImage(bIcon(q.k),x0+2,y0+2,s-4,s-4)}ctx.restore()}
+function drawMiniBuilds(mx,s){const p=player();for(const q of p.builds){if(!q.done||q.k==='rail'||BLD[q.k].mod)continue;const x=q.x*s,y=q.y*s;mx.fillStyle='#131410';mx.fillRect(x-2.5,y-2.5,5,5);mx.fillStyle=PCOL[q.k]||'#fbf3e0';mx.fillRect(x-1.5,y-1.5,3,3)}}
 // ---------- engine hooks
 function ownBuildAt(x,y){for(const q of player().builds){if(!q.done||q.id<0||q.k==='rail')continue;const z=W.zones[q.id];if(z&&!z.dead&&rectHit(z,x,y,1,1))return q}return null}
 function pickArmy(sx,sy){for(const s of G.states){if(!s.isP)continue;for(const a of s.armies){if(!a.units.length)continue;if(M.abs(api.sxw(a.x)-sx)<18&&M.abs(api.syw(a.y)-sy)<14)return a}}
@@ -883,11 +925,12 @@ const hooks={
     const own=ownBuildAt(x,y);
     if(G.mode==='demolish'){if(!own){toast('Здесь нет вашей постройки');return true}toast(`Снести <b>${BLD[own.k].n}</b>${own.k==='station'?' вместе с его путями':own.k==='droneport'?' вместе с модулями':''}? Вернётся ${fmt(BLD[own.k].cost*0.3)}`,'ic-b-demolish',[['Снести',()=>{demolish(player(),own);G.sel=null;panelSig='';updHUD()}],['Отмена',()=>{}]],9000);G.mode=null;updCatalog();return true}
     const a=pickArmy(sx,sy);if(a){G.sel={army:a};G.mode=null;panelSig='';updPanel();onBuilt('assembly',false);return true}
+    if(!G.mode&&!own){const di=depAt(sx,sy);if(di>=0){selDep(di,false);return true}}
     if(own&&!G.mode){G.sel={build:own};panelSig='';updPanel();return true}
     if(G.sel&&G.sel.army&&G.mode==='move'){const ar=G.sel.army;ar.tx=x;ar.ty=y;G.mode=null;panelSig='';return true}
     if(fogOn()&&!seenAt(x,y))return true;if(G.sel){G.sel=null;G.mode=null;panelSig=''}return false},
   key(e){if(!G||document.body.classList.contains('m-settings'))return !!G;if(e.code==='Escape'){if($('confirm').classList.contains('show')){closeConfirm();return true}if(placing){setPlacing(false);return true}if(railDrag){railDrag=null;return true}
-      if(G.build){setBuild(null);return true}if(G.mode||G.sel){G.mode=null;G.sel=null;panelSig='';updPanel();updCatalog();return true}for(const w of ['store','mystate','dip'])if($(w).classList.contains('show')){$(w).classList.remove('show');return true}ui.pause(true);return true}
+      if(G.build){setBuild(null);return true}if(G.mode||G.sel){G.mode=null;G.sel=null;panelSig='';updPanel();updCatalog();return true}for(const w of ['store','mystate','dip','orep','hqp'])if($(w).classList.contains('show')){$(w).classList.remove('show');updOres();return true}ui.pause(true);return true}
     if(G.phase!=='play')return false;if(e.code==='Space'||e.code==='KeyP'){setSpeed(G.speed?0:(G._lastSp||1));e.preventDefault();return true}
     if(e.code==='KeyF'||e.code==='Tab'){const n={1:2,2:4,4:1}[G._lastSp||1];G._lastSp=n;setSpeed(n);e.preventDefault();return true}
     const d=/^Digit([1-7])$/.exec(e.code);if(d){setTab(TABS[+d[1]-1][0],true);return true}return false},
@@ -906,7 +949,7 @@ function initState(c){cfg=c;tutorial=!!c.tutorial;hintsOff=!ui.settings().hints;
   botList().forEach((b,i)=>G.states.push(mkState(i+1,b,false)));
   const p=player();$('hname').textContent=p.name;$('hgov').textContent=p.gov+' · столица '+p.capital;flagCanvas(p.flag,42,28,$('hflag'));flagCanvas(p.flag,54,36,$('msf'));$('msh').textContent=p.gov+' '+p.name;G._lastSp=1;setSpeed(1);updModes();tab='cities';tabSig='';
   document.body.classList.remove('tray-off','sel');$('bb-cat').innerHTML='';$('gpanel').innerHTML='';
-  for(const w of ['over','dip','mystate','store'])$(w).classList.remove('show');$('toasts').innerHTML=''}
+  for(const w of ['over','dip','mystate','store','orep','hqp'])$(w).classList.remove('show');$('toasts').innerHTML='';oreCss();oreSig='';hqSig=''}
 function depOp(){return {f:'addDeposits',q:G.dep.map(d=>[d.k,M.round(d.x),M.round(d.y),M.round(200+ORES[d.k].v*14)])}}
 function newGame(c){initState(c);const MT={normal:'обычная карта',cont:'материки',arch:'архипелаг',islands:'острова'};ui.loading('Создание мира',`Сид ${c.seed} · ${MT[c.map.type]} · рельеф, реки, леса, месторождения`);setTimeout(()=>{boot(null,()=>{ui.loaded();analyse();G.dep=genDeposits();const o=depOp();api.op(o.f,o.q);hint(0);updHUD()});document.body.className='m-game';updHUD()},60)}
 // founding: bots pick their sites, the world is rebuilt with the capitals; land is taken around them
@@ -921,7 +964,7 @@ function found(x,y){closeConfirm();setPlacing(false);const picks=chooseCaps(x,y)
 function snapshot(){const P=player();return {cfg,meta:{date:Date.now(),name:P.name,flag:P.flag,t:G.t,phase:G.phase,day:gameClock(),score:P.score,map:cfg.map.type},
   g:{t:G.t,phase:G.phase,over:G.over,wars:[...G.wars],ops:api?api.ops.slice():[],hint:hintStep,uid:G.uid,rev:[...G.rev],
     states:G.states.map(s=>({res:Object.fromEntries(Object.entries(s.res).map(([k,v])=>[k,v===Infinity?'inf':v])),earned:s.earned,cap:s.cap,grow:s.grow,allies:s.allies,trait:s.trait,dead:s.dead,lostCap:s.lostCap,planI:s.planI,warAfter:s.warAfter,armyN:s.armyN,uav:s.uav,bat:s.bat,
-      places:s.places.map(p=>({k:p.k,id:p.id,x:p.x,y:p.y,grow:p.grow,name:p.name,t0:p.t0})),builds:s.builds.map(q=>({k:q.k,x:q.x,y:q.y,t:q.t,time:q.time,done:q.done,id:q.id,off:q.off,dep:q.dep,failed:q.failed,uid:q.uid,a:q.a,b:q.b,L:q.L,cost:q.cost,port:q.port,queue:q.queue,pt:q.pt,paid:q.paid,up:q.up})),
+      places:s.places.map(p=>({k:p.k,id:p.id,x:p.x,y:p.y,grow:p.grow,name:p.name,t0:p.t0,bq:p.bq})),builds:s.builds.map(q=>({k:q.k,x:q.x,y:q.y,t:q.t,time:q.time,done:q.done,id:q.id,off:q.off,dep:q.dep,failed:q.failed,uid:q.uid,a:q.a,b:q.b,L:q.L,cost:q.cost,port:q.port,queue:q.queue,pt:q.pt,paid:q.paid,up:q.up})),
       armies:s.armies.map(a=>({n:a.n,id:a.id,x:a.x,y:a.y,tpl:a.tpl,units:a.units,tx:a.tx,ty:a.ty,home:s.builds.indexOf(a.home)}))})),
     dep:G.dep.map(d=>[d.k,M.round(d.x),M.round(d.y),d.amt===Infinity?-1:M.round(d.amt),d.max===Infinity?-1:M.round(d.max),d.known?1:0,d.used]),own:own?rle(own):null,expl:expl?rle(expl):null,cam:api?[api.cam.x,api.cam.y,api.cam.m]:null}}}
 function save(auto){if(!G||!cfg||cfg.tutorial&&auto)return false;const ok=Saves.put(cfg.slot||1,snapshot());if(!auto)toast(ok?`Сохранено в ячейку ${cfg.slot||1}`:'Не удалось сохранить: нет места в хранилище браузера',ok?'ic-save':'ic-warn');return ok}
@@ -932,7 +975,7 @@ function load(sv){const c=sv.cfg;initState(c);const g=sv.g;G.t=g.t;G.phase=g.pha
   setTimeout(()=>{const caps=G.phase==='play'?c.caps:null;boot(caps,()=>{ui.loaded();if(g.cam){api.cam.x=g.cam[0];api.cam.y=g.cam[1];api.cam.m=g.cam[2]}},g.ops);document.body.className='m-game';
     analyse();G.dep=g.dep.map(a=>({k:a[0],x:a[1],y:a[2],c:cellOf(a[1],a[2]),amt:a[3]<0?Infinity:a[3],max:a[4]<0?Infinity:a[4],known:!!a[5],used:a[6]===undefined?-1:a[6]}));
     if(G.phase==='play'){own=unrle(g.own,new Uint8Array(N*N));vis=new Uint8Array(N*N);expl=g.expl?unrle(g.expl,new Uint8Array(N*N)):new Uint8Array(N*N);
-      for(const s of G.states){s.cells=0;s.bb=null;s._P=null;s._dirty=true;const ct=W.cities.find(q=>q.cap===s.id);s.cityId=ct?ct.id:-1;s.growQ=-1;syncGrow(s);for(const p of s.places)if(p.k==='city')syncPlace(p)}
+      for(const s of G.states){s.cells=0;s.bb=null;s._P=null;s._dirty=true;const ct=W.cities.find(q=>q.cap===s.id);s.cityId=ct?ct.id:-1;s.growQ=-1;syncGrow(s);for(const p of s.places)if(p.k!=='capital'&&p.grow<1)syncPlace(p)}
       for(let k=0;k<N*N;k++)if(own[k]){const s=G.states[own[k]-1],i=k%N,j=(k/N)|0;s.cells++;const b=s.bb||(s.bb=[i,j,i,j]);if(i<b[0])b[0]=i;if(j<b[1])b[1]=j;if(i>b[2])b[2]=i;if(j>b[3])b[3]=j}
       updPop();dirtyPol=true;dirtyFog=true;hint(g.hint>=2?g.hint:2)}else hint(0);
     if(G.over)setSpeed(0);updHUD()},60)}
@@ -943,7 +986,8 @@ function wire(u){ui=u;
   $('cfy').onclick=()=>{if(askFn){const f=askFn;closeConfirm();f();return}if(pend)found(pend.x,pend.y)};$('cfn').onclick=()=>closeConfirm();
   $('hintx').onclick=()=>hideHint();$('plan').onclick=()=>{if($('hint').classList.contains('show'))hideHint();else hint(hintStep,true)};
   $('dipx').onclick=()=>$('dip').classList.remove('show');$('msx').onclick=()=>$('mystate').classList.remove('show');$('stx').onclick=()=>$('store').classList.remove('show');
-  $('hstate').onclick=()=>{if(!G||G.phase!=='play')return;$('mystate').classList.toggle('show');$('msb')._h='';updMyState()};
+  $('hstate').onclick=()=>{if(!G||G.phase!=='play')return;leftWin('mystate')};$('b-hq').onclick=()=>leftWin('hqp');$('b-ores').onclick=()=>leftWin('orep');
+  $('orex').onclick=()=>leftWin('orep');$('hqx').onclick=()=>{$('hqp').classList.remove('show');updOres()};
   $('hres').onclick=()=>{if(!G)return;$('store').classList.toggle('show');$('stb')._h='';updStore()};
   $('a-found').onclick=()=>{if(G&&G.phase==='found')setPlacing(!placing)};$('a-found-x').onclick=()=>setPlacing(false);
   $('bmenu').onclick=()=>ui.pause(true);

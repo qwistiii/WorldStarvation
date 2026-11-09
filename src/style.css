@@ -169,10 +169,10 @@ input,select{border-radius:var(--r);background:#0b0f14;border-color:var(--line2)
   --rivg:linear-gradient(var(--rg),var(--rg)) 0 0/2px 2px no-repeat,linear-gradient(var(--rg),var(--rg)) 100% 0/2px 2px no-repeat,linear-gradient(var(--rg),var(--rg)) 0 100%/2px 2px no-repeat,linear-gradient(var(--rg),var(--rg)) 100% 100%/2px 2px no-repeat;
   --key:linear-gradient(var(--o2),var(--o2))}
 /* the HUD scales with the window (--z from ui.js: the window height and width × «Масштаб интерфейса»), as the UI of DroneFlames does */
-#hud,#topcol,#plan,#found,#bbar,#ktip,#mystate,#store,#dip,#confirm,.pause-win,.over-win,body.m-game #bl,body.m-game #insp{zoom:var(--z,1)}
+#hud,#topcol,#plan,#found,#lrail,#orep,#hqp,#bbar,#ktip,#mystate,#store,#dip,#confirm,.pause-win,.over-win,body.m-game #bl,body.m-game #insp{zoom:var(--z,1)}
 .gm{display:none}
 body.m-game #hud,body.m-game #topcol,body.m-game #bbar,body.m-game #toasts{display:flex}
-body.m-game.ph-found #found,body.m-game.ph-play #plan{display:flex}
+body.m-game.ph-found #found,body.m-game.ph-play #plan,body.m-game.ph-play #lrail{display:flex}
 .ol{font-family:var(--df);color:var(--tx)}
 .ol button{font-family:var(--df);color:var(--tx);transition:none}
 .ol .ic,.ol .ri{display:inline-block;flex:none}
@@ -240,16 +240,16 @@ button.sl:hover{background:#34352f;border-color:var(--k0)}
 .bb-tabs button b{font:700 10.5px/1.1 var(--df);text-transform:uppercase;letter-spacing:.04em;text-shadow:var(--tsh);white-space:nowrap;overflow:hidden;max-width:100%}
 .bb-tabs button i{position:absolute;left:2px;top:-1px;font:800 10.5px var(--df);font-style:normal;color:var(--tgo);text-shadow:var(--tsh)}
 .bb-tabs button.pulse:after{animation:tpulse 1.2s ease-in-out infinite}@keyframes tpulse{50%{filter:brightness(1.4) sepia(.5)}}
-.bb-tray{position:relative;display:flex;align-items:flex-start;gap:5px;padding:14px 6px 7px;background:var(--o4);border-top:1px solid var(--o0);box-shadow:inset 0 1px 0 var(--o7);flex:none}
+.bb-tray{position:relative;display:flex;align-items:flex-start;gap:5px;padding:11px 6px 5px;background:var(--o4);border-top:1px solid var(--o0);box-shadow:inset 0 1px 0 var(--o7);flex:none}
 .bb-tray:before{content:'';position:absolute;left:0;right:0;top:2px;height:8px;background:var(--key) 0 0/12px 8px repeat-x;box-shadow:0 1px 0 var(--o1);pointer-events:none}
 body.tray-off .bb-tray,body.sel .bb-tray{display:none}
-.bb-keys{display:flex;gap:3px;flex:none}
+.bb-keys{display:flex;gap:3px;flex:none;padding-top:0}
 #bspd{position:absolute;right:3px;bottom:2px;font:800 11px var(--df);font-style:normal;color:var(--tgo);text-shadow:var(--tsh);z-index:1}
 .bb-div{flex:none;width:6px;align-self:stretch;margin:0 1px;border:1px solid var(--o0);
   background:linear-gradient(var(--rv),var(--rv)) 50% 1px/2px 3px no-repeat,linear-gradient(var(--rv),var(--rv)) 50% calc(100% - 1px)/2px 3px no-repeat,repeating-linear-gradient(180deg,var(--o1) 0 4px,var(--o5) 4px 6px) 50% 0/2px 100% no-repeat,var(--o3)}
 .bb-arr{flex:none;width:22px;height:48px;padding:0;border:1px solid var(--k0);border-radius:0;background:var(--k1);box-shadow:var(--brass),inset 0 0 0 3px var(--k0);font:800 16px var(--df);text-shadow:var(--tsh)}
 .bb-arr:hover{background:#34352f;border-color:var(--k0)}
-#bb-cat{flex:1;min-width:0;display:flex;gap:3px;overflow-x:auto;scroll-behavior:smooth;scrollbar-width:none;min-height:74px}#bb-cat::-webkit-scrollbar{display:none}
+#bb-cat{flex:1;min-width:0;display:flex;gap:3px;overflow-x:auto;scroll-behavior:smooth;scrollbar-width:none;min-height:74px;padding:3px 3px 2px;margin:-3px 0 -2px}#bb-cat::-webkit-scrollbar{display:none}
 .bb-note{align-self:center;padding:0 14px;font:700 11px var(--df);text-transform:uppercase;color:var(--tm);text-shadow:var(--tsh)}
 
 /* ---- the card of a selected building or army: in place of the panel, above the tabs */
@@ -351,7 +351,7 @@ body.sel #gpanel{display:flex}
 .ol .note{font:500 11px/1.45 var(--df);color:var(--tm);text-shadow:0 1px 0 var(--to)}
 .side-win{position:fixed;z-index:6;width:360px;max-height:calc(100% - var(--bbh) / var(--z,1) - 104px)}.side-win.show{display:flex}
 #dip{right:6px;top:92px}
-#mystate{left:6px;top:92px;width:320px}
+#mystate{left:84px;top:92px;width:320px}#hqp{left:84px;top:92px;width:360px}
 #store{left:50%;top:90px;width:340px;transform:translateX(-50%);z-index:7}
 .ol .pc-s{margin:10px 0 3px}
 .dst{display:grid;grid-template-columns:38px 1fr auto;gap:10px;align-items:center;padding:8px 2px;border-bottom:1px solid rgba(29,29,21,0.5)}
@@ -386,3 +386,23 @@ body.m-game #insp button{font:800 10.5px var(--df);text-transform:uppercase;colo
 @media (max-width:1180px){#hres{gap:8px;padding:0 9px}#hres small{display:none}.hb-n small{display:none}#hrace{display:none}}
 @media (max-width:980px){#hres #rwood,#hres #roil{display:none}.bb-tabs button b{font-size:9px;letter-spacing:0}body.m-game #mini{width:130px;height:130px}}
 @media (max-width:760px){#hres #rfuel,#hres #rpop,#hres .st{display:none}.hb-n b{max-width:120px}.bb-tabs button b{display:none}#glimit{display:none}}
+
+/* ---- stage 5.9: the left rail (ШТАБ, ЗАЛЕЖИ) and the panel of free deposits, as in DroneFlames */
+#lrail{position:fixed;left:6px;top:92px;z-index:5;flex-direction:column;gap:6px;padding:7px 5px;border:1px solid var(--k0);background:var(--riv),var(--sla);box-shadow:var(--brass),0 3px 0 rgba(0,0,0,0.3)}
+#lrail .bcat{width:62px}#lrail .bcat.on .sl{border-color:var(--d0)}
+#orep{position:fixed;left:84px;top:92px;z-index:6;width:300px;max-height:calc(100% - var(--bbh) / var(--z,1) - 104px);flex-direction:column;gap:6px;padding:8px;border:1px solid var(--k0);background:var(--riv),var(--sla);box-shadow:var(--brass),0 4px 0 rgba(0,0,0,0.3)}
+#orep.show{display:flex}
+.op-h{display:flex;align-items:center;gap:8px}.op-h b{flex:1;font:800 12px var(--df);text-transform:uppercase;color:var(--tt);text-shadow:var(--tsh)}
+.op-f{display:flex;flex-wrap:wrap;gap:3px}
+.op-f button{display:flex;align-items:center;gap:3px;padding:3px 6px 3px 3px;border:1px solid var(--o0);border-radius:0;background:var(--o5);font:800 9.5px var(--df);text-transform:uppercase;text-shadow:var(--tsh);box-shadow:inset 1px 1px 0 var(--o7),inset -1px -1px 0 var(--o3)}
+.op-f button.on{background:var(--d1);border-color:var(--d0);box-shadow:inset 1px 1px 0 var(--d4),inset -1px -1px 0 var(--d5)}.op-f button:hover{border-color:var(--o0)}
+.op-f .ic{width:14px;height:17px}
+.op-l{display:flex;flex-direction:column;gap:3px;overflow:auto;scrollbar-width:thin;min-height:40px}
+.op-l button{display:flex;align-items:center;gap:7px;text-align:left;padding:4px 8px 4px 4px;border:1px solid var(--o0);border-radius:0;background:var(--o4);font:700 11px var(--df);text-shadow:0 1px 0 var(--to);box-shadow:inset 1px 1px 0 var(--o6),inset -1px -1px 0 var(--o2)}
+.op-l button:hover{background:#666b4c;border-color:var(--o0)}.op-l button.on{background:#6e3a2c}
+.op-l .ic{width:22px;height:27px}.op-l b{font-weight:800;text-transform:uppercase}.op-l small{margin-left:auto;color:var(--tgo);font:700 10px var(--df);white-space:nowrap}
+.op-l p{margin:4px 2px;font:500 11px/1.4 var(--df);color:var(--tm)}
+.hq-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(29,29,21,0.45);font:600 11px var(--df)}
+.hq-row canvas{width:30px;height:20px;box-shadow:0 0 0 1px var(--o0)}.hq-row .ic{width:22px;height:22px}.hq-row span{flex:1;min-width:0}.hq-row small{display:block;color:var(--tm);font:500 10px var(--df)}
+.hq-row .btn{flex:none}
+.pc-h>.sl .ic[class*="ic-o-"]{width:28px;height:35px}

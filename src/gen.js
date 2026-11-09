@@ -253,12 +253,21 @@ function pickType(c,dn,R){const r=R();
   return pickW(r,[4,72,8,8,5,5,7,4,3,3,16,3,13,5])}
 function buildVillage(c){
   const R=rng(c.seed^0x99);c.ang=R()*PI;c.ca=M.cos(c.ang);c.sa=M.sin(c.ang);c.vst=[];
-  const mk=(ang,len)=>{const ca=M.cos(ang),sa=M.sin(ang);let best=null,cur=null;const n=20;
-    for(let k=0;k<=n;k++){const t=-len+2*len*k/n;const x=c.x+ca*t,y=c.y+sa*t;const okk=landE(x,y,0.004)>=0;
+  const mk=(ang,len,ox,oy)=>{const ca=M.cos(ang),sa=M.sin(ang);let best=null,cur=null;const n=20;const X=ox===undefined?c.x:ox,Y=oy===undefined?c.y:oy;
+    for(let k=0;k<=n;k++){const t=-len+2*len*k/n;const x=X+ca*t,y=Y+sa*t;const okk=landE(x,y,0.004)>=0;
       if(okk){if(!cur)cur=[t,t];cur[1]=t}else{if(cur&&(!best||cur[1]-cur[0]>best[1]-best[0]))best=cur;cur=null}}
     if(cur&&(!best||cur[1]-cur[0]>best[1]-best[0]))best=cur;
-    if(best&&best[1]-best[0]>80){const s={x0:c.x+ca*best[0],y0:c.y+sa*best[0],x1:c.x+ca*best[1],y1:c.y+sa*best[1],ca,sa,L:best[1]-best[0]};c.vst.push(s);
+    if(best&&best[1]-best[0]>80){const s={x0:X+ca*best[0],y0:Y+sa*best[0],x1:X+ca*best[1],y1:Y+sa*best[1],ca,sa,L:best[1]-best[0]};c.vst.push(s);
       s.r=mkRoad(4,[s.x0,s.y0,s.x1,s.y1]);}};
+  // villages founded in the game (stage 5.9) get one of several layouts and their own plot rhythm
+  if(c.dyn){const L=c.R,a=c.ang,px=-c.sa,py=c.ca,t=R()*6|0;c.vsp=0.8+R()*0.6;c.vlay=t;
+    if(t===0)mk(a,L*1.25);
+    else if(t===1){mk(a,L*1.05);mk(a+PI/2,L*0.85)}
+    else if(t===2){mk(a,L*1.05);mk(a+PI/2,L*0.45,c.x+px*L*0.45,c.y+py*L*0.45)}
+    else if(t===3){mk(a,L*0.95);mk(a+0.62,L*0.8)}
+    else if(t===4){mk(a,L*0.95,c.x+px*L*0.28,c.y+py*L*0.28);mk(a,L*0.8,c.x-px*L*0.28,c.y-py*L*0.28);mk(a+PI/2,L*0.32)}
+    else{mk(a,L*0.7,c.x-c.ca*L*0.35,c.y-c.sa*L*0.35);mk(a+PI/2,L*0.7,c.x+c.ca*L*0.35+px*L*0.35,c.y+c.sa*L*0.35+py*L*0.35)}
+    return}
   mk(c.ang,c.R*1.1);if(R()<0.6)mk(c.ang+PI/2+(R()-0.5)*0.4,c.R*0.75);
   if(c.R>280&&R()<0.5){const o=(R()<0.5?1:-1)*c.R*0.45;const ox=-c.sa*o,oy=c.ca*o;const cc={x:c.x+ox,y:c.y+oy};const sv=c.x;c.x=cc.x;c.y=cc.y;mk(c.ang,c.R*0.7);c.x=sv;c.y-=oy;}
 }
@@ -1600,10 +1609,11 @@ function genBlock(c,bi,bj,t){
 function obbOver(a,b){for(const [ux,uy] of [[a[4],a[5]],[-a[5],a[4]],[b[4],b[5]],[-b[5],b[4]]]){const pa=a[2]*M.abs(ux*a[4]+uy*a[5])+a[3]*M.abs(-ux*a[5]+uy*a[4]),pb=b[2]*M.abs(ux*b[4]+uy*b[5])+b[3]*M.abs(-ux*b[5]+uy*b[4]);
   if(M.abs((b[0]-a[0])*ux+(b[1]-a[1])*uy)>=pa+pb)return false}return true}
 // plots of a village street in world space (for the streets that are laid out after it)
-function vPlots(c,sj){const s=c.vst[sj],out=[];for(const p of genVillage(c,sj))if(p.k==='g'){const lx=p.x+p.w/2,ly=p.y+p.h/2;out.push([s.x0+lx*s.ca-ly*s.sa,s.y0+lx*s.sa+ly*s.ca,p.w/2,p.h/2,s.ca,s.sa])}return out}
-function genVillage(c,si){
-  const s=c.vst[si];const R=rng(hh(c.id,si,71));const P=[],O=[];const OP=[];for(let sj=0;sj<si;sj++)for(const q of vPlots(c,sj))OP.push(q);
-  for(let a=12;a<s.L-12;a+=26+R()*12){for(const side of [-1,1]){if(R()<0.16)continue;
+function vPlots(c,sj){const s=c.vst[sj],out=[];for(const p of genVillage(c,sj,true))if(p.k==='g'){const lx=p.x+p.w/2,ly=p.y+p.h/2;out.push([s.x0+lx*s.ca-ly*s.sa,s.y0+lx*s.sa+ly*s.ca,p.w/2,p.h/2,s.ca,s.sa])}return out}
+function genVillage(c,si,full){
+  if(!full&&GROW.has(c.id)){const g=GROW.get(c.id),s=c.vst[si],h=s.L/2;return genVillage(c,si,true).filter(p=>{const px=(p.x||0)+(p.w||0)/2;return M.abs(px-h)<=h*g+3})}
+  const s=c.vst[si];const R=rng(hh(c.id,si,71));const P=[],O=[];const OP=[];for(let sj=0;sj<si;sj++)for(const q of vPlots(c,sj))OP.push(q);const sp=c.vsp||1;
+  for(let a=12;a<s.L-12;a+=(26+R()*12)*sp){for(const side of [-1,1]){if(R()<0.16)continue;
     const Rl=R;const lw=24+Rl()*4,ld=36+Rl()*26;const ly=side>0?5:-5-ld;
     const wx=s.x0+s.ca*a-s.sa*(side*(5+ld/2)),wy=s.y0+s.sa*a+s.ca*(side*(5+ld/2));if(landE(wx,wy,0.002)<0||wetArea(s.x0,s.y0,s.ca,s.sa,a-lw/2,ly,a+lw/2,ly+ld,14,0.001))continue;
     let inZ=false;for(const z of zones){if(M.hypot(z.x-wx,z.y-wy)<z.rad){inZ=true;break}}if(inZ)continue;
@@ -2325,7 +2335,7 @@ function lightFeat(ctx,f,x0,y0,s,mpp,qx0,qy0,qx1,qy1){
     if(f.type===0){if(mpp>9){ctx.setTransform(s,0,0,s,-x0*s,-y0*s);fdot(ctx,'warm',f.x,f.y,f.R*1.5,M.min(0.35,0.1+mpp*0.002))}
       for(let i=0;i<f.vst.length;i++){const st=f.vst[i];setFrame(ctx,st.x0,st.y0,st.ca,st.sa,x0,y0,s);
         if(mpp>9){const R=rng(hh(f.id,i,72));for(let a=12;a<st.L-12;a+=30){for(const sd of [-1,1]){if(R()<0.35)continue;fdot(ctx,'win',a,sd*12,8,0.7)}if(R()<0.4)fdot(ctx,'warm',a,0,11,0.45)}continue}
-        const vk='v'+f.id+'_'+i+(LITE2?'b':LITE?'a':'');let P=bcGet(vk);if(!P){P=genVillage(f,i);bcSet(vk,P)}drawLightPrims(ctx,P,mpp,false);
+        const vk='v'+f.id+'_'+i+(LITE2?'b':LITE?'a':'')+(GROW.has(f.id)?'g'+GROW.get(f.id).toFixed(2):'');let P=bcGet(vk);if(!P){P=genVillage(f,i);bcSet(vk,P)}drawLightPrims(ctx,P,mpp,false);
         for(let a=20;a<st.L;a+=80)fdot(ctx,'warm',a,4,11,0.5)}return}
     const BD=f.D-1;const [i0,i1,j0,j1]=blkRange(f,qx0,qy0,qx1,qy1);
     const bi0=M.max(0,bsr(f.us,i0)),bi1=M.min(BD-1,bsr(f.us,i1)),bj0=M.max(0,bsr(f.vs,j0)),bj1=M.min(BD-1,bsr(f.vs,j1));
@@ -2464,7 +2474,7 @@ function grain(ctx,x0,y0,mpp,vec){if(!vec&&!SPLIT)return;
     const m=(1+g)*SHD[o>>2];d[o]*=m;d[o+1]*=m;d[o+2]*=m}}
   ctx.putImageData(img,0,0)}
 function drawFeat(ctx,f,pass,x0,y0,s,mpp,qx0,qy0,qx1,qy1){
-  if(f.kind==='city'){if(f.type===0){if(mpp>9)return;for(let i=0;i<f.vst.length;i++){const st=f.vst[i];setFrame(ctx,st.x0,st.y0,st.ca,st.sa,x0,y0,s);const vk='v'+f.id+'_'+i+(LITE2?'b':LITE?'a':'');let P=bcGet(vk);if(!P){P=genVillage(f,i);bcSet(vk,P)}
+  if(f.kind==='city'){if(f.type===0){if(mpp>9)return;for(let i=0;i<f.vst.length;i++){const st=f.vst[i];setFrame(ctx,st.x0,st.y0,st.ca,st.sa,x0,y0,s);const vk='v'+f.id+'_'+i+(LITE2?'b':LITE?'a':'')+(GROW.has(f.id)?'g'+GROW.get(f.id).toFixed(2):'');let P=bcGet(vk);if(!P){P=genVillage(f,i);bcSet(vk,P)}
         if(pass===1){ctx.beginPath();drawPrims(ctx,P,1,mpp);ctx.fillStyle=SHADOW;ctx.fill()}else drawPrims(ctx,P,pass,mpp)}return}
     const N=f.N,BD=f.D-1;const [i0,i1,j0,j1]=blkRange(f,qx0,qy0,qx1,qy1);
     const bi0=M.max(0,bsr(f.us,i0)),bi1=M.min(BD-1,bsr(f.us,i1)),bj0=M.max(0,bsr(f.vs,j0)),bj1=M.min(BD-1,bsr(f.vs,j1));

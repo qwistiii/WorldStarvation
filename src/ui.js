@@ -2,7 +2,7 @@
 (function(){
 'use strict';
 const $=id=>document.getElementById(id);
-const VERSION='5.8';
+const VERSION='5.9';
 let bg=null,C=null,prevWorker=null,prevId=0,prevT=0,setFrom=null,paused=null;
 
 // ---------------------------------------------------------------- settings
@@ -135,6 +135,8 @@ function paintIcons(){const css=[];
   css.push(icon('save',x=>{col(x,IC.b2);x.fillRect(8,8,48,48);col(x,IC.w);x.fillRect(18,8,26,16);col(x,IC.s);x.fillRect(16,34,32,22);col(x,IC.b2);x.fillRect(36,11,5,10)}));
   css.push(icon('move',x=>{col(x,IC.g);x.beginPath();x.moveTo(6,26);x.lineTo(34,26);x.lineTo(34,12);x.lineTo(58,32);x.lineTo(34,52);x.lineTo(34,38);x.lineTo(6,38);x.closePath();x.fill()}));
   css.push(icon('net',x=>{col(x,IC.s);x.lineWidth=3;for(let i=0;i<5;i++){x.beginPath();x.moveTo(8+i*12,8);x.lineTo(8+i*12,56);x.stroke();x.beginPath();x.moveTo(8,8+i*12);x.lineTo(56,8+i*12);x.stroke()}col(x,IC.r);x.fillRect(26,26,12,12)}));
+  css.push(icon('hq',x=>{col(x,IC.w2);x.beginPath();x.moveTo(6,14);x.lineTo(22,8);x.lineTo(42,14);x.lineTo(58,8);x.lineTo(58,50);x.lineTo(42,56);x.lineTo(22,50);x.lineTo(6,56);x.closePath();x.fill();col(x,IC.g);x.beginPath();x.moveTo(10,20);x.lineTo(20,16);x.lineTo(26,30);x.lineTo(14,40);x.lineTo(10,38);x.closePath();x.fill();
+    col(x,IC.r);x.lineWidth=4;x.beginPath();x.moveTo(16,46);x.quadraticCurveTo(28,24,44,26);x.stroke();x.beginPath();x.moveTo(50,26);x.lineTo(41,19);x.lineTo(42,33);x.closePath();x.fill();col(x,IC.b2);x.beginPath();x.arc(46,42,4,0,P2);x.fill()}));
   css.push(icon('con',x=>{for(const [bx,by] of [[6,36],[32,36],[19,14]]){col(x,'#c3c6c9');x.fillRect(bx,by,26,20);col(x,'#8e9296');x.fillRect(bx,by+16,26,4);x.fillRect(bx+20,by,6,20)}}));
   // the key (meander) band of the DroneFlames panels: one hook per 12 px, drawn at 3× for a zoomed HUD
   {const K=3,c=document.createElement('canvas');c.width=12*K;c.height=8*K;const x=c.getContext('2d');x.fillStyle='#3e412d';x.fillRect(0,0,c.width,c.height);x.fillStyle='#70764f';
