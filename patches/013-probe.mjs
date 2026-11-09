@@ -1,0 +1,10 @@
+import fs from 'fs';
+const out = [];
+const dump = (f, a, b) => { const L = fs.readFileSync(f, 'utf8').split('\n'); out.push('=== ' + f + ' ' + a + '-' + b + ' of ' + L.length); for (let i = a; i <= b && i <= L.length; i++) out.push(i + ': ' + L[i - 1]); };
+const grep = (f, re) => { const L = fs.readFileSync(f, 'utf8').split('\n'); out.push('=== grep ' + f + ' ' + re); L.forEach((l, i) => { if (re.test(l)) out.push((i + 1) + ': ' + l.slice(0, 300)); }); };
+dump('src/main.js', 1, 39);
+grep('src/main.js', /mainRender|NW=|NW =|ready/);
+grep('src/game.js', /flyTo|addPlace/);
+grep('tests/perf-capital.mjs', /cpu|goto|launch|args/);
+fs.mkdirSync('docs/probe', { recursive: true });
+fs.writeFileSync('docs/probe/p013.txt', out.join('\n'));
