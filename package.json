@@ -1,6 +1,6 @@
 {
   "name": "world-starvation",
-  "version": "5.8.0",
+  "version": "5.9.0",
   "description": "World Starvation — браузерная стратегия на процедурном мире (вид сверху, Canvas 2D + Web Workers)",
   "private": true,
   "type": "module",
@@ -8,7 +8,7 @@
     "start": "node tools/serve.mjs",
     "build": "node tools/build.mjs",
     "test": "node --test tests/gen.test.mjs tests/geometry.test.mjs tests/game.test.mjs tests/stage57.test.mjs",
-    "test:browser": "node tools/build.mjs && node tests/smoke.mjs && node tests/visual.mjs && node tests/game.mjs && node tests/game57.mjs && node tests/game58.mjs"
+    "test:browser": "node tools/build.mjs && node tests/smoke.mjs && node tests/visual.mjs && node tests/game.mjs && node tests/game57.mjs && node tests/game58.mjs && node tests/game59.mjs"
   },
   "engines": {
     "node": ">=18"

@@ -65,7 +65,7 @@ try {
   await page.mouse.move(vs[0], vs[1]); await page.waitForTimeout(150); await page.mouse.click(vs[0], vs[1]); await page.waitForTimeout(500);
   check(await page.evaluate(() => Game.G.states[0].builds.some((q) => q.k === 'village')), 'село строится');
   await page.evaluate(() => Game.setSpeed(4));
-  await page.waitForFunction(() => Game.G.states[0].places.some((p) => p.k === 'village'), null, { timeout: 20000 }).catch(() => {});
+  await page.waitForFunction(() => Game.G.states[0].builds.some((q) => q.k === 'village' && q.done), null, { timeout: 20000 }).catch(() => {});
   check(await page.evaluate(() => { const p = Game.G.states[0].places.find((q) => q.k === 'village'); return !!p && Game.api.W.cities[p.id].dyn && /Колхоз/.test(document.getElementById('hintt').textContent); }), 'село построено в мире, подсказка «Колхоз»');
   const st2 = await page.evaluate(() => Game.G.states.map((s) => s.cells));
   check(st2[0] > st[0].cells, 'у села появилась своя земля', st2.join(','));
