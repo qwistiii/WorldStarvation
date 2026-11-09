@@ -22,22 +22,27 @@
 <canvas id="mini" width="256" height="256"></canvas>
 
 <!-- ======================================================= main menu -->
-<div id="menu" class="screen">
- <div class="mm-side">
-  <div class="logo"><div class="logo-mark"></div><div><div class="logo-t">WORLD<br>STARVATION</div><div class="logo-s">Глобальная стратегия · наше время</div></div></div>
+<div id="menu" class="screen df">
+ <div class="mm-c">
+  <canvas id="mm-logo" width="800" height="300" aria-label="World Starvation"></canvas>
+  <div class="mm-tag">Этап 5 · стратегия наших дней</div>
   <nav class="mm-nav">
-   <button class="mm-b" data-go="new"><span class="ic ic-new"></span><b>Новая игра</b><small>Своя страна, свой мир, свои правила</small></button>
-   <button class="mm-b" data-go="continue" id="mm-cont"><span class="ic ic-cont"></span><b>Продолжить</b><small id="mm-cont-s">—</small></button>
-   <button class="mm-b" data-go="tutorial"><span class="ic ic-tut"></span><b>Обучение</b><small>Пошаговые подсказки на небольшой карте</small></button>
-   <button class="mm-b" data-go="settings"><span class="ic ic-set"></span><b>Настройки</b><small>Графика, интерфейс, сохранения</small></button>
+   <button class="mm-b mm-play" data-go="new" title="Своя страна, свой мир, свои правила"><span class="ic ic-new"></span><b>Новая игра</b></button>
+   <button class="mm-b mm-cont" data-go="continue" id="mm-cont"><span class="ic ic-cont"></span><b>Продолжить</b><small id="mm-cont-s">—</small></button>
+   <div class="mm-row">
+    <button class="mm-b mm-sm" data-go="tutorial" title="Пошаговые подсказки на небольшой карте"><span class="ic ic-tut"></span><b>Обучение</b></button>
+    <button class="mm-b mm-sm" data-go="settings" title="Графика, интерфейс, сохранения"><span class="ic ic-set"></span><b>Настройки</b></button>
+   </div>
   </nav>
-  <div class="mm-foot">Этап 5 · <span id="mm-ver"></span></div>
  </div>
+ <div class="mm-foot">World Starvation · <span id="mm-ver"></span></div>
+ <button class="mm-news" id="mm-news"><i>i</i><b>Что нового</b></button>
+ <div id="news" class="ol win news-win"><div class="win-h"><h3>Что нового</h3><button class="xb" id="newsx" title="Закрыть">✕</button></div><div class="win-b" id="newsb"></div></div>
 </div>
 
 <!-- ======================================================= new game setup -->
 <div id="setup" class="screen">
- <div class="win setup-win">
+ <div class="win setup-win ol">
   <div class="win-h"><button class="btn ghost" data-back>← Меню</button><h2>Новая игра</h2><div class="tabs" id="stabs"></div></div>
   <div class="win-b" id="spages">
    <!-- country -->
@@ -126,7 +131,7 @@
 
 <!-- ======================================================= settings -->
 <div id="settings" class="screen">
- <div class="win set-win">
+ <div class="win set-win ol">
   <div class="win-h"><button class="btn ghost" data-back>← Назад</button><h2>Настройки</h2></div>
   <div class="win-b" id="setb"></div>
  </div>

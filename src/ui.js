@@ -165,8 +165,30 @@ function swatches(el,list,val,on,custom){el.innerHTML='';for(const c of list){co
   function set(c){for(const q of el.children)q.classList.toggle('on',q.title===c||(q.classList.contains('cust')&&!list.includes(c)))}}
 function rnd(){return Math.random()}
 
-// ---------------------------------------------------------------- main menu
-function showMenu(){document.body.className='m-menu';
+// ---------------------------------------------------------------- main menu (stage 5.11: laid out as in DroneFlames)
+// the logo: chunky Rubik Black letters with a dark outline and drop, an orange-to-yellow fill with a light top band
+// and pixel rows, a wheat ear and a drone over the title — drawn in Canvas when the font is ready
+function drawLogo(cv){const x=cv.getContext('2d'),W=cv.width,H=cv.height;x.clearRect(0,0,W,H);
+  const word=(t,y,size,track)=>{x.font=`900 ${size}px Rubik, system-ui, sans-serif`;x.textBaseline='alphabetic';const ch=[...t],w=ch.map(c=>x.measureText(c).width),tot=w.reduce((a,b)=>a+b,0)+track*(ch.length-1);
+    let cx=W/2-tot/2;const P=ch.map((c,i)=>{const p=cx;cx+=w[i]+track;return p});
+    const each=f=>ch.forEach((c,i)=>f(c,P[i]));
+    x.fillStyle='#160a04';each((c,p)=>x.fillText(c,p+2,y+size*0.1));x.lineJoin='round';x.strokeStyle='#160a04';x.lineWidth=size*0.2;each((c,p)=>x.strokeText(c,p,y));
+    const L=document.createElement('canvas');L.width=W;L.height=H;const l=L.getContext('2d');l.font=x.font;l.textBaseline='alphabetic';
+    const g=l.createLinearGradient(0,y-size*0.75,0,y+size*0.02);g.addColorStop(0,'#fff09a');g.addColorStop(0.3,'#ffc63a');g.addColorStop(0.62,'#f58a1c');g.addColorStop(1,'#b8380c');l.fillStyle=g;ch.forEach((c,i)=>l.fillText(c,P[i],y));
+    l.globalCompositeOperation='source-atop';l.fillStyle='rgba(255,255,235,0.42)';l.fillRect(0,y-size*0.75,W,size*0.13);l.fillStyle='rgba(90,20,0,0.16)';for(let q=y-size*0.4;q<y;q+=4)l.fillRect(0,q,W,2);
+    l.globalCompositeOperation='source-over';x.drawImage(L,0,0);x.strokeStyle='rgba(60,16,0,0.55)';x.lineWidth=2;each((c,p)=>x.strokeText(c,p,y))};
+  word('WORLD',128,124,6);word('STARVATION',262,102,2);
+  // wheat ear (left) and a quadcopter (right) above the first word
+  x.save();x.translate(W*0.1,64);x.rotate(-0.35);x.lineWidth=5;x.strokeStyle='#160a04';x.beginPath();x.moveTo(0,46);x.lineTo(0,-30);x.stroke();x.lineWidth=2.4;x.strokeStyle='#ffd24a';x.beginPath();x.moveTo(0,46);x.lineTo(0,-30);x.stroke();
+  for(let i=0;i<5;i++)for(const sd of [-1,1]){x.save();x.translate(0,-22+i*12);x.rotate(sd*0.55);x.fillStyle='#160a04';x.beginPath();x.ellipse(sd*8,0,10,5.6,0,0,P2);x.fill();x.fillStyle=i%2?'#ffcf3c':'#f2a52a';x.beginPath();x.ellipse(sd*8,0,8,4,0,0,P2);x.fill();x.restore()}x.restore();
+  x.save();x.translate(W*0.9,50);const arm=(a)=>{x.save();x.rotate(a);x.fillStyle='#160a04';x.fillRect(-2,-30,4,30);x.beginPath();x.ellipse(0,-30,15,5,0,0,P2);x.fill();x.fillStyle='#e5743a';x.beginPath();x.ellipse(0,-30,12,3,0,0,P2);x.fill();x.restore()};
+  for(const a of [0.8,-0.8,2.35,-2.35])arm(a);x.fillStyle='#160a04';x.fillRect(-14,-9,28,18);x.fillStyle='#f2a52a';x.fillRect(-11,-6,22,12);x.fillStyle='#ffe36a';x.fillRect(-11,-6,22,4);x.restore()}
+function logoReady(){const cv=$('mm-logo');if(!cv)return;drawLogo(cv);if(document.fonts&&document.fonts.load)document.fonts.load('900 100px Rubik').then(()=>drawLogo(cv)).catch(()=>{})}
+// «Что нового»: the changes of the latest stages (newest first)
+const NEWS=[['5.11',['Города растут по-разному: кольца и лучи вокруг площади, веер от площади, прямая сетка с диагональными бульварами, изогнутые и «старые» сетки; суперкварталы, микрорайоны, площади и скверы','Аэропорт: самолёты летают по рейсам — пассажирские в свои аэропорты и в страны с безвизом, грузовые — свои и на экспорт','Безвизовый режим в «Дипломатии»; война его отменяет','Железная дорога сама огибает города, постройки, горы и воду','Детали на площадках всех построек: склады, техника, грузы, стада, кучи руды','Пашня плавно переходит в лес через опушку; свет фонарей без пятен на перекрёстках','Главное меню, настройки и новая игра — в стиле DroneFlames']],
+  ['5.10',['Облака снова в полном разрешении, FPS у облаков как у земли']],['5.9',['Сёла растут с закладки, разные планировки сёл','Слева «Штаб» и «Залежи»: список свободных залежей и постройка добычи в два клика','Значки залежей — булавки, свои постройки на миникарте']]];
+function showNews(v){const w=$('news');if(!v){w.classList.remove('show');return}$('newsb').innerHTML=NEWS.map(([ver,L])=>`<div class="nw-v">Версия ${ver}</div><ul>${L.map(t=>`<li>${t}</li>`).join('')}</ul>`).join('');w.classList.add('show')}
+function showMenu(){document.body.className='m-menu';logoReady();
   const L=Saves.latest(),cb=$('mm-cont');cb.disabled=!L;cb.style.display=L?'':'none';$('mm-cont-s').textContent=L?`${L.s.meta.name} · ${L.s.meta.day} · ячейка ${L.i}`:'Сохранений пока нет';
   $('mm-ver').textContent='v'+VERSION;
   if(!S.menuBg||bg){loaded();return}
@@ -343,12 +365,13 @@ paintIcons();applyS();if(document.fonts)document.fonts.load('700 12px Rubik').ca
 const U={viewOpts:()=>Object.assign({clouds:S.clouds,traffic:S.traffic,labels:S.labels,fps:S.fps},QV[S.quality]||QV.balance),settings:()=>S,pause,toMenu,loading,loaded};
 Game.wire(U);
 for(const b of document.querySelectorAll('.mm-b'))b.onclick=()=>menuGo(b.dataset.go);
+$('mm-news').onclick=()=>showNews(!$('news').classList.contains('show'));$('newsx').onclick=()=>showNews(false);
 for(const b of document.querySelectorAll('[data-back]'))b.onclick=()=>{if(document.body.classList.contains('m-settings'))closeSettings();else showMenu()};
 $('screate').onclick=create;
 $('presume').onclick=()=>pause(false);$('psave').onclick=()=>{Game.save(false);$('pinfo').textContent=Game.pauseInfo()};$('pset').onclick=()=>openSettings('game');
 $('pexit').onclick=()=>{$('pause').classList.remove('show');paused=null;toMenu()};
 addEventListener('resize',()=>{if(!$('loading').classList.contains('fade'))drawLdBg()});
-addEventListener('keydown',e=>{if(e.code!=='Escape')return;if(document.body.classList.contains('m-settings')){closeSettings();return}if(document.body.classList.contains('m-setup'))showMenu()});
+addEventListener('keydown',e=>{if(e.code!=='Escape')return;if($('news').classList.contains('show')){showNews(false);return}if(document.body.classList.contains('m-settings')){closeSettings();return}if(document.body.classList.contains('m-setup'))showMenu()});
 window.__ui={S,menuGo,openSetup,create,get C(){return C}};
 const HS=location.hash.slice(1);
 if(/^\d/.test(HS)||/^view/.test(HS)){document.body.className='m-view';loading('Загрузка мира','Режим просмотра · сид '+parseInt(HS));setTimeout(()=>startWorld({mode:'view',onReady:()=>loaded()}),60)}
