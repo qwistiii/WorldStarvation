@@ -1,0 +1,241 @@
+=== src/main.js 40-125 of 599
+40:  else if(m.t==='season'){G.setSeason(m.s)}
+41:  else if(m.t==='grow'){G.setGrow(m.id,m.g)}
+42:  else if(m.t==='hid'){G.setHidden(m.ids)}
+43:  else if(m.t==='op'){G[m.op.f](m.op.q)}
+44:  else if(m.t==='tile'){if(m.L){const c=G.renderLights(m.z,m.x,m.y,m.hb);if(!c){postMessage({t:'tile',key:m.key,L:m.L,b:null,gv:m.gv});return}const b=c.transferToImageBitmap();postMessage({t:'tile',key:m.key,L:m.L,b,gv:m.gv},[b]);return}
+45:    const c=G.renderTile(m.z,m.x,m.y);const b=c.transferToImageBitmap();postMessage({t:'tile',key:m.key,b,s:G.season(),gv:m.gv},[b])}};`;
+46: let wurl=null;try{if(HS.indexOf('cpu')>=0)throw 0;const url=URL.createObjectURL(new Blob([wsrc],{type:'text/javascript'}));
+47:   for(let i=0;i<NW;i++){const w=new Worker(url);w.busy=0;w.ready=false;w.dead=false;
+48:     w.onmessage=e=>{const m=e.data;if(m.t==='ready'){if(m.ok){w.ready=true;mainRender=false} // a slow start fell back to the main thread: hand rendering back to the workers
+49:           else{w.dead=true;if(workers.every(q=>q.dead))mainRender=true}return}
+50:       if(m.t==='tile'){w.busy--;if(!alive){if(m.b&&m.b.close)m.b.close();return}
+51:         if(m.L){LPS[m.L].delete(m.key);if(outdated(m.key,m.gv)){if(m.b&&m.b.close)m.b.close();return}LCS[m.L].set(m.key,{b:m.b,f:frameNo,t0:T});lastArr=T;return}
+52:         pending.delete(m.key);if(m.s!==season||outdated(m.key,m.gv)){if(m.b&&m.b.close)m.b.close();return}cache.set(m.key,{b:m.b,f:frameNo,t0:T});lastArr=T}};
+53:     w.onerror=()=>{w.dead=true;if(workers.every(q=>q.dead))mainRender=true};w.postMessage({t:'init',seed:SEED,season,opt:cfg.opt,grow:[...GROWS],ops:OPS});if(HIDL.length)w.postMessage({t:'hid',ids:HIDL});workers.push(w)}wurl=url}
+54: catch(e){mainRender=true}
+55: setTimeout(()=>{if(alive&&!workers.some(w=>w.ready))mainRender=true},4000+(cfg.opt?3000:0));
+56: const tkey=(z,x,y)=>z*16777216+y*4096+x;
+57: function request(z,x,y,p){const k=tkey(z,x,y);if(cache.has(k)||pending.has(k))return;queue.push({k,z,x,y,p,L:0})}
+58: function requestL(z,x,y,p,L){const k=tkey(z,x,y);if(LCS[L].has(k)||LPS[L].has(k))return;queue.push({k,z,x,y,p,L})}
+59: function dispatch(){queue.sort((a,b)=>a.p-b.p);let qi=0;
+60:   if(mainRender){const t0=performance.now();while(qi<queue.length&&performance.now()-t0<12){const q=queue[qi++];
+61:       if(q.L){if(LCS[q.L].has(q.k))continue;LCS[q.L].set(q.k,{b:W.renderLights(q.z,q.x,q.y,LHB[q.L]),f:frameNo})}else{if(cache.has(q.k))continue;cache.set(q.k,{b:W.renderTile(q.z,q.x,q.y),f:frameNo})}}return}
+62:   for(const w of workers){if(!w.ready||w.dead)continue;while(w.busy<2&&qi<queue.length){const q=queue[qi++];
+63:       if(q.L){if(LPS[q.L].has(q.k)||LCS[q.L].has(q.k))continue;LPS[q.L].add(q.k)}else{if(pending.has(q.k)||cache.has(q.k))continue;pending.add(q.k)}
+64:       w.busy++;w.postMessage({t:'tile',z:q.z,x:q.x,y:q.y,key:q.k,L:q.L,hb:LHB[q.L],gv:GV})}}}
+65: function evictMap(mp,hi,lo){if(mp.size<hi)return;const arr=[];for(const [k,v] of mp){if(k>=4*16777216)arr.push([k,v.f])}arr.sort((a,b)=>a[1]-b[1]);
+66:   for(let i=0;i<arr.length&&mp.size>lo;i++){if(arr[i][1]>=frameNo-2)break;const v=mp.get(arr[i][0]);if(v.b&&v.b.close)v.b.close();mp.delete(arr[i][0])}}
+67: function evict(){evictMap(cache,460,360);evictMap(LCS[1],320,240);evictMap(LCS[2],180,130);evictMap(LCS[3],120,90)}
+68: function dropStale(){for(const v of stale.values())if(v.b&&v.b.close)v.b.close();stale=new Map();for(let L=1;L<=3;L++){for(const v of LST[L].values())if(v.b&&v.b.close)v.b.close();LST[L].clear()}}
+69: function setSeason(s){s=clamp(s|0,0,2);if(s===season)return;season=s;W.setSeason(s);for(const w of workers)if(w.ready)w.postMessage({t:'season',s});
+70:   dropStale();stale=new Map(cache);cache.clear();pending.clear();staleT=0;
+71: }
+72: 
+73: // growth of capitals: tiles over a growing town are re-rendered; the old picture stays (stale) until the new one arrives.
+74: // Tiles that were in flight while the town changed are dropped on arrival (generation version GV).
+75: let GV=0;const INV=[];
+76: const tileBB=k=>{const z=M.floor(k/16777216),r=k-z*16777216,y=M.floor(r/4096),x=r-y*4096,ts=WORLD/(1<<z);return [x*ts,y*ts,(x+1)*ts,(y+1)*ts]};
+77: const hitBB=(a,b)=>a[0]<b[2]&&b[0]<a[2]&&a[1]<b[3]&&b[1]<a[3];
+78: const tileZ0=k=>M.floor(k/16777216);
+79: function outdated(k,gv){if(gv===undefined||gv>=GV)return false;const bb=tileBB(k),z=tileZ0(k);for(const e of INV)if(e.gv>gv&&z>=e.zmin&&z<=e.zmax&&hitBB(bb,e.bb))return true;return false}
+80: // zmin: coarse levels (whole regions per tile) are refreshed only on big growth steps — a town is a few pixels there
+81: function invalidate(bb,zmin,zmax){zmin=zmin||0;zmax=zmax==null?99:zmax;GV++;INV.push({gv:GV,bb,zmin,zmax});if(INV.length>64)INV.shift();
+82:   for(const [k,v] of cache){const tz=tileZ0(k);if(tz<zmin||tz>zmax||!hitBB(tileBB(k),bb))continue;const o=stale.get(k);if(o&&o.b&&o.b.close&&o!==v)o.b.close();stale.set(k,v);cache.delete(k)}staleT=0;
+83:   for(let L=1;L<=3;L++)for(const [k,v] of LCS[L])if(tileZ0(k)>=zmin&&tileZ0(k)<=zmax&&hitBB(tileBB(k),bb)){const o=LST[L].get(k);if(o&&o.b&&o.b.close&&o!==v)o.b.close();LST[L].set(k,v);LCS[L].delete(k)}}
+84: const GSENT=new Map();function setGrow(id,g){g=g>=1?1:g;const g0=GROWS.has(id)?GROWS.get(id):1;if(g0===g)return;if(g>=1)GROWS.delete(id);else GROWS.set(id,g);W.setGrow(id,g);
+85:   // stage 5.13: the tiles of a growing town are redrawn in steps of 1/12 of the growth, not on every call: constant
+86:   // re-rendering kept the workers busy, dropped every tile in flight and made the town flicker
+87:   const s0=GSENT.has(id)?GSENT.get(id):1;if(g<1&&g>=s0&&M.floor(g*12)===M.floor(s0*12)&&(g>=0.95)===(s0>=0.95))return;if(g>=1)GSENT.delete(id);else GSENT.set(id,g);const coarse=g>=1||M.floor(g*4)!==M.floor(s0*4);for(const w of workers)w.postMessage({t:'grow',id,g});
+88:   const c=W.cities.find(q=>q.id===id);if(c){const rf=W.fieldReach(c)+200;let bb=[c.x-rf,c.y-rf,c.x+rf,c.y+rf];for(const z of W.zones)if(z.city===c)bb=[M.min(bb[0],z.bb[0]),M.min(bb[1],z.bb[1]),M.max(bb[2],z.bb[2]),M.max(bb[3],z.bb[3])];invalidate([bb[0]-300,bb[1]-300,bb[2]+300,bb[3]+300],coarse?0:6)}}
+89: const zoneOn=z=>!W.isHid(z.id)&&(z.dyn||!z.city||W.growOf(z.city.id)>=0.95);
+90: // fog of war (stage 5.7): the game hides buildings of other states that the player has not seen; tiles over the zones
+91: // that changed are redrawn
+92: function setHidden(ids){ids=[...ids].sort((a,b)=>a-b);const old=new Set(HIDL),now=new Set(ids);let bb=null;
+93:   for(const id of new Set([...old,...now])){if(old.has(id)&&now.has(id))continue;const z=W.zones[id];if(!z)continue;let b=z.bb;if(z.link)b=[M.min(b[0],z.link.bb[0]),M.min(b[1],z.link.bb[1]),M.max(b[2],z.link.bb[2]),M.max(b[3],z.link.bb[3])];
+94:     bb=bb?[M.min(bb[0],b[0]),M.min(bb[1],b[1]),M.max(bb[2],b[2]),M.max(bb[3],b[3])]:b.slice()}
+95:   if(!bb)return;HIDL=ids;W.setHidden(ids);for(const w of workers)w.postMessage({t:'hid',ids});invalidate([bb[0]-100,bb[1]-100,bb[2]+100,bb[3]+100],4);LOWB=LOWB?[M.min(LOWB[0],bb[0]),M.min(LOWB[1],bb[1]),M.max(LOWB[2],bb[2]),M.max(LOWB[3],bb[3])]:bb}
+96: // a settlement or building placed during the game: same call here and in every worker, then the tiles over it are redrawn
+97: function op(f,q){const r0=W.roads.length,id=W[f](q);if(id<0)return id;const o={f,q};OPS.push(o);for(const w of workers)w.postMessage({t:'op',op:o});
+98:   const f0=f==='addPlace'?W.cities.find(c=>c.id===id):f==='addZone'||f==='removeZone'?W.zones.find(z=>z.id===id):null;let bb=f0?f0.bb.slice():q&&q.x!=null?[q.x-500,q.y-500,q.x+500,q.y+500]:null;
+99:   // a town also changes the farmland around it (fields reach R + 4.5 km): redraw that ring too, or tiles meet with seams
+100:   if(f==='addPlace'&&f0){const r=W.fieldReach(f0)+200;bb=[f0.x-r,f0.y-r,f0.x+r,f0.y+r]}if(f==='addDeposits'){bb=[0,0,WORLD,WORLD]}
+101:   if(f==='zoneUp'){const z=W.zones[id];bb=z.bb.slice()}if(f==='addRail'||f==='removeRail'){bb=W.roads[id].bb.slice()}
+102:   if(f==='moveDeposit'){const d=W.deps[id],o=q.length>4?[q[3],q[4]]:[d.x,d.y];bb=[M.min(o[0],d.x)-400,M.min(o[1],d.y)-400,M.max(o[0],d.x)+400,M.max(o[1],d.y)+400]}if(!bb)return id;
+103:   for(let i=r0;i<W.roads.length;i++){const r=W.roads[i];bb=[M.min(bb[0],r.bb[0]),M.min(bb[1],r.bb[1]),M.max(bb[2],r.bb[2]),M.max(bb[3],r.bb[3])]}
+104:   // detailed levels at once; the coarse ones (a whole region per tile) are refreshed in batches every 12 s
+105:   const b2=[bb[0]-200,bb[1]-200,bb[2]+200,bb[3]+200];invalidate(b2,4);LOWB=LOWB?[M.min(LOWB[0],b2[0]),M.min(LOWB[1],b2[1]),M.max(LOWB[2],b2[2]),M.max(LOWB[3],b2[3])]:b2;return id}
+106: let LOWB=null;const lowT=setInterval(()=>{if(alive&&LOWB){invalidate(LOWB,0,3);LOWB=null}},12000);
+107: // game hooks must never stop the render loop: errors are reported once per hook
+108: const hkErr={};function hk(n,a,b){try{HK[n](a,b)}catch(e){if(!hkErr[n]){hkErr[n]=1;console.error('hook '+n+':',e)}ctx.setTransform(DPR,0,0,DPR,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}}
+109: // ------------------------------------------------------------ camera
+110: const cam={x:WORLD/2,y:WORLD/2,m:400};let zoomT=null,fly=null,vel={x:0,y:0};
+111: const MINM=0.045,maxM=()=>WORLD*1.25/M.min(VW,VH);cam.m=maxM();
+112: function zoomAt(f,sx,sy){const base=zoomT?zoomT.m:cam.m;zoomT={m:clamp(base*f,MINM,maxM()),sx,sy};fly=null}
+113: function flyTo(x,y,m,dur){const d=M.hypot(x-cam.x,y-cam.y);const span=M.max(cam.m,m)*M.max(VW,VH);const peak=M.max(0,M.log(d/span+1))*0.9;
+114:   fly={t:0,dur:dur||M.min(6,2.2+peak*1.2),x0:cam.x,y0:cam.y,l0:M.log(cam.m),x1:x,y1:y,l1:M.log(clamp(m,MINM,maxM())),peak};zoomT=null;vel.x=vel.y=0}
+115: function updateCam(dt){
+116:   if(fly){fly.t+=dt/fly.dur;const t=M.min(1,fly.t);const e=t*t*(3-2*t);cam.x=fly.x0+(fly.x1-fly.x0)*e;cam.y=fly.y0+(fly.y1-fly.y0)*e;cam.m=M.exp(fly.l0+(fly.l1-fly.l0)*e+fly.peak*M.sin(PI*t));if(t>=1)fly=null}
+117:   if(zoomT){const wx=cam.x+(zoomT.sx-VW/2)*cam.m,wy=cam.y+(zoomT.sy-VH/2)*cam.m;const nm=cam.m*M.pow(zoomT.m/cam.m,1-M.exp(-dt*11));cam.m=nm;cam.x=wx-(zoomT.sx-VW/2)*nm;cam.y=wy-(zoomT.sy-VH/2)*nm;
+118:     if(M.abs(M.log(nm/zoomT.m))<0.003){cam.m=zoomT.m;zoomT=null}}
+119:   if(!drag&&(vel.x||vel.y)){cam.x+=vel.x*dt;cam.y+=vel.y*dt;const k=M.exp(-dt*4.5);vel.x*=k;vel.y*=k;if(M.hypot(vel.x,vel.y)<cam.m*2)vel.x=vel.y=0}
+120:   const kx=(keys.ArrowRight||keys.KeyD?1:0)-(keys.ArrowLeft||keys.KeyA?1:0),ky=(keys.ArrowDown||keys.KeyS?1:0)-(keys.ArrowUp||keys.KeyW?1:0);
+121:   if(kx||ky){cam.x+=kx*cam.m*VW*0.7*dt;cam.y+=ky*cam.m*VW*0.7*dt;fly=null}
+122:   if(keys.Equal||keys.NumpadAdd)zoomAt(M.exp(-dt*2.2),VW/2,VH/2);if(keys.Minus||keys.NumpadSubtract)zoomAt(M.exp(dt*2.2),VW/2,VH/2);
+123:   const mg=WORLD*0.15;cam.x=clamp(cam.x,-mg,WORLD+mg);cam.y=clamp(cam.y,-mg,WORLD+mg);cam.m=clamp(cam.m,MINM,maxM())}
+124: // input
+125: const ptr=new Map();let drag=false,lastMove=0,pinch=null,downAt=null;const keys={};
+=== src/gen.js 1495-1575 of 2841
+1495: function fieldR(c){const g=GROW.size?growFields(c):1;return (c.type===0?c.R+2300:c.R+3300)*g}
+1496: function fieldOn(x,y,h){if(h%9===0)return 0;const t=0.62+((h>>>21)&1023)/1023*0.68;if(baseH(x,y,5)>0.3)return 0;
+1497:   for(const c of live){const R=fieldR(c);if(R<=0)continue;const dx=x-c.x,dy=y-c.y;if(dx*dx+dy*dy<R*R*t*t)return 1}return 0}
+1498: const AUT=[[178,96,30],[200,160,44],[156,52,30],[150,124,44]];
+1499: // SPLIT: part of the hillshade is kept in SHD and applied after the vector layers (grain), so houses,
+1500: // plots and roads on slopes are lit like the terrain under them instead of looking pasted on flat ground
+1501: let SPLIT=false;const SHD=new Float32Array(256*256);
+1502: function raster(ctx,x0,y0,mpp,near){const WIN=SEASON===2;if(EMPTY)VCx=1e9;
+1503:   const st=GS*mpp;const oct=clamp(M.ceil(M.log2(30000/(st*1.2))),3,13);
+1504:   const ex=1+clamp(M.log2(mpp)*0.25,0,1.6);
+1505:   let k=0;
+1506:   for(let gj=0;gj<GN;gj++){const wy=y0+(gj-1.5)*st;for(let gi=0;gi<GN;gi++,k++){const wx=x0+(gi-1.5)*st;
+1507:     const e=baseH(wx,wy,oct);gH[k]=e;const rv=riverV(wx,wy);gR[k]=rv;const w=riverW(wx,wy,e);gW[k]=w;
+1508:     gM[k]=moist(wx,wy);gF[k]=noise(wx/1900+3.3,wy/1900-7.1)*0.6+noise(wx/520+1.7,wy/520+9.9)*0.4;
+1509:     let fa=EMPTY?0:smooth(0.0,0.3,noise(wx/15000+61.1,wy/15000-12.3)),u=0;
+1510:     for(let q=0;q<near.length;q++){const c=near[q];if(c.kind==='zone'){const dx=wx-c.x,dy=wy-c.y;const lx=dx*c.ca+dy*c.sa,ly=-dx*c.sa+dy*c.ca;
+1511:         const v=smooth(1.08,0.98,M.max(M.abs(lx)/(c.W/2),M.abs(ly)/(c.H/2)));if(TINTZ[c.zk]&&v>u)u=v*0.8;continue}
+1512:       const dx=wx-c.x,dy=wy-c.y,d2=dx*dx+dy*dy,R2=EMPTY?fieldR(c)*1.3+3400:c.R+4500;if(d2>R2*R2)continue;const d=M.sqrt(d2);
+1513:       // game worlds: only the reach of the farmland (which field systems are ploughed is decided per field system below)
+1514:       const fv=EMPTY?smooth(R2,R2-800,d):smooth(c.R+4500,c.R+600,d)*(c.type===0?0.85:1)*(GROW.size?growFields(c):1);if(fv>fa)fa=fv;
+1515:       if(d<c.R*1.6){const f=cityF(c,wx,wy)*(c.type===0?0.8:1)+(GROW.size?growShift(c):0);const v=smooth(1.1,0.92,f)*(c.type===0?0.12:1);if(v>u)u=v}}
+1516:     gA[k]=fa;gU[k]=u;
+1517:     // game worlds: field systems are looked up through a smooth domain warp, so the edge between farmland and wood or
+1518:     // meadow (and the field tracks between systems) curves like a real clearing instead of following straight Voronoi edges
+1519:     if(EMPTY){gQX[k]=noise(wx/2100+5.3,wy/2100-2.7)*330+noise(wx/640+1.9,wy/640+7.7)*70;gQY[k]=noise(wx/2100-8.1,wy/2100+4.4)*330+noise(wx/640-3.3,wy/640-6.1)*70}
+1520:     const r=M.abs(rv);gHS[k]=e}}
+1521:   // macro relief (smooth 4-octave height, 250 m stencil) on a 4x coarser grid, bilinearly upsampled:
+1522:   // readable hills / valleys / hilltops that do not depend on zoom
+1523:   {const CS=4,NC=M.ceil((GN-1)/CS)+1;const cM=MC1,cC=MC2;
+1524:     for(let cj=0;cj<NC;cj++)for(let ci=0;ci<NC;ci++){const wx=x0+(ci*CS-1.5)*st,wy=y0+(cj*CS-1.5)*st;const H=250,c0=baseH(wx,wy,4),eE=baseH(wx+H,wy,4),eW=baseH(wx-H,wy,4),eN=baseH(wx,wy-H,4),eS=baseH(wx,wy+H,4);
+1525:       const zx=(eE-eW)/(2*H)*ELEV*1.7,zy=(eS-eN)/(2*H)*ELEV*1.7,nl=M.sqrt(zx*zx+zy*zy+1);const lam=((-zx*LX-zy*LY+LZ)/nl)/LZ;
+1526:       cM[cj*NC+ci]=clamp(1+(lam-1)*0.5,0.72,1.12);cC[cj*NC+ci]=clamp((c0-(eE+eW+eN+eS)/4)*ELEV/14,-1,1)*smooth(0,0.01,c0)}
+1527:     for(let gj=0;gj<GN;gj++){const fy=gj/CS,cj=M.min(NC-2,fy|0),ty=fy-cj;for(let gi=0;gi<GN;gi++){const fx=gi/CS,ci=M.min(NC-2,fx|0),tx=fx-ci,q=cj*NC+ci,k=gj*GN+gi;
+1528:       gMS[k]=(cM[q]*(1-tx)+cM[q+1]*tx)*(1-ty)+(cM[q+NC]*(1-tx)+cM[q+NC+1]*tx)*ty;gCV[k]=(cC[q]*(1-tx)+cC[q+1]*tx)*(1-ty)+(cC[q+NC]*(1-tx)+cC[q+NC+1]*tx)*ty}}}
+1529:   for(let gj=1;gj<GN-1;gj++)for(let gi=1;gi<GN-1;gi++){const k=gj*GN+gi;
+1530:     const dhx=(gHS[k+1]-gHS[k-1])/(2*st),dhy=(gHS[k+GN]-gHS[k-GN])/(2*st);const zx=dhx*ELEV*ex,zy=dhy*ELEV*ex;
+1531:     const nl=M.sqrt(zx*zx+zy*zy+1);gS[k]=((-zx*LX-zy*LY+LZ)/nl)/(LZ);
+1532:     gGH[k]=M.hypot((gH[k+1]-gH[k-1])/(2*st),(gH[k+GN]-gH[k-GN])/(2*st));
+1533:     gGR[k]=M.hypot((gR[k+1]-gR[k-1])/(2*st),(gR[k+GN]-gR[k-GN])/(2*st))}
+1534:   const img=ctx.createImageData(TS,TS),d=img.data;
+1535:   const id1=1/(4*mpp),id2=1/(16*mpp);const crowns=mpp<1.7,fieldsOn=mpp<120,stripes=mpp<2.5;
+1536:   let o=0;
+1537:   for(let py=0;py<TS;py++){const gy=(py+0.5)/GS+1.5;const j=gy|0,ty=gy-j;const wy=y0+(py+0.5)*mpp;
+1538:     for(let px=0;px<TS;px++,o+=4){SHD[o>>2]=1;const gx=(px+0.5)/GS+1.5;const i=gx|0,tx=gx-i;const k=j*GN+i;
+1539:       const w00=(1-tx)*(1-ty),w10=tx*(1-ty),w01=(1-tx)*ty,w11=tx*ty;
+1540:       const e=gH[k]*w00+gH[k+1]*w10+gH[k+GN]*w01+gH[k+GN+1]*w11;
+1541:       const rv=gR[k]*w00+gR[k+1]*w10+gR[k+GN]*w01+gR[k+GN+1]*w11;
+1542:       const ww=gW[k]*w00+gW[k+1]*w10+gW[k+GN]*w01+gW[k+GN+1]*w11;
+1543:       const sh=gS[k]*w00+gS[k+1]*w10+gS[k+GN]*w01+gS[k+GN+1]*w11;
+1544:       const gh=gGH[k]*w00+gGH[k+1]*w10+gGH[k+GN]*w01+gGH[k+GN+1]*w11;
+1545:       const wx=x0+(px+0.5)*mpp;
+1546:       const d1=noise(wx*id1+0.5,wy*id1+0.3),d2=noise(wx*id2+7.1,wy*id2+3.9);const d0=((mix32(M.imul(px,73856093)^M.imul(py,19349663)^(x0|0))&255)/255-0.5);const dt=d1*0.4+d2*0.45+d0*0.3;
+1547:       let aL=clamp(e/(gh*mpp*1.2+1e-7)+0.5,0,1);
+1548:       let aR=0;if(ww>0&&e>-0.03){const gr=(gGR[k]*w00+gGR[k+1]*w10+gGR[k+GN]*w01+gGR[k+GN+1]*w11)*mpp+1e-7;const r=rv<0?-rv:rv;
+1549:         aR=clamp((ww-r)/gr+0.5,0,1);if(aR>0)aR*=M.min(1,0.22+3*ww/gr)*smooth(-0.003,0.006,e)} // the channel fades out at the mouth instead of running on into the sea
+1550:       const land=aL*(1-aR);
+1551:       let R=0,Gc=0,Bc=0;
+1552:       if(land>0){
+1553:         const mo=gM[k]*w00+gM[k+1]*w10+gM[k+GN]*w01+gM[k+GN+1]*w11;
+1554:         const fn=gF[k]*w00+gF[k+1]*w10+gF[k+GN]*w01+gF[k+GN+1]*w11;
+1555:         const ag=gA[k]*w00+gA[k+1]*w10+gA[k+GN]*w01+gA[k+GN+1]*w11;
+1556:         const u=gU[k]*w00+gU[k+1]*w10+gU[k+GN]*w01+gU[k+GN+1]*w11;
+1557:         const dry=smooth(0.3,-0.45,mo);
+1558:         R=88+44*dry+dt*8;Gc=122+14*dry+dt*9;Bc=58+24*dry+dt*5;{const hy=smooth(0.06,0.4,e)*0.32;R=lerp(R,136,hy);Gc=lerp(Gc,132,hy);Bc=lerp(Bc,86,hy)}
+1559:         if(SEASON===1){R+=30+dry*8;Gc-=2;Bc-=10}else if(WIN){R=230+dt*10;Gc=234+dt*10;Bc=240+dt*8}
+1560:         const slope=gh*ELEV;
+1561:         // forest
+1562:         const fv=mo*0.75+fn*0.6+dt*0.05;
+1563:         let fo=smooth(0.06,0.13,fv)*(1-smooth(0.04,0.25,u))*smooth(0.55,0.44,e);
+1564:         // fields
+1565:         let agv=smooth(0.25,0.55,ag)*smooth(0.36,0.22,e)*(1-smooth(0.05,0.3,u))*(1-smooth(1.2,2.5,slope));
+1566:         let i1=0,i2=0,dB=0,pdx=0,pdy=0,EDP=-1,fe=0;
+1567:         if(agv>0.01&&(fieldsOn||EMPTY)){
+1568:           // field systems: jittered Voronoi regions (each with its own furrow direction and plot sizes),
+1569:           // bounded by field tracks / hedgerows, so there are no straight seams on a fixed grid
+1570:           let qx=wx,qy=wy;if(EMPTY){qx+=gQX[k]*w00+gQX[k+1]*w10+gQX[k+GN]*w01+gQX[k+GN+1]*w11;qy+=gQY[k]*w00+gQY[k+1]*w10+gQY[k+GN]*w01+gQY[k+GN+1]*w11}
+1571:           const vx=M.floor(qx/2400),vy=M.floor(qy/2400);if(vx!==VCx||vy!==VCy){VCx=vx;VCy=vy;let q=0;for(let b2=-1;b2<=1;b2++)for(let a2=-1;a2<=1;a2++){const hq=hh(vx+a2,vy+b2,23);VP[q++]=(vx+a2+0.15+((hq&1023)/1023)*0.7)*2400;VP[q++]=(vy+b2+0.15+(((hq>>>10)&1023)/1023)*0.7)*2400;VP[q++]=hq;if(EMPTY)VF[q/3-1]=fieldOn(VP[q-3],VP[q-2],hq)}}
+1572:           let q1=1e18,q2=1e18;for(let q=0;q<27;q+=3){const dx=qx-VP[q],dy=qy-VP[q+1],dd=dx*dx+dy*dy;if(dd<q1){q2=q1;i2=i1;q1=dd;i1=q}else if(dd<q2){q2=dd;i2=q}}
+1573:           pdx=VP[i2]-VP[i1];pdy=VP[i2+1]-VP[i1+1];dB=(q2-q1)/(2*M.sqrt(pdx*pdx+pdy*pdy)+1e-6);
+1574:           // game worlds: a whole field system is ploughed or left as meadow / wood, so the farmland has the ragged outline
+1575:           // of real field patterns (no rings around the towns); 1 px blend across the boundary
+=== src/gen.js 2755-2800 of 2841
+2755:   for(const e of u.U){const b=e.b;let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(let c=0;c<4;c++){const lx=c&1?b[2]:b[0],ly=c&2?b[3]:b[1];const wx=fx+lx*ca-ly*sa,wy=fy+lx*sa+ly*ca;if(wx<x0)x0=wx;if(wx>x1)x1=wx;if(wy<y0)y0=wy;if(wy>y1)y1=wy}
+2756:     DQ.push({a:e.a,fx,fy,ca,sa,k:(y0+y1)/2,x0,y0,x1,y1})}}
+2757: function flushDQ(){const Q=DQ;DQ=null;if(!Q)return;Q.sort((a,b)=>a.k-b.k);
+2758:   for(const j of Q){setFrame(Q.ctx,j.fx,j.fy,j.ca,j.sa,Q.x0,Q.y0,Q.s);drawPrims(Q.ctx,j.a,2,Q.mpp)}
+2759:   if(DQLOG)for(const j of Q)DQLOG.push([j.k,j.x0,j.y0,j.x1,j.y1])}
+2760: function paintLog(on){const r=DQLOG;DQLOG=on?[]:null;return r}
+2761: function renderTile(z,tx,ty){
+2762:   const tsz=WORLD/(1<<z),mpp=tsz/TS,x0=tx*tsz,y0=ty*tsz,s=1/mpp;
+2763:   const cv=mkCanvas(TS,TS),ctx=cv.getContext('2d',{willReadFrequently:true});
+2764:   const NM=EMPTY?9500:5000,near=queryF(x0-NM,y0-NM,x0+tsz+NM,y0+tsz+NM).filter(o=>(o.kind==='city'||o.kind==='zone')&&featOn(o));
+2765:   const deps=DEPS.length?queryF(x0-300,y0-300,x0+tsz+300,y0+tsz+300).filter(o=>o.kind==='dep'):null;
+2766:   SPLIT=true;raster(ctx,x0,y0,mpp,near);
+2767:   const mg=mpp<6?260:mpp*45;const qx0=x0-mg,qy0=y0-mg,qx1=x0+tsz+mg,qy1=y0+tsz+mg;
+2768:   let feats=queryF(qx0,qy0,qx1,qy1),rl=queryRoads(x0-mpp*20-40,y0-mpp*20-40,x0+tsz+mpp*20+40,y0+tsz+mpp*20+40);
+2769:   if(DEADN||HID.size){feats=feats.filter(f=>!f.dead&&!(f.kind==='zone'&&zHid(f)));rl=rl.filter(r=>!r.dead&&!rHid(r))}if(GROW.size){feats=feats.filter(featOn);rl=growRoads(rl,false)}
+2770:   blockCache=new Map();TREEQ.length=0;mppG=mpp;LITE=mpp>2.2;LITE2=mpp>4.5;
+2771:   const detail=mpp<14;
+2772:   const T=()=>ctx.setTransform(s,0,0,s,-x0*s,-y0*s);
+2773:   // pass 0 (grounds)
+2774:   if(deps&&deps.length){T();drawDeps(ctx,deps,mpp)}
+2775:   for(const f of feats)drawFeat(ctx,f,0,x0,y0,s,mpp,qx0,qy0,qx1,qy1);
+2776:   TX0=x0;TY0=y0;T();drawRoads(ctx,rl,mpp);if(s>1.4){const RL=rl.filter(r=>r.k===5);if(RL.length){ctx.lineCap='butt';ctx.strokeStyle='#9a9ca2';ctx.lineWidth=0.14;strokeSym(ctx,RL,[0.72]);ctx.strokeStyle='rgba(40,40,44,0.5)';ctx.lineWidth=0.08;strokeSym(ctx,RL,[0.82])}}if(mpp<0.75)for(const f of feats)drawCross(ctx,f,x0,y0,s,qx0,qy0,qx1,qy1);T();drawOverpasses(ctx,rl,mpp);
+2777:   if(detail){
+2778:     ctx.fillStyle=SHADOW;
+2779:     for(const f of feats){drawFeat(ctx,f,1,x0,y0,s,mpp,qx0,qy0,qx1,qy1)}
+2780:     DQ=[];DQ.ctx=ctx;DQ.mpp=mpp;DQ.x0=x0;DQ.y0=y0;DQ.s=s;try{for(const f of feats)drawFeat(ctx,f,2,x0,y0,s,mpp,qx0,qy0,qx1,qy1)}finally{flushDQ()}
+2781:   }
+2782:   ctx.setTransform(1,0,0,1,0,0);
+2783:   if(TREEQ.length){const S=sprites();for(let i=0;i<TREEQ.length;i+=4){const d=TREEQ[i+2]*1.45;if(d<1.6)continue;ctx.drawImage(S.treeS[SEASON][TREEQ[i+3]],TREEQ[i]-d*0.44,TREEQ[i+1]-d*0.44,d,d)}}
+2784:   if(mpp<7){T();drawPower(ctx,rl,mpp);ctx.setTransform(1,0,0,1,0,0)}
+2785:   blockCache=null;
+2786:   grain(ctx,x0,y0,mpp,feats.length>0||rl.length>0);
+2787:   return cv;
+2788: }
+2789: function drawCross(ctx,f,x0,y0,s,qx0,qy0,qx1,qy1){if(f.kind!=='city'||f.type===0||GROW.has(f.id))return;const N=f.N,D=f.D;
+2790:   const [i0,i1,j0,j1]=blkRange(f,qx0,qy0,qx1,qy1);
+2791:   const a0=M.max(0,bsr(f.us,i0)),a1=M.min(D-1,bsr(f.us,i1)+1),b0=M.max(0,bsr(f.vs,j0)),b1=M.min(D-1,bsr(f.vs,j1)+1);if(a1<a0||b1<b0)return;
+2792:   if(!f.cv)setFrame(ctx,f.x,f.y,f.ca,f.sa,x0,y0,s);ctx.fillStyle='rgba(236,236,230,0.85)';ctx.beginPath();
+2793:   for(let j=b0;j<=b1;j++)for(let i=a0;i<=a1;i++){const up=f.eU[j*D+i],um=i>0&&f.eU[j*D+i-1],vp=f.eV[j*D+i],vm=j>0&&f.eV[(j-1)*D+i];if(up+um+vp+vm<3)continue;
+2794:     let cx=f.us[i],cy=f.vs[j];if(f.cv){const nf=nodeFrame(f,i,j);ctx.fill();setFrame(ctx,nf[0],nf[1],nf[2],nf[3],x0,y0,s);ctx.beginPath();cx=0;cy=0}const hvI=RW[lkU(f,i)]/2,hvJ=RW[lkV(f,j)]/2;
+2795:     const zeb=(dirx,diry,dist,half)=>{for(let o=-half+0.5;o<half-0.4;o+=1.05){if(dirx){const x=cx+dirx*dist;ctx.rect(dirx>0?x:x-3,cy+o,3,0.55)}else{const y=cy+diry*dist;ctx.rect(cx+o,diry>0?y:y-3,0.55,3)}}};
+2796:     if(up)zeb(1,0,hvI+1.6,hvJ-0.4);if(um)zeb(-1,0,hvI+1.6,hvJ-0.4);if(vp)zeb(0,1,hvJ+1.6,hvI-0.4);if(vm)zeb(0,-1,hvJ+1.6,hvI-0.4);
+2797:     if(up)ctx.rect(cx+hvI+5.4,cy,0.35,hvJ-0.6);if(um)ctx.rect(cx-hvI-5.75,cy-hvJ+0.6,0.35,hvJ-0.6);if(vp)ctx.rect(cx-hvI+0.6,cy+hvJ+5.4,hvI-0.6,0.35);if(vm)ctx.rect(cx,cy-hvJ-5.75,hvI-0.6,0.35)}
+2798:   ctx.fill()}
+2799: function grain(ctx,x0,y0,mpp,vec){if(!vec&&!SPLIT)return;
+2800:   const img=ctx.getImageData(0,0,TS,TS),d=img.data;const i1=1/(2.2*mpp),i2=1/(7*mpp);let o=0;const fine=mpp<3;
+=== grep src/main.js /dispatch|Worker|requestIdle|budget|queue|pending/
+32: const cache=new Map(),pending=new Set();const LCS=[null,new Map(),new Map(),new Map()],LPS=[null,new Set(),new Set(),new Set()],lcache=LCS[1];const LHB=[0,0,2,2];let stale=new Map(),staleT=0,lastArr=-9;const LST=[null,new Map(),new Map(),new Map()]; // stage 5
+33: let frameNo=0,queue=[];
+47:   for(let i=0;i<NW;i++){const w=new Worker(url);w.busy=0;w.ready=false;w.dead=false;
+52:         pending.delete(m.key);if(m.s!==season||outdated(m.key,m.gv)){if(m.b&&m.b.close)m.b.close();return}cache.set(m.key,{b:m.b,f:frameNo,t0:T});lastArr=T}};
+57: function request(z,x,y,p){const k=tkey(z,x,y);if(cache.has(k)||pending.has(k))return;queue.push({k,z,x,y,p,L:0})}
+58: function requestL(z,x,y,p,L){const k=tkey(z,x,y);if(LCS[L].has(k)||LPS[L].has(k))return;queue.push({k,z,x,y,p,L})}
+59: function dispatch(){queue.sort((a,b)=>a.p-b.p);let qi=0;
+60:   if(mainRender){const t0=performance.now();while(qi<queue.length&&performance.now()-t0<12){const q=queue[qi++];
+62:   for(const w of workers){if(!w.ready||w.dead)continue;while(w.busy<2&&qi<queue.length){const q=queue[qi++];
+63:       if(q.L){if(LPS[q.L].has(q.k)||LCS[q.L].has(q.k))continue;LPS[q.L].add(q.k)}else{if(pending.has(q.k)||cache.has(q.k))continue;pending.add(q.k)}
+70:   dropStale();stale=new Map(cache);cache.clear();pending.clear();staleT=0;
+257:   queue=[];request(0,0,0,-1e9);let upN=0;
+268:   if(z<12&&queue.length<4){const z2=z+1,n2=1<<z2,t2=WORLD/n2;const cx=M.floor(cam.x/t2),cy=M.floor(cam.y/t2);for(let y=cy-1;y<=cy+1;y++)for(let x=cx-1;x<=cx+1;x++)if(x>=0&&y>=0&&x<n2&&y<n2)request(z2,x,y,1e5)}
+544:   dispatch();pf('dispatch');
+556:   if(stale.size||LST[1].size||LST[2].size||LST[3].size){staleT+=dt;if((pending.size+LPS[1].size+LPS[2].size+LPS[3].size===0&&!queue.length&&T-lastArr>FADE+0.1)||staleT>25)dropStale()}
+564:   perfEl.textContent=['FPS '+M.round(fpsA)+' · худший кадр '+fWorst.toFixed(1)+' мс','JS за кадр '+(PROF.js||0).toFixed(2)+' мс'].concat(top,['тайлы '+cache.size+' · старые '+stale.size+' · в работе '+(pending.size+LPS[1].size+LPS[2].size+LPS[3].size)+' · очер
+591:   stats:()=>({fps:fpsA,cars:carCount,tiles:cache.size,lights:LCS[1].size+'/'+LCS[2].size+'/'+LCS[3].size,queue:queue.length,pending:pending.size+LPS[1].size+LPS[2].size+LPS[3].size,main:mainRender,lowQ}),
+=== grep src/gen.js /raster\(|Worker|OffscreenCanvas|getImageData/
+22: function mkCanvas(w,h){if(typeof OffscreenCanvas!=='undefined')return new OffscreenCanvas(w,h);const c=document.createElement('canvas');c.width=w;c.height=h;return c}
+1415:   const img=x.getImageData(0,0,N,N),d=img.data;const L=[-0.58,-0.46,0.67];let hm=1;const HB=new Float32Array(N*N),TB=new Float32Array(N*N);
+1502: function raster(ctx,x0,y0,mpp,near){const WIN=SEASON===2;if(EMPTY)VCx=1e9;
+2633:   g.setTransform(1,0,0,1,0,0);g.globalCompositeOperation='source-over';const im=g.getImageData(0,0,W,H),d=im.data;
+2766:   SPLIT=true;raster(ctx,x0,y0,mpp,near);
+2800:   const img=ctx.getImageData(0,0,TS,TS),d=img.data;const i1=1/(2.2*mpp),i2=1/(7*mpp);let o=0;const fine=mpp<3;
