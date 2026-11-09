@@ -29,7 +29,7 @@ const opt=Object.assign({clouds:true,labels:true,traffic:true},cfg.view||{});
 
 // ------------------------------------------------------------ workers / tile caches
 // cache: day tiles of the current season; stale: previous season (fallback while re-rendering); lcache: night-light tiles
-const cache=new Map(),pending=new Set();const LCS=[null,new Map(),new Map(),new Map()],LPS=[null,new Set(),new Set(),new Set()],lcache=LCS[1];const LHB=[0,0,2,2];let stale=new Map(),staleT=0;let frameNo=0,queue=[];
+const cache=new Map(),pending=new Set();const LCS=[null,new Map(),new Map(),new Map()],LPS=[null,new Set(),new Set(),new Set()],lcache=LCS[1];const LHB=[0,0,2,2];let stale=new Map(),staleT=0,lastArr=-9;const LST=[null,new Map(),new Map(),new Map()]; // stage 5.13: LST = previous light tiles of a redrawn area, shown until the new ones arrivelet frameNo=0,queue=[];
 const workers=[];let mainRender=false;
 const NW=M.max(2,M.min((navigator.deviceMemory||4)>=8?7:5,(navigator.hardwareConcurrency||4)-2)); // stage 5.12: up to 7 workers on 8+ GB machines
 const wsrc=(typeof FlagArt==='function'?FlagArt.toString():'')+WorldGen.toString()+`
@@ -47,8 +47,8 @@ let wurl=null;try{if(HS.indexOf('cpu')>=0)throw 0;const url=URL.createObjectURL(
     w.onmessage=e=>{const m=e.data;if(m.t==='ready'){if(m.ok){w.ready=true;mainRender=false} // a slow start fell back to the main thread: hand rendering back to the workers
           else{w.dead=true;if(workers.every(q=>q.dead))mainRender=true}return}
       if(m.t==='tile'){w.busy--;if(!alive){if(m.b&&m.b.close)m.b.close();return}
-        if(m.L){LPS[m.L].delete(m.key);if(outdated(m.key,m.gv)){if(m.b&&m.b.close)m.b.close();return}LCS[m.L].set(m.key,{b:m.b,f:frameNo});return}
-        pending.delete(m.key);if(m.s!==season||outdated(m.key,m.gv)){if(m.b&&m.b.close)m.b.close();return}cache.set(m.key,{b:m.b,f:frameNo})}};
+        if(m.L){LPS[m.L].delete(m.key);if(outdated(m.key,m.gv)){if(m.b&&m.b.close)m.b.close();return}LCS[m.L].set(m.key,{b:m.b,f:frameNo,t0:T});lastArr=T;return}
+        pending.delete(m.key);if(m.s!==season||outdated(m.key,m.gv)){if(m.b&&m.b.close)m.b.close();return}cache.set(m.key,{b:m.b,f:frameNo,t0:T});lastArr=T}};
     w.onerror=()=>{w.dead=true;if(workers.every(q=>q.dead))mainRender=true};w.postMessage({t:'init',seed:SEED,season,opt:cfg.opt,grow:[...GROWS],ops:OPS});if(HIDL.length)w.postMessage({t:'hid',ids:HIDL});workers.push(w)}wurl=url}
 catch(e){mainRender=true}
 setTimeout(()=>{if(alive&&!workers.some(w=>w.ready))mainRender=true},4000+(cfg.opt?3000:0));
@@ -64,7 +64,7 @@ function dispatch(){queue.sort((a,b)=>a.p-b.p);let qi=0;
 function evictMap(mp,hi,lo){if(mp.size<hi)return;const arr=[];for(const [k,v] of mp){if(k>=4*16777216)arr.push([k,v.f])}arr.sort((a,b)=>a[1]-b[1]);
   for(let i=0;i<arr.length&&mp.size>lo;i++){if(arr[i][1]>=frameNo-2)break;const v=mp.get(arr[i][0]);if(v.b&&v.b.close)v.b.close();mp.delete(arr[i][0])}}
 function evict(){evictMap(cache,460,360);evictMap(LCS[1],320,240);evictMap(LCS[2],180,130);evictMap(LCS[3],120,90)}
-function dropStale(){for(const v of stale.values())if(v.b&&v.b.close)v.b.close();stale=new Map()}
+function dropStale(){for(const v of stale.values())if(v.b&&v.b.close)v.b.close();stale=new Map();for(let L=1;L<=3;L++){for(const v of LST[L].values())if(v.b&&v.b.close)v.b.close();LST[L].clear()}}
 function setSeason(s){s=clamp(s|0,0,2);if(s===season)return;season=s;W.setSeason(s);for(const w of workers)if(w.ready)w.postMessage({t:'season',s});
   dropStale();stale=new Map(cache);cache.clear();pending.clear();staleT=0;
 }
@@ -79,8 +79,11 @@ function outdated(k,gv){if(gv===undefined||gv>=GV)return false;const bb=tileBB(k
 // zmin: coarse levels (whole regions per tile) are refreshed only on big growth steps — a town is a few pixels there
 function invalidate(bb,zmin,zmax){zmin=zmin||0;zmax=zmax==null?99:zmax;GV++;INV.push({gv:GV,bb,zmin,zmax});if(INV.length>64)INV.shift();
   for(const [k,v] of cache){const tz=tileZ0(k);if(tz<zmin||tz>zmax||!hitBB(tileBB(k),bb))continue;const o=stale.get(k);if(o&&o.b&&o.b.close&&o!==v)o.b.close();stale.set(k,v);cache.delete(k)}staleT=0;
-  for(let L=1;L<=3;L++)for(const [k,v] of LCS[L])if(tileZ0(k)>=zmin&&tileZ0(k)<=zmax&&hitBB(tileBB(k),bb)){if(v.b&&v.b.close)v.b.close();LCS[L].delete(k)}}
-function setGrow(id,g){g=g>=1?1:g;const g0=GROWS.has(id)?GROWS.get(id):1;if(g0===g)return;const coarse=g>=1||M.floor(g*4)!==M.floor(g0*4);if(g>=1)GROWS.delete(id);else GROWS.set(id,g);W.setGrow(id,g);for(const w of workers)w.postMessage({t:'grow',id,g});
+  for(let L=1;L<=3;L++)for(const [k,v] of LCS[L])if(tileZ0(k)>=zmin&&tileZ0(k)<=zmax&&hitBB(tileBB(k),bb)){const o=LST[L].get(k);if(o&&o.b&&o.b.close&&o!==v)o.b.close();LST[L].set(k,v);LCS[L].delete(k)}}
+const GSENT=new Map();function setGrow(id,g){g=g>=1?1:g;const g0=GROWS.has(id)?GROWS.get(id):1;if(g0===g)return;if(g>=1)GROWS.delete(id);else GROWS.set(id,g);W.setGrow(id,g);
+  // stage 5.13: the tiles of a growing town are redrawn in steps of 1/12 of the growth, not on every call: constant
+  // re-rendering kept the workers busy, dropped every tile in flight and made the town flicker
+  const s0=GSENT.has(id)?GSENT.get(id):1;if(g<1&&g>=s0&&M.floor(g*12)===M.floor(s0*12)&&(g>=0.95)===(s0>=0.95))return;if(g>=1)GSENT.delete(id);else GSENT.set(id,g);const coarse=g>=1||M.floor(g*4)!==M.floor(s0*4);for(const w of workers)w.postMessage({t:'grow',id,g});
   const c=W.cities.find(q=>q.id===id);if(c){const rf=W.fieldReach(c)+200;let bb=[c.x-rf,c.y-rf,c.x+rf,c.y+rf];for(const z of W.zones)if(z.city===c)bb=[M.min(bb[0],z.bb[0]),M.min(bb[1],z.bb[1]),M.max(bb[2],z.bb[2]),M.max(bb[3],z.bb[3])];invalidate([bb[0]-300,bb[1]-300,bb[2]+300,bb[3]+300],coarse?0:6)}}
 const zoneOn=z=>!W.isHid(z.id)&&(z.dyn||!z.city||W.growOf(z.city.id)>=0.95);
 // fog of war (stage 5.7): the game hides buildings of other states that the player has not seen; tiles over the zones
@@ -142,7 +145,7 @@ let clickT=0;
 cv.addEventListener('pointerup',up,SIG);cv.addEventListener('pointercancel',up,SIG);
 cv.addEventListener('wheel',e=>{e.preventDefault();if(MODE==='bg')return;let d=e.deltaY;if(e.deltaMode===1)d*=18;else if(e.deltaMode===2)d*=400;zoomAt(M.exp(clamp(d,-300,300)*0.0022),e.clientX,e.clientY)},{passive:false,signal:AC.signal});
 cv.addEventListener('dblclick',e=>{clearTimeout(clickT);if(HK.dblclick&&HK.dblclick())return;zoomAt(0.35,e.clientX,e.clientY)},SIG);
-addEventListener('keydown',e=>{if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.tagName==='TEXTAREA')return;if(MODE==='bg')return;keys[e.code]=true;
+addEventListener('keydown',e=>{if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.tagName==='TEXTAREA')return;if(MODE==='bg')return;keys[e.code]=true;if(e.code==='F3'){e.preventDefault();perfOn=!perfOn;if(!perfOn&&perfEl)perfEl.style.display='none';return}
   if(HK.key&&HK.key(e))return;
   if(MODE==='view'){if(e.code==='KeyN')setTod(isNight()?11:22.5);if(e.code==='KeyP')setSpeed(tSpeed?0:1)}if(e.code==='Escape')closeInsp()},SIG);
 addEventListener('keyup',e=>{keys[e.code]=false},SIG);
@@ -242,18 +245,24 @@ function camGoal(){if(fly)return [fly.x1,fly.y1,M.exp(fly.l1),-5e5];if(zoomT){co
 function preRect(zt,cx,cy,m,p,L){const nt=1<<zt,tt=WORLD/nt,hw=VW/2*m,hh=VH/2*m;for(let y=M.max(0,M.floor((cy-hh)/tt));y<=M.min(nt-1,M.floor((cy+hh)/tt));y++)for(let x=M.max(0,M.floor((cx-hw)/tt));x<=M.min(nt-1,M.floor((cx+hw)/tt));x++){const d=M.hypot((x+0.5)*tt-cx,(y+0.5)*tt-cy)/tt;if(L)requestL(zt,x,y,p+d,L);else request(zt,x,y,p+d)}}
 function tileRect(tx,ty,ts){return [M.round(((tx*ts-cam.x)/cam.m+VW/2)*DPR),M.round((((tx+1)*ts-cam.x)/cam.m+VW/2)*DPR),M.round(((ty*ts-cam.y)/cam.m+VH/2)*DPR),M.round((((ty+1)*ts-cam.y)/cam.m+VH/2)*DPR)]}
 function ancestor(mp,z,tx,ty,X0,Y0,X1,Y1,md){for(let d=1;d<=M.min(z,md||99);d++){const ax=tx>>d,ay=ty>>d;const a=mp.get(tkey(z-d,ax,ay));if(a&&a.b){a.f=frameNo;const sz=256/(1<<d);ctx.drawImage(a.b,(tx-(ax<<d))*sz,(ty-(ay<<d))*sz,sz,sz,X0,Y0,X1-X0,Y1-Y0);return true}}return false}
+// stage 5.13: a new tile fades in over its fallback (the old version of the tile or the nearest coarser one) instead of popping;
+// at most 8 new tiles start per frame (their upload to the GPU is spread over frames)
+const FADE=0.3;
+function anc2(z,tx,ty,X0,Y0,X1,Y1){for(let d=1;d<=z;d++){const ax=tx>>d,ay=ty>>d,k=tkey(z-d,ax,ay);const a=cache.get(k)||stale.get(k);if(a&&a.b){a.f=frameNo;const sz=256/(1<<d);ctx.drawImage(a.b,(tx-(ax<<d))*sz,(ty-(ay<<d))*sz,sz,sz,X0,Y0,X1-X0,Y1-Y0);return true}}return false}
+function fallback(k,z,tx,ty,X0,Y0,X1,Y1){const st=stale.get(k);if(st&&st.b){ctx.drawImage(st.b,X0,Y0,X1-X0,Y1-Y0);return true}return anc2(z,tx,ty,X0,Y0,X1,Y1)}
 function drawTiles(){
   const z=tileZ(),n=1<<z,ts=WORLD/n;
   const tx0=M.max(0,M.floor(vx0/ts)),tx1=M.min(n-1,M.floor(vx1/ts)),ty0=M.max(0,M.floor(vy0/ts)),ty1=M.min(n-1,M.floor(vy1/ts));
-  queue=[];request(0,0,0,-1e9);
+  queue=[];request(0,0,0,-1e9);let upN=0;
   const zf=M.max(0,z-3),nf=1<<zf,tf=WORLD/nf;for(let y=M.max(0,M.floor(vy0/tf));y<=M.min(nf-1,M.floor(vy1/tf));y++)for(let x=M.max(0,M.floor(vx0/tf));x<=M.min(nf-1,M.floor(vx1/tf));x++)request(zf,x,y,-1e6);
   ctx.setTransform(1,0,0,1,0,0);
   for(let ty=ty0;ty<=ty1;ty++)for(let tx=tx0;tx<=tx1;tx++){const k=tkey(z,tx,ty);const e=cache.get(k);
     const [X0,X1,Y0,Y1]=tileRect(tx,ty,ts);
-    if(e){e.f=frameNo;ctx.drawImage(e.b,X0,Y0,X1-X0,Y1-Y0);continue}
+    if(e){e.f=frameNo;if(e.t0!==undefined&&!e.up){if(upN<8){e.up=1;upN++;e.t0=T}else if(fallback(k,z,tx,ty,X0,Y0,X1,Y1))continue;else e.up=1}
+      let u=e.t0===undefined?1:(T-e.t0)/FADE;if(u>=1)e.t0=undefined;else if(fallback(k,z,tx,ty,X0,Y0,X1,Y1)){u=u<0?0:u;ctx.globalAlpha=u*u*(3-2*u)}ctx.drawImage(e.b,X0,Y0,X1-X0,Y1-Y0);ctx.globalAlpha=1;continue}
     const cxp=(tx+0.5)*ts-cam.x,cyp=(ty+0.5)*ts-cam.y;request(z,tx,ty,M.hypot(cxp,cyp)/ts);
     const st=stale.get(k);if(st){ctx.drawImage(st.b,X0,Y0,X1-X0,Y1-Y0);continue}
-    if(!ancestor(cache,z,tx,ty,X0,Y0,X1,Y1))ancestor(stale,z,tx,ty,X0,Y0,X1,Y1)}
+    anc2(z,tx,ty,X0,Y0,X1,Y1)}
   {const g=camGoal();if(g){const zt=tileZAt(g[2]);if(zt!==z)preRect(zt,g[0],g[1],g[2],g[3],0)}}
   if(z<12&&queue.length<4){const z2=z+1,n2=1<<z2,t2=WORLD/n2;const cx=M.floor(cam.x/t2),cy=M.floor(cam.y/t2);for(let y=cy-1;y<=cy+1;y++)for(let x=cx-1;x<=cx+1;x++)if(x>=0&&y>=0&&x<n2&&y<n2)request(z2,x,y,1e5)}
   return z}
@@ -261,8 +270,8 @@ function drawTiles(){
 function lightLevel(z,a,L,prio){const n=1<<z,ts=WORLD/n,mp=LCS[L];
   const tx0=M.max(0,M.floor(vx0/ts)),tx1=M.min(n-1,M.floor(vx1/ts)),ty0=M.max(0,M.floor(vy0/ts)),ty1=M.min(n-1,M.floor(vy1/ts));ctx.globalAlpha=a;
   for(let ty=ty0;ty<=ty1;ty++)for(let tx=tx0;tx<=tx1;tx++){const k=tkey(z,tx,ty);const e=mp.get(k);const [X0,X1,Y0,Y1]=tileRect(tx,ty,ts);
-    if(e){e.f=frameNo;if(e.b)ctx.drawImage(e.b,X0,Y0,X1-X0,Y1-Y0);continue}
-    requestL(z,tx,ty,prio+M.hypot((tx+0.5)*ts-cam.x,(ty+0.5)*ts-cam.y)/ts,L);ancestor(mp,z,tx,ty,X0,Y0,X1,Y1,L===1?1:2)}}
+    if(e){e.f=frameNo;let u=e.t0===undefined?1:(T-e.t0)/FADE;if(u>=1){e.t0=undefined;u=1}else{u=u<0?0:u*u*(3-2*u);const o=LST[L].get(k);ctx.globalAlpha=a*(1-u);if(o){if(o.b)ctx.drawImage(o.b,X0,Y0,X1-X0,Y1-Y0)}else ancestor(mp,z,tx,ty,X0,Y0,X1,Y1,L===1?1:2)}ctx.globalAlpha=a*u;if(e.b)ctx.drawImage(e.b,X0,Y0,X1-X0,Y1-Y0);ctx.globalAlpha=a;continue}
+    requestL(z,tx,ty,prio+M.hypot((tx+0.5)*ts-cam.x,(ty+0.5)*ts-cam.y)/ts,L);{const o=LST[L].get(k);if(o){if(o.b)ctx.drawImage(o.b,X0,Y0,X1-X0,Y1-Y0)}else ancestor(mp,z,tx,ty,X0,Y0,X1,Y1,L===1?1:2)}}}
 function drawLights(z,a){if(a<0.01)return;ctx.setTransform(1,0,0,1,0,0);ctx.globalCompositeOperation='lighter';
   const fogB=1+wcur.fog*0.9+wcur.rain*0.3;
   requestL(0,0,0,-1e9,1);
@@ -488,12 +497,12 @@ function drawSel(){if(!sel)return;ctx.setTransform(DPR,0,0,DPR,0,0);const o=sel.
 
 // ------------------------------------------------------------ main loop
 let last=performance.now(),fpsA=60,hudT=0,zNow=0,lowQ=false,qT=0,pfT=0,CAMMV=false,pcm=0;
-const PROF={};function pf(n){const t=performance.now();PROF[n]=(PROF[n]||0)*0.97+(t-pfT)*0.03;pfT=t}
+let perfOn=false,perfEl=null,fWorst=0;const PROF={};function pf(n){const t=performance.now();PROF[n]=(PROF[n]||0)*0.97+(t-pfT)*0.03;pfT=t}
 const hud={alt:document.getElementById('alt'),scale:document.getElementById('scalebar'),scaleT:document.getElementById('scalet'),pos:document.getElementById('pos'),fps:document.getElementById('fps'),load:document.getElementById('loading'),clock:null};
 const mini=document.getElementById('mini'),mctx=mini.getContext('2d');
 let frameErr=0;
-function frame(now){if(!alive)return;try{frameBody(now)}catch(e){if(frameErr++<3)console.error('frame:',e);ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}requestAnimationFrame(frame)}
-function frameBody(now){const dt=M.min(0.06,(now-last)/1000);last=now;T+=dt;frameNo++;fpsA=fpsA*0.95+(1/M.max(dt,1e-3))*0.05;
+function frame(now){if(!alive)return;const fj0=performance.now();try{frameBody(now);PROF.js=(PROF.js||0)*0.95+(performance.now()-fj0)*0.05}catch(e){if(frameErr++<3)console.error('frame:',e);ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}requestAnimationFrame(frame)}
+function frameBody(now){const dt=M.min(0.06,(now-last)/1000);last=now;T+=dt;frameNo++;fpsA=fpsA*0.95+(1/M.max(dt,1e-3))*0.05;if(perfOn)fWorst=M.max(fWorst,dt*1000);
   if(!todDrag&&DN)tod=(tod+(todRate!==null?todRate:SPEEDS[tSpeed])*dt)%24;if(HK.frame)hk('frame',dt);if(MODE==='bg')bgCam(dt);updWeather(dt);updLight();
   pfT=performance.now();updateCam(dt);CAMMV=!!(fly||zoomT||pinch)||M.abs(cam.m-pcm)>cam.m*1e-4;pcm=cam.m;
   vx0=cam.x-VW/2*cam.m;vy0=cam.y-VH/2*cam.m;vx1=cam.x+VW/2*cam.m;vy1=cam.y+VH/2*cam.m;
@@ -534,13 +543,17 @@ function frameBody(now){const dt=M.min(0.06,(now-last)/1000);last=now;T+=dt;fram
   if(HK.draw){ctx.setTransform(DPR,0,0,DPR,0,0);hk('draw',ctx,API);ctx.setTransform(DPR,0,0,DPR,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}
   pf('hook');drawSel();
   if(frameNo%30===0)evict();
-  if(stale.size){staleT+=dt;if((pending.size===0&&!queue.some(q=>!q.L))||staleT>25)dropStale()}
+  if(stale.size||LST[1].size||LST[2].size||LST[3].size){staleT+=dt;if((pending.size+LPS[1].size+LPS[2].size+LPS[3].size===0&&!queue.length&&T-lastArr>FADE+0.1)||staleT>25)dropStale()}
   // adaptive quality (hysteresis): drop the mid bloom layer when the frame rate is low
   if(LG.lights>0.05){if(!lowQ&&fpsA<22||lowQ&&fpsA>38)qT+=dt;else qT=0;if(qT>3){lowQ=!lowQ;qT=0}}
   hudT+=dt;if(hudT>0.12){hudT=0;updHUD()}
 }
+// stage 5.13: F3 shows where the frame time goes (to check FPS on a real machine)
+function perfShow(){if(!perfEl){perfEl=document.createElement('div');perfEl.style.cssText='position:fixed;left:8px;top:64px;z-index:9999;background:rgba(0,0,0,0.75);color:#9f9;font:12px/1.4 monospace;padding:6px 9px;border-radius:6px;pointer-events:none;white-space:pre';document.body.appendChild(perfEl)}perfEl.style.display='block';const NL=String.fromCharCode(10);
+  const top=Object.entries(PROF).filter(e=>e[0]!=='js').sort((a,b)=>b[1]-a[1]).slice(0,6).map(e=>e[0]+' '+e[1].toFixed(2)+' мс');
+  perfEl.textContent=['FPS '+M.round(fpsA)+' · худший кадр '+fWorst.toFixed(1)+' мс','JS за кадр '+(PROF.js||0).toFixed(2)+' мс'].concat(top,['тайлы '+cache.size+' · старые '+stale.size+' · в работе '+(pending.size+LPS[1].size+LPS[2].size+LPS[3].size)+' · очередь '+queue.length,'потоков '+workers.filter(w=>w.ready).length+(mainRender?' (CPU)':'')+' · машин '+carCount+' · LOD '+zNow]).join(NL);fWorst=0}
 function fmtD(m){return m>=1000?(m/1000).toFixed(m>=10000?0:1).replace('.',',')+' км':M.round(m)+' м'}
-function updHUD(){const H=camH();hud.alt.textContent=fmtD(H);
+function updHUD(){const H=camH();if(perfOn)perfShow();hud.alt.textContent=fmtD(H);
   const target=110*cam.m;const p=M.pow(10,M.floor(M.log10(target)));let L=p;for(const f of [1,2,5,10])if(f*p<=target)L=f*p;hud.scale.style.width=(L/cam.m)+'px';hud.scaleT.textContent=fmtD(L);
   hud.pos.textContent=`${(cam.x/1000).toFixed(2)} : ${(cam.y/1000).toFixed(2)} км · LOD ${zNow}`;hud.fps.textContent=`${M.round(fpsA)} FPS · тайлов ${cache.size}+${lcache.size}${mainRender?' (CPU)':' · потоков '+workers.filter(w=>w.ready).length}${carCount?' · машин '+carCount:''}`;
   const z0=cache.get(0)||stale.get(0);if(z0){if(!readyFired&&cache.size>4){readyFired=true;if(cfg.onReady)cfg.onReady(API)}
