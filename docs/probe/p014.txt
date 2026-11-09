@@ -1,0 +1,6 @@
+=== grep src/game.js /startWorld|cpu/
+2: // Uses the world engine (startWorld) through hooks; all game graphics are overlays drawn in Canvas 2D.
+991:   const vo=ui.viewOpts();api=startWorld({seed:cfg.seed,opt:mapOpt(caps),ops:ops||[],mode:'game',tod:cfg.rules.dayNight?9.5:12.5,dayNight:cfg.rules.dayNight,view:vo,hooks,onReady:A=>{onReady&&onReady(A)}});
+=== grep src/ui.js /cpu|startWorld/
+197:     bg=startWorld({mode:'bg',seed:20261107,tod:17.4,view:Object.assign({labels:false,traffic:true,clouds:true},QV[S.quality]||QV.balance),onReady:()=>loaded()});$('ldt').textContent='Отрисовка карты'},80)}
+377: if(/^\d/.test(HS)||/^view/.test(HS)){document.body.className='m-view';loading('Загрузка мира','Режим просмотра · сид '+parseInt(HS));setTimeout(()=>startWorld({mode:'view',onReady:()=>loaded()}),60)}

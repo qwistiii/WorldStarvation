@@ -31,33 +31,35 @@ const opt=Object.assign({clouds:true,labels:true,traffic:true},cfg.view||{});
 // cache: day tiles of the current season; stale: previous season (fallback while re-rendering); lcache: night-light tiles
 const cache=new Map(),pending=new Set();const LCS=[null,new Map(),new Map(),new Map()],LPS=[null,new Set(),new Set(),new Set()],lcache=LCS[1];const LHB=[0,0,2,2];let stale=new Map(),staleT=0,lastArr=-9;const LST=[null,new Map(),new Map(),new Map()]; // stage 5.13: LST = previous light tiles of a redrawn area, shown until the new ones arrive
 let frameNo=0,queue=[];
-const workers=[];let mainRender=false;
+const workers=[];let mainRender=false;const WD={ready:0,dead:0,fb:0,mr:0,terr:0,errs:[]};
 const NW=M.max(2,M.min((navigator.deviceMemory||4)>=8?7:5,(navigator.hardwareConcurrency||4)-2)); // stage 5.12: up to 7 workers on 8+ GB machines
 const wsrc=(typeof FlagArt==='function'?FlagArt.toString():'')+WorldGen.toString()+`
 let G=null;
-onmessage=function(e){const m=e.data;
+function H0(e){const m=e.data;
  if(m.t==='init'){try{const t=new OffscreenCanvas(2,2).getContext('2d');if(!t)throw new Error('no2d');G=WorldGen(m.seed,m.opt);G.setSeason(m.season);for(const o of m.ops||[])G[o.f](o.q);for(const q of m.grow||[])G.setGrow(q[0],q[1]);postMessage({t:'ready',ok:true})}catch(err){postMessage({t:'ready',ok:false,err:String(err)})}}
  else if(m.t==='season'){G.setSeason(m.s)}
  else if(m.t==='grow'){G.setGrow(m.id,m.g)}
  else if(m.t==='hid'){G.setHidden(m.ids)}
  else if(m.t==='op'){G[m.op.f](m.op.q)}
  else if(m.t==='tile'){if(m.L){const c=G.renderLights(m.z,m.x,m.y,m.hb);if(!c){postMessage({t:'tile',key:m.key,L:m.L,b:null,gv:m.gv});return}const b=c.transferToImageBitmap();postMessage({t:'tile',key:m.key,L:m.L,b,gv:m.gv},[b]);return}
-   const c=G.renderTile(m.z,m.x,m.y);const b=c.transferToImageBitmap();postMessage({t:'tile',key:m.key,b,s:G.season(),gv:m.gv},[b])}};`;
+   const c=G.renderTile(m.z,m.x,m.y);const b=c.transferToImageBitmap();postMessage({t:'tile',key:m.key,b,s:G.season(),gv:m.gv},[b])}}
+// stage 5.14: an error in one tile or op must not kill the worker (all workers dead = every tile on the main thread)
+onmessage=function(e){try{H0(e)}catch(err){const m=e.data||{};const es=String(err&&err.stack||err).slice(0,300);if(m.t==='tile')postMessage({t:'tile',key:m.key,L:m.L,b:null,s:G?G.season():0,gv:m.gv,err:es});else postMessage({t:'err',m:m.t,err:es})}};`;
 let wurl=null;try{if(HS.indexOf('cpu')>=0)throw 0;const url=URL.createObjectURL(new Blob([wsrc],{type:'text/javascript'}));
   for(let i=0;i<NW;i++){const w=new Worker(url);w.busy=0;w.ready=false;w.dead=false;
-    w.onmessage=e=>{const m=e.data;if(m.t==='ready'){if(m.ok){w.ready=true;mainRender=false} // a slow start fell back to the main thread: hand rendering back to the workers
+    w.onmessage=e=>{const m=e.data;if(m.t==='err'){if(WD.errs.length<20)WD.errs.push('w:'+m.m+':'+m.err);return}if(m.t==='ready'){if(!m.ok&&WD.errs.length<20)WD.errs.push('init:'+m.err);if(m.ok){w.ready=true;WD.ready++;mainRender=false} // a slow start fell back to the main thread: hand rendering back to the workers
           else{w.dead=true;if(workers.every(q=>q.dead))mainRender=true}return}
       if(m.t==='tile'){w.busy--;if(!alive){if(m.b&&m.b.close)m.b.close();return}
-        if(m.L){LPS[m.L].delete(m.key);if(outdated(m.key,m.gv)){if(m.b&&m.b.close)m.b.close();return}LCS[m.L].set(m.key,{b:m.b,f:frameNo,t0:T});lastArr=T;return}
-        pending.delete(m.key);if(m.s!==season||outdated(m.key,m.gv)){if(m.b&&m.b.close)m.b.close();return}cache.set(m.key,{b:m.b,f:frameNo,t0:T});lastArr=T}};
-    w.onerror=()=>{w.dead=true;if(workers.every(q=>q.dead))mainRender=true};w.postMessage({t:'init',seed:SEED,season,opt:cfg.opt,grow:[...GROWS],ops:OPS});if(HIDL.length)w.postMessage({t:'hid',ids:HIDL});workers.push(w)}wurl=url}
-catch(e){mainRender=true}
-setTimeout(()=>{if(alive&&!workers.some(w=>w.ready))mainRender=true},4000+(cfg.opt?3000:0));
+        if(m.L){LPS[m.L].delete(m.key);if(m.err&&WD.errs.length<20)WD.errs.push('light:'+m.err);if(outdated(m.key,m.gv)){if(m.b&&m.b.close)m.b.close();return}LCS[m.L].set(m.key,{b:m.b,f:frameNo,t0:T});lastArr=T;return}
+        pending.delete(m.key);if(!m.b){WD.terr++;if(m.err&&WD.errs.length<20)WD.errs.push('tile:'+m.err);return}if(m.s!==season||outdated(m.key,m.gv)){if(m.b&&m.b.close)m.b.close();return}cache.set(m.key,{b:m.b,f:frameNo,t0:T});lastArr=T}};
+    w.onerror=(ev)=>{WD.dead++;if(WD.errs.length<20)WD.errs.push('onerror:'+(ev&&ev.message)+' @'+(ev&&ev.lineno));w.dead=true;if(workers.every(q=>q.dead))mainRender=true};w.postMessage({t:'init',seed:SEED,season,opt:cfg.opt,grow:[...GROWS],ops:OPS});if(HIDL.length)w.postMessage({t:'hid',ids:HIDL});workers.push(w)}wurl=url}
+catch(e){mainRender=true;WD.errs.push('spawn:'+String(e))}
+setTimeout(()=>{if(alive&&!workers.some(w=>w.ready)){mainRender=true;WD.fb++}},4000+(cfg.opt?3000:0));
 const tkey=(z,x,y)=>z*16777216+y*4096+x;
 function request(z,x,y,p){const k=tkey(z,x,y);if(cache.has(k)||pending.has(k))return;queue.push({k,z,x,y,p,L:0})}
 function requestL(z,x,y,p,L){const k=tkey(z,x,y);if(LCS[L].has(k)||LPS[L].has(k))return;queue.push({k,z,x,y,p,L})}
 function dispatch(){queue.sort((a,b)=>a.p-b.p);let qi=0;
-  if(mainRender){const t0=performance.now();while(qi<queue.length&&performance.now()-t0<12){const q=queue[qi++];
+  if(mainRender){WD.mr++;const t0=performance.now();while(qi<queue.length&&performance.now()-t0<12){const q=queue[qi++];
       if(q.L){if(LCS[q.L].has(q.k))continue;LCS[q.L].set(q.k,{b:W.renderLights(q.z,q.x,q.y,LHB[q.L]),f:frameNo})}else{if(cache.has(q.k))continue;cache.set(q.k,{b:W.renderTile(q.z,q.x,q.y),f:frameNo})}}return}
   for(const w of workers){if(!w.ready||w.dead)continue;while(w.busy<2&&qi<queue.length){const q=queue[qi++];
       if(q.L){if(LPS[q.L].has(q.k)||LCS[q.L].has(q.k))continue;LPS[q.L].add(q.k)}else{if(pending.has(q.k)||cache.has(q.k))continue;pending.add(q.k)}
@@ -588,7 +590,7 @@ const API={gflights:GFL,get ops(){return OPS},op,W,cam,setHidden,flyTo,zoomAt,ma
   sxw,syw,toWorld:(sx,sy)=>[cam.x+(sx-VW/2)*cam.m,cam.y+(sy-VH/2)*cam.m],setTodRate:r=>{todRate=r},isNight,
   showCity:c=>{sel={k:'city',o:c};showInsp()},
   setWeather:i=>{wxi=i;const w=WX[i];for(const k in wcur)wcur[k]=w[k]!==undefined?w[k]:(k==='dim'||k==='cd'?1:0)},
-  stats:()=>({fps:fpsA,cars:carCount,tiles:cache.size,lights:LCS[1].size+'/'+LCS[2].size+'/'+LCS[3].size,queue:queue.length,pending:pending.size+LPS[1].size+LPS[2].size+LPS[3].size,main:mainRender,lowQ}),
+  stats:()=>({fps:fpsA,cars:carCount,tiles:cache.size,lights:LCS[1].size+'/'+LCS[2].size+'/'+LCS[3].size,queue:queue.length,pending:pending.size+LPS[1].size+LPS[2].size+LPS[3].size,main:mainRender,lowQ,nw:workers.length,wr:workers.filter(q=>q.ready).length,wdead:workers.filter(q=>q.dead).length,cpu:HS.indexOf('cpu')>=0,wd:WD}),
   stop:()=>{introOff=true;fly=null;zoomT=null}};
 window.__world=Object.assign({PROF,cache,lcache,cloudLayers:CLL},API);
 requestAnimationFrame(frame);

@@ -27,7 +27,7 @@ try {
   await p.evaluate(() => { window.__ft = []; window.__lt = []; window.__cm = []; window.__rec = true; let last = performance.now();
     const loop = (t) => { window.__ft.push([t, t - last]); last = t; if (window.__rec) requestAnimationFrame(loop); }; requestAnimationFrame(loop);
     const t00 = performance.now(); window.__cmI = setInterval(() => { const w = window.__world; let s = null; try { s = w && w.stats ? w.stats() : null; } catch (e) {}
-      window.__cm.push([Math.round(performance.now() - t00), w && w.cam ? +(+w.cam.m).toFixed(2) : null, s ? s.queue : null, s ? s.pending : null]); }, 500);
+      window.__cm.push([Math.round(performance.now() - t00), w && w.cam ? +(+w.cam.m).toFixed(2) : null, s ? s.queue : null, s ? s.pending : null, s ? (s.main ? 1 : 0) : null, s ? s.wr : null]); }, 500);
     try { new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__lt.push([Math.round(e.startTime), Math.round(e.duration)]); }).observe({ entryTypes: ['longtask'] }); } catch (e) {}
     for (let r = 0; r < 60000; r += 1500) for (let a = 0; a < 6.28; a += 0.3) { const x = 65536 + Math.cos(a) * r, y = 65536 + Math.sin(a) * r; if (Game._test.validSite(x, y) === null) { Game._test.found(x, y); return; } } });
   await p.waitForFunction(() => Game.api && Game.api.ready && Game.G.phase === 'play' && Game.G.states[0].places.length, null, { timeout: 90000 });
@@ -36,10 +36,12 @@ try {
     for (const [t] of a) { const i = Math.floor((t - t0) / 1000); sec[i] = (sec[i] || 0) + 1; }
     const w = window.__world, prof = {}; if (w && w.PROF) for (const k in w.PROF) prof[k] = +(+w.PROF[k]).toFixed(2);
     return { frames: d.length, fps: d.length ? Math.round(1000 * d.length / d.reduce((q, x) => q + x, 0)) : 0, p95: +(s[Math.floor(s.length * 0.95)] || 0).toFixed(1), max: +(s[s.length - 1] || 0).toFixed(1), over12ms: d.filter((x) => x > 12).length, perSec: Array.from(sec, (x) => x || 0), longTasks: window.__lt.length, longMs: window.__lt.reduce((q, x) => q + x[1], 0), prof, t0: Math.round(t0), lt: window.__lt.filter((x) => x[1] >= 80).slice(0, 40), cm: window.__cm.filter((x, i) => i % 2 === 0) }; });
+  const wk0 = await p.evaluate(() => { const s = window.__world && window.__world.stats ? window.__world.stats() : null; return s ? { main: s.main, nw: s.nw, wr: s.wr, wdead: s.wdead, cpu: s.cpu, wd: s.wd, hc: navigator.hardwareConcurrency, dm: navigator.deviceMemory } : null; });
+  tail.push('workers ' + JSON.stringify(wk0));
   const lt = found.lt, cm = found.cm; delete found.lt; delete found.cm;
   console.log('found ' + JSON.stringify(found));
   tail.push('longtasks>=80ms [start,dur] ' + JSON.stringify(lt));
-  tail.push('cam per s [ms,m,queue,pending] ' + JSON.stringify(cm));
+  tail.push('cam per s [ms,m,queue,pending,mainRender,workersReady] ' + JSON.stringify(cm));
   if (cdp) {
     try {
       const { profile } = await cdp.send('Profiler.stop');

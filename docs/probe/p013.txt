@@ -1,0 +1,75 @@
+=== src/main.js 1-39 of 599
+1: // The world engine: renders a WorldGen world with camera, traffic, light and weather.
+2: // startWorld(cfg) can be called again after api.destroy() (main menu → game → menu …).
+3: // cfg: {seed, opt (WorldGen options), mode:'view'|'bg'|'game', hash (url hash string for 'view'), hooks:{draw,click,key,frame}}
+4: function startWorld(cfg){
+5: 'use strict';
+6: cfg=cfg||{};const MODE=cfg.mode||'view',HK=cfg.hooks||{};
+7: const M=Math,PI=M.PI,TAU=PI*2;
+8: const AC=new AbortController(),SIG={signal:AC.signal};let alive=true;
+9: const clamp=(x,a,b)=>x<a?a:x>b?b:x, smooth=(a,b,x)=>{let t=(x-a)/(b-a);t=t<0?0:t>1?1:t;return t*t*(3-2*t)}, lerp=(a,b,t)=>a+(b-a)*t;
+10: // hash: #seed[,tHH][,wN][,sN][cpu]   e.g. #20261107,t22.5,w3,s2
+11: const HS=MODE==='view'?(cfg.hash!=null?cfg.hash:location.hash.slice(1)):(cfg.cpu?'cpu':'');
+12: let SEED=cfg.seed||parseInt(HS.replace('cpu',''));if(!SEED||isNaN(SEED))SEED=20261107;
+13: const hv=(re,d)=>{const m=HS.match(re);return m?parseFloat(m[1]):d};
+14: const cv=document.getElementById('c'),ctx=cv.getContext('2d',{alpha:false});
+15: const VQ=cfg.view||{};let DPR=M.min(window.devicePixelRatio||1,VQ.dpr||2),VW=0,VH=0,vign=null;const LITE=!!VQ.lite;
+16: function resize(){VW=innerWidth;VH=innerHeight;cv.width=M.round(VW*DPR);cv.height=M.round(VH*DPR);
+17:   vign=ctx.createRadialGradient(VW/2,VH/2,M.min(VW,VH)*0.35,VW/2,VH/2,M.hypot(VW,VH)*0.62);vign.addColorStop(0,'rgba(0,0,0,0)');vign.addColorStop(1,'rgba(0,8,20,0.38)')}
+18: addEventListener('resize',resize,SIG);resize();
+19: 
+20: let season=clamp(hv(/,s(\d)/,0)|0,0,2);
+21: const W=WorldGen(SEED,cfg.opt),WORLD=W.WORLD,S0=W.sprites();W.setSeason(season);
+22: const OPS=[];for(const o of cfg.ops||[]){W[o.f](o.q);OPS.push(o)} // settlements and buildings placed in the game (replayed on load)
+23: const GROWS=new Map(cfg.grow||[]);for(const [id,g] of GROWS)W.setGrow(id,g);
+24: let HIDL=[];
+25: // main-thread copies of sprites as regular canvases (faster to draw than OffscreenCanvas sources in some browsers)
+26: const toC=c=>{const d=document.createElement('canvas');d.width=c.width;d.height=c.height;d.getContext('2d').drawImage(c,0,0);return d};
+27: const S={car:S0.car.map(toC),carLo:S0.carLo.map(toC),truck:S0.truck.map(toC),bus:toC(S0.bus),tree:S0.tree.map(toC)};
+28: const opt=Object.assign({clouds:true,labels:true,traffic:true},cfg.view||{});
+29: 
+30: // ------------------------------------------------------------ workers / tile caches
+31: // cache: day tiles of the current season; stale: previous season (fallback while re-rendering); lcache: night-light tiles
+32: const cache=new Map(),pending=new Set();const LCS=[null,new Map(),new Map(),new Map()],LPS=[null,new Set(),new Set(),new Set()],lcache=LCS[1];const LHB=[0,0,2,2];let stale=new Map(),staleT=0,lastArr=-9;const LST=[null,new Map(),new Map(),new Map()]; // stage 5.13: LST = previous light tiles of a redrawn area, shown until the new ones arrive
+33: let frameNo=0,queue=[];
+34: const workers=[];let mainRender=false;
+35: const NW=M.max(2,M.min((navigator.deviceMemory||4)>=8?7:5,(navigator.hardwareConcurrency||4)-2)); // stage 5.12: up to 7 workers on 8+ GB machines
+36: const wsrc=(typeof FlagArt==='function'?FlagArt.toString():'')+WorldGen.toString()+`
+37: let G=null;
+38: onmessage=function(e){const m=e.data;
+39:  if(m.t==='init'){try{const t=new OffscreenCanvas(2,2).getContext('2d');if(!t)throw new Error('no2d');G=WorldGen(m.seed,m.opt);G.setSeason(m.season);for(const o of m.ops||[])G[o.f](o.q);for(const q of m.grow||[])G.setGrow(q[0],q[1]);postMessage({t:'ready',ok:true})}catch(err){postMessage({t:'ready',ok:false,err:String(err)})}}
+=== grep src/main.js /mainRender|NW=|NW =|ready/
+34: const workers=[];let mainRender=false;
+35: const NW=M.max(2,M.min((navigator.deviceMemory||4)>=8?7:5,(navigator.hardwareConcurrency||4)-2)); // stage 5.12: up to 7 workers on 8+ GB machines
+39:  if(m.t==='init'){try{const t=new OffscreenCanvas(2,2).getContext('2d');if(!t)throw new Error('no2d');G=WorldGen(m.seed,m.opt);G.setSeason(m.season);for(const o of m.ops||[])G[o.f](o.q);for(const q of m.grow||[])G.setGrow(q[0],q[1]);postMessage({t:'ready',ok:true})}catch(err){postMessage({t:'ready',
+47:   for(let i=0;i<NW;i++){const w=new Worker(url);w.busy=0;w.ready=false;w.dead=false;
+48:     w.onmessage=e=>{const m=e.data;if(m.t==='ready'){if(m.ok){w.ready=true;mainRender=false} // a slow start fell back to the main thread: hand rendering back to the workers
+49:           else{w.dead=true;if(workers.every(q=>q.dead))mainRender=true}return}
+53:     w.onerror=()=>{w.dead=true;if(workers.every(q=>q.dead))mainRender=true};w.postMessage({t:'init',seed:SEED,season,opt:cfg.opt,grow:[...GROWS],ops:OPS});if(HIDL.length)w.postMessage({t:'hid',ids:HIDL});workers.push(w)}wurl=url}
+54: catch(e){mainRender=true}
+55: setTimeout(()=>{if(alive&&!workers.some(w=>w.ready))mainRender=true},4000+(cfg.opt?3000:0));
+60:   if(mainRender){const t0=performance.now();while(qi<queue.length&&performance.now()-t0<12){const q=queue[qi++];
+62:   for(const w of workers){if(!w.ready||w.dead)continue;while(w.busy<2&&qi<queue.length){const q=queue[qi++];
+69: function setSeason(s){s=clamp(s|0,0,2);if(s===season)return;season=s;W.setSeason(s);for(const w of workers)if(w.ready)w.postMessage({t:'season',s});
+204: let tod=((hv(/,t(\d+(?:\.\d+)?)/,cfg.tod!=null?cfg.tod:17.2))%24+24)%24,tSpeed=1,todRate=null,readyFired=false;const DN=cfg.dayNight!==false;const SPEEDS=[0,4/60,40/60]; // game hours per real second (4 game min/s → day = 6 min)
+564:   perfEl.textContent=['FPS '+M.round(fpsA)+' · худший кадр '+fWorst.toFixed(1)+' мс','JS за кадр '+(PROF.js||0).toFixed(2)+' мс'].concat(top,['тайлы '+cache.size+' · старые '+stale.size+' · в работе '+(pending.size+LPS[1].size+LPS[2].size+LPS[3].size)+' · очередь '+queue.length,'потоков '+workers.fi
+568:   hud.pos.textContent=`${(cam.x/1000).toFixed(2)} : ${(cam.y/1000).toFixed(2)} км · LOD ${zNow}`;hud.fps.textContent=`${M.round(fpsA)} FPS · тайлов ${cache.size}+${lcache.size}${mainRender?' (CPU)':' · потоков '+workers.filter(w=>w.ready).length}${carCount?' · машин '+carCount:''}`;
+569:   const z0=cache.get(0)||stale.get(0);if(z0){if(!readyFired&&cache.size>4){readyFired=true;if(cfg.onReady)cfg.onReady(API)}
+587:   get VW(){return VW},get VH(){return VH},get DPR(){return DPR},get T(){return T},get tod(){return tod},get fps(){return fpsA},get ready(){return readyFired},
+591:   stats:()=>({fps:fpsA,cars:carCount,tiles:cache.size,lights:LCS[1].size+'/'+LCS[2].size+'/'+LCS[3].size,queue:queue.length,pending:pending.size+LPS[1].size+LPS[2].size+LPS[3].size,main:mainRender,lowQ}),
+=== grep src/game.js /flyTo|addPlace/
+225: function placeNow(s,q){const b=BLD[q.k],name=NAMES.capital(rngS(hsh(q.x|0,q.y|0)*1e9));const id=api.op('addPlace',{k:q.k,x:q.x,y:q.y,st:s.id,name,R:b.R});q.id=id;if(id<0)return;
+595:   const b=$('msb');if(b._h===h)return;b._h=h;b.innerHTML=h;$('a-home').onclick=()=>{const q=p.places[0];if(q)api.flyTo(q.x,q.y,3)};$('a-dip').onclick=()=>{$('dip').classList.add('show');updDip()}}
+623:   $('a-go').onclick=()=>api.flyTo(a.x,a.y,4)}
+712:   if(d.go==='cap'){const q=p.places[0];if(q)api.flyTo(q.x,q.y,3);return}if(d.go==='world')return api.flyTo(W.WORLD/2,W.WORLD/2,api.maxM()*0.9);
+714:   if(d.fly){const [x,y]=d.fly.split(',').map(Number);return api.flyTo(x,y,3)}
+715:   if(d.army!=null){const a=p.armies[+d.army];G.sel={army:a};G.mode=null;panelSig='';updPanel();api.flyTo(a.x,a.y,M.min(api.cam.m,8));return updCatalog()}
+780:   for(const e of b.querySelectorAll('[data-go]'))e.onclick=()=>{const s=G.states[+e.dataset.go];const q=s.places[0];if(q)api.flyTo(q.x,q.y,6)}}
+917: function selDep(i,fly){const d=G.dep[i];if(!d)return;G.sel={dep:i};G.mode=null;setBuild(null);panelSig='';if(fly)api.flyTo(d.x,d.y,M.min(api.cam.m,4));updPanel();oreSig='';updOres()}
+926:   $('a-close').onclick=closeSel;$('a-depgo').onclick=()=>api.flyTo(d.x,d.y,M.min(api.cam.m,3));
+939:   for(const e of b.querySelectorAll('[data-fly]'))e.onclick=()=>{const [x,y]=e.dataset.fly.split(',').map(Number);api.flyTo(x,y,4)};
+940:   for(const e of b.querySelectorAll('[data-army]'))e.onclick=()=>{const a=p.armies[+e.dataset.army];if(!a)return;G.sel={army:a};G.mode=null;panelSig='';updPanel();api.flyTo(a.x,a.y,M.min(api.cam.m,6))}}
+1008:     G.dep=keep;boot(caps,()=>{ui.loaded();api.flyTo(x,y,3.2,4.5)},[depOp()]);
+=== grep tests/perf-capital.mjs /cpu|goto|launch|args/
+12: const b = await chromium.launch();
+18:   await p.goto('http://127.0.0.1:' + PORT + '/index.html');
