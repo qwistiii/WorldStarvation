@@ -1,0 +1,47 @@
+name: apply
+# patches/*.mjs pushed to a claude/** branch are run here (exact string edits of big source files), removed and committed;
+# then the tests workflow is started for the branch
+on:
+  push:
+    branches: ['claude/**']
+    paths: ['patches/**']
+permissions:
+  contents: write
+  actions: write
+  pull-requests: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: apply
+        id: apply
+        run: |
+          set -eo pipefail
+          shopt -s nullglob
+          files=(patches/*.mjs)
+          if [ ${#files[@]} -eq 0 ]; then echo "none=1" >> "$GITHUB_OUTPUT"; exit 0; fi
+          for f in "${files[@]}"; do echo "== $f" | tee -a /tmp/apply.log; node "$f" 2>&1 | tee -a /tmp/apply.log; done
+          git rm -q "${files[@]}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "apply: ${files[*]}"
+          git push
+      - name: run tests
+        if: success() && steps.apply.outputs.none != '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run tests.yml --ref "$GITHUB_REF_NAME"
+      - name: report failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PR=$(gh pr list --head "$GITHUB_REF_NAME" --state open --json number -q '.[0].number')
+          [ -n "$PR" ] || exit 0
+          { echo "apply failed"; echo '~~~'; tail -c 6000 /tmp/apply.log 2>/dev/null; echo '~~~'; } > fail.md
+          gh pr comment "$PR" --body-file fail.md
