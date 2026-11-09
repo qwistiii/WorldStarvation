@@ -1,0 +1,56 @@
+name: tests
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci || npm install
+      - run: npx playwright install --with-deps chromium
+      - name: unit
+        id: unit
+        continue-on-error: true
+        run: set -o pipefail; npm test 2>&1 | tee unit.log
+      - name: browser
+        id: browser
+        continue-on-error: true
+        run: set -o pipefail; npm run test:browser 2>&1 | tee browser.log
+      - name: perf-branch
+        continue-on-error: true
+        run: set -o pipefail; timeout 600 node tools/perf.mjs 2>&1 | tee perf-branch.log
+      - name: perf-main
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          git worktree add ../base origin/main
+          cd ../base
+          (npm ci || npm install)
+          timeout 600 node tools/perf.mjs 2>&1 | tee "$GITHUB_WORKSPACE/perf-main.log"
+      - name: report
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "unit: ${{ steps.unit.outcome }}, browser: ${{ steps.browser.outcome }}"
+            for f in unit browser perf-branch perf-main; do
+              echo "### $f"; echo '~~~'
+              tail -c 12000 "$f.log" 2>/dev/null || echo "нет лога"
+              echo '~~~'
+            done
+          } > report.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file report.md
+      - if: steps.unit.outcome == 'failure' || steps.browser.outcome == 'failure'
+        run: exit 1
