@@ -68,6 +68,11 @@ try {
   // ---- значки залежей пропадают у облаков, постройки отмечены на карте и миникарте
   const far = await page.evaluate(() => { const A = Game.api; return { m: A.maxM() }; });
   check(far.m > 75, 'у облаков (высота камеры ' + Math.round(far.m) + ' м/пикс) значки залежей не рисуются');
+  // ---- облака: полное разрешение, у неподвижной камеры слой не перерисовывается (FPS у облаков)
+  await page.evaluate(() => { const A = Game.api; A.stop(); A.cam.m = A.maxM(); Game.setSpeed(0); });
+  await page.waitForTimeout(2500);
+  const cl = await page.evaluate(async () => { const L = __world.cloudLayers[1], k0 = L.key, w = L.c.width; await new Promise((r) => setTimeout(r, 1200)); return { same: L.key === k0, full: w >= innerWidth * Math.min(devicePixelRatio, 2) * 0.99, n: L.n, p: +__world.PROF.clouds.toFixed(2) }; });
+  check(cl.same && cl.full && cl.n > 50, 'облака в полном разрешении, все; у неподвижной камеры слой не перерисовывается', JSON.stringify(cl));
   for (const e of errors) console.log('     ' + e);
   check(errors.length === 0, 'без ошибок на странице');
 } finally {

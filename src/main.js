@@ -375,22 +375,30 @@ function drawFlightLights(a){if(a<0.02||!FLB.length)return;ctx.globalCompositeOp
     if(strobe){const e=d*2.6;ctx.drawImage(GL_B,-sz*0.07-e/2,-sz*0.43-e/2,e,e);ctx.drawImage(GL_B,-sz*0.07-e/2,sz*0.43-e/2,e,e)}
     if((T*0.9+f.ph)%1<0.12){const e=d*1.6;ctx.drawImage(GL_R,-e/2,-e/2,e,e)}}
   ctx.setTransform(DPR,0,0,DPR,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}
-// clouds and their shadows are soft, so they are drawn into a quarter-size layer and scaled up: the big translucent
-// sprites overlap a lot, and at full resolution their fill cost dominated the frame
-const CLO=mk(4,4),cxl=CLO.getContext('2d');const CLK=0.25;
+// clouds and their shadows (stage 5.9): full resolution again (as before 5.3 — the quarter-size layer lost the look) and
+// every cloud is drawn. The cost was the number of sprites, not their size: from high up hundreds of clouds are in view.
+// So each pass is drawn into its own full-size layer and that layer is only redrawn when the picture would change —
+// the camera moved (by a third of a pixel), the wind drifted the clouds by a third of a pixel, the cover, the daylight
+// or the tint changed. A still camera blits one image per pass.
+const CLL=[{c:mk(4,4),key:'',cx:0,cy:0},{c:mk(4,4),key:'',cx:0,cy:0}];
 function drawClouds(shadowPass){const H=camH();const cloudFar=1; // clouds are seen from orbit too (stage 5.5); near the cloud layer they dissolve (game)
   const span=WORLD*1.3;
-  if(shadowPass&&LG.day<0.03)return;
-  const lw=M.max(4,M.ceil(VW*CLK)),lh=M.max(4,M.ceil(VH*CLK));if(CLO.width!==lw||CLO.height!==lh){CLO.width=lw;CLO.height=lh}else{cxl.setTransform(1,0,0,1,0,0);cxl.clearRect(0,0,lw,lh)} // clear in pixels: the layer keeps the scale transform of the last frame
-  const x2=cxl;x2.setTransform(CLK,0,0,CLK,0,0);let n=0;
-  for(let ci=0;ci<clouds.length;ci++){const c=clouds[ci];const vis=clamp((wcur.cover-c.g)*14,0,1);if(vis<=0)continue;
-    let x=((c.x+T*9+WORLD*0.15)%span+span)%span-WORLD*0.15,y=c.y;
-    if((LITE||(MODE==='game'&&VQ.dpr<2))&&ci%2)continue;
-    if(shadowPass){if(cam.m<0.12)continue;const sx=x+W.SUNX*c.alt,sy=y+W.SUNY*c.alt;if(!inView(sx,sy,c.s))continue;const sz=c.s/cam.m;const sa=0.2*vis*LG.day*(1-0.45*smooth(0.6,1,wcur.cover))*cloudFar;if(sa<0.02)continue;x2.globalAlpha=sa;x2.drawImage(CLS[c.v][1],sxw(sx)-sz/2,syw(sy)-sz/2,sz,sz);n++;continue}
-    if(H<c.alt*1.12)continue;const kk=H/(H-c.alt);let a=smooth(c.alt*1.12,c.alt*2.6,H)*(MODE==='game'?smooth(c.alt*3,c.alt*6,H)*0.85:1);if(a<=0.01)continue; // game: no white-out when the camera comes down through the cloud layer
-    const X=VW/2+(x-cam.x)/cam.m*kk,Y=VH/2+(y-cam.y)/cam.m*kk,sz=c.s/cam.m*kk;if(X+sz/2<0||Y+sz/2<0||X-sz/2>VW||Y-sz/2>VH)continue;
-    const ca=a*0.95*vis*cloudFar*(MODE==='game'?smooth(VW*2.4,VW*1.3,sz):1);if(ca<0.02)continue;/* game: no screen-filling cloud sprites */x2.globalAlpha=ca;x2.drawImage(CLS[c.v][2],X-sz/2,Y-sz/2,sz,sz);n++}
-  x2.globalAlpha=1;if(!n)return;ctx.setTransform(DPR,0,0,DPR,0,0);ctx.imageSmoothingEnabled=true;ctx.drawImage(CLO,0,0,lw/CLK,lh/CLK)}
+  if(shadowPass&&(LG.day<0.03||cam.m<0.12))return;
+  // the layer is a margin larger than the screen: a pan (the shadows always, the clouds when seen from far above, where
+  // they have no parallax) only shifts the old picture until it would show its edge
+  const PAD=64,L=CLL[shadowPass?0:1],q=3/cam.m,lw=M.max(4,M.ceil((VW+PAD*2)*DPR)),lh=M.max(4,M.ceil((VH+PAD*2)*DPR));
+  const key=[cam.m.toFixed(5),M.round(T*9*q),M.round(wcur.cover*60),shadowPass?M.round(LG.day*60):cloudTint,lw,lh,LITE?1:0].join('|');
+  const ox=(L.cx-cam.x)/cam.m,oy=(L.cy-cam.y)/cam.m,flat=shadowPass||H>90000;
+  if(key!==L.key||(flat?M.abs(ox)>PAD*0.9||M.abs(oy)>PAD*0.9:M.abs(ox)>0.34||M.abs(oy)>0.34)){L.key=key;L.cx=cam.x;L.cy=cam.y;if(L.c.width!==lw||L.c.height!==lh){L.c.width=lw;L.c.height=lh}const x2=L.c.getContext('2d');x2.setTransform(1,0,0,1,0,0);x2.clearRect(0,0,lw,lh);x2.setTransform(DPR,0,0,DPR,PAD*DPR,PAD*DPR);x2.imageSmoothingEnabled=true;let n=0;
+    for(let ci=0;ci<clouds.length;ci++){const c=clouds[ci];const vis=clamp((wcur.cover-c.g)*14,0,1);if(vis<=0)continue;
+      let x=((c.x+T*9+WORLD*0.15)%span+span)%span-WORLD*0.15,y=c.y;
+      if(LITE&&ci%2)continue;
+      if(shadowPass){const sx=x+W.SUNX*c.alt,sy=y+W.SUNY*c.alt;if(!inView(sx,sy,c.s+PAD*cam.m*2))continue;const sz=c.s/cam.m;const sa=0.2*vis*LG.day*(1-0.45*smooth(0.6,1,wcur.cover))*cloudFar;if(sa<0.02)continue;x2.globalAlpha=sa;x2.drawImage(CLS[c.v][1],sxw(sx)-sz/2,syw(sy)-sz/2,sz,sz);n++;continue}
+      if(H<c.alt*1.12)continue;const kk=H/(H-c.alt);let a=smooth(c.alt*1.12,c.alt*2.6,H)*(MODE==='game'?smooth(c.alt*3,c.alt*6,H)*0.85:1);if(a<=0.01)continue; // game: no white-out when the camera comes down through the cloud layer
+      const X=VW/2+(x-cam.x)/cam.m*kk,Y=VH/2+(y-cam.y)/cam.m*kk,sz=c.s/cam.m*kk;if(X+sz/2<-PAD||Y+sz/2<-PAD||X-sz/2>VW+PAD||Y-sz/2>VH+PAD)continue;
+      const ca=a*0.95*vis*cloudFar*(MODE==='game'?smooth(VW*2.4,VW*1.3,sz):1);if(ca<0.02)continue;/* game: no screen-filling cloud sprites */x2.globalAlpha=ca;x2.drawImage(CLS[c.v][2],X-sz/2,Y-sz/2,sz,sz);n++}
+    L.n=n}
+  if(!L.n)return;const dx=(L.cx-cam.x)/cam.m,dy=(L.cy-cam.y)/cam.m;ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.drawImage(L.c,M.round((dx-PAD)*DPR),M.round((dy-PAD)*DPR));ctx.setTransform(DPR,0,0,DPR,0,0)}
 function drawFog(){const f=wcur.fog;if(f<0.01)return;ctx.setTransform(DPR,0,0,DPR,0,0);
   for(let l=0;l<2;l++){const P=l?1700:5200,sc=P/256/cam.m;const ox=VW/2-(cam.x-T*(l?9:5))/cam.m,oy=VH/2-(cam.y+T*(l?3:-2))/cam.m;
     FOG.setTransform(new DOMMatrix([sc,0,0,sc,ox+l*91,oy+l*57]));ctx.fillStyle=FOG;ctx.globalAlpha=f*(l?0.42:0.6);ctx.fillRect(0,0,VW,VH)}
@@ -490,18 +498,18 @@ function frameBody(now){const dt=M.min(0.06,(now-last)/1000);last=now;T+=dt;fram
         wavePat.setTransform(new DOMMatrix([ca,sa,-sa,ca,(dx-cam.x)/cam.m+VW/2,(dy-cam.y)/cam.m+VH/2]));ctx.fillStyle=wavePat;ctx.globalAlpha=(l?0.45:NLW===1?0.8:0.65)*wgt*ga;ctx.fillRect(0,0,VW,VH)}}ctx.globalAlpha=1;ctx.restore()}
   pf('water');zNow=drawTiles();pf('tiles');
   {ctx.setTransform(DPR,0,0,DPR,0,0);ctx.fillStyle='rgba(14,46,82,0.8)';const X0=sxw(0),Y0=syw(0),X1=sxw(WORLD),Y1=syw(WORLD);if(X0>0||Y0>0||X1<VW||Y1<VH){ctx.beginPath();ctx.rect(-5,-5,VW+10,VH+10);ctx.rect(X0,Y0,X1-X0,Y1-Y0);ctx.fill('evenodd')}}
-  if(opt.clouds)drawClouds(true);
+  pf('edge');if(opt.clouds)drawClouds(true);pf('shadows');
   let rs=[];const trafficOn=opt.traffic&&cam.m<30;
   if(trafficOn){rs=cam.m<8?W.queryRoads(vx0,vy0,vx1,vy1).filter(W.roadShown):[];if(cam.m<3.2)drawTraffic(rs);else cbn=0;if(cam.m<8)drawTrains(rs,0);drawShips(0)}else cbn=0;
   pf('traffic');drawEmitters();drawTurbines(0);pf('emit');
   if(opt.traffic)drawFlights();else FLB.length=0;
-  pf('flights');drawFog();
+  pf('flights');drawFog();pf('fog');
   // ambient light (dusk / night / overcast)
   if(A[0]<0.995||A[1]<0.995||A[2]<0.995){ctx.setTransform(DPR,0,0,DPR,0,0);ctx.globalCompositeOperation='multiply';ctx.fillStyle=`rgb(${A[0]*255|0},${A[1]*255|0},${A[2]*255|0})`;ctx.fillRect(0,0,VW,VH);ctx.globalCompositeOperation='source-over'}
   // emissive layers
   if(NL>0.01){drawLights(zNow,NL);if(trafficOn){drawCarLights(NL);if(cam.m<8)drawTrains(rs,NL)}if(opt.traffic||cam.m<120)drawShips(NL);drawTurbines(NL);}
-  drawFlares(NL);if(opt.traffic)drawFlightLights(LG.night);
-  dispatch();
+  drawFlares(NL);if(opt.traffic)drawFlightLights(LG.night);pf('lights');
+  dispatch();pf('dispatch');
   pf('lights');drawPrecip(dt);
   if(opt.clouds){const c=LG.cloud;tintClouds(c[0],c[1],c[2],flash>0.05?0:0.92);drawClouds(false)}
   ctx.setTransform(DPR,0,0,DPR,0,0);
@@ -546,7 +554,7 @@ const API={get ops(){return OPS},op,W,cam,setHidden,flyTo,zoomAt,maxM,opt,LG,wcu
   setWeather:i=>{wxi=i;const w=WX[i];for(const k in wcur)wcur[k]=w[k]!==undefined?w[k]:(k==='dim'||k==='cd'?1:0)},
   stats:()=>({fps:fpsA,cars:carCount,tiles:cache.size,lights:LCS[1].size+'/'+LCS[2].size+'/'+LCS[3].size,queue:queue.length,pending:pending.size+LPS[1].size+LPS[2].size+LPS[3].size,main:mainRender,lowQ}),
   stop:()=>{introOff=true;fly=null;zoomT=null}};
-window.__world=Object.assign({PROF,cache,lcache},API);
+window.__world=Object.assign({PROF,cache,lcache,cloudLayers:CLL},API);
 requestAnimationFrame(frame);
 // cinematic intro (viewer): dive from orbit to the largest city
 if(MODE==='view'){const big=W.cities.find(c=>c.type===3)||W.cities[0];introT=setTimeout(()=>{if(!drag&&!zoomT&&!introOff)flyTo(big.x+big.R*0.12,big.y+big.R*0.08,2.4,7)},1600)}
