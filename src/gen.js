@@ -2617,7 +2617,7 @@ function lightRoads(ctx,list,mpp,bx0,by0,bx1,by1){const s=1/mpp,W=ctx.canvas.wid
   const byK=[[],[],[],[],[],[],[],[],[]];for(const r of list)if(byK[r.k])byK[r.k].push(r);let any=false;
   for(const k of [4,3,6,2,7,1,0])if(byK[k].length&&LAMP[k])any=true;if(!any)return;
   if(!LG_||LG_.width!==W||LG_.height!==H){LG_=mkCanvas(W,H);LT_=mkCanvas(W,H)}
-  const g=LG_.getContext('2d'),t=LT_.getContext('2d');const blank=(c)=>{c.setTransform(1,0,0,1,0,0);c.globalCompositeOperation='source-over';c.globalAlpha=1;c.fillStyle='#000';c.fillRect(0,0,W,H);c.setTransform(tf)};
+  const g=LG_.getContext('2d',{willReadFrequently:true}),t=LT_.getContext('2d');const blank=(c)=>{c.setTransform(1,0,0,1,0,0);c.globalCompositeOperation='source-over';c.globalAlpha=1;c.fillStyle='#000';c.fillRect(0,0,W,H);c.setTransform(tf)};
   blank(g);g.globalCompositeOperation='lighten';t.lineCap='round';t.lineJoin='round';any=false;
   const band=(L,col,a,w0)=>{blank(t);t.globalCompositeOperation='lighter';
     for(const [f,q] of [[1.7,0.26],[1.25,0.32],[0.85,0.42]]){t.strokeStyle=la(LC[col],a*q);t.lineWidth=w0*f;t.beginPath();for(const r of L)offsetPath(t,r,0);t.stroke()}
@@ -2631,7 +2631,7 @@ function lightRoads(ctx,list,mpp,bx0,by0,bx1,by1){const s=1/mpp,W=ctx.canvas.wid
     else{const w=M.max(D*0.8,mpp*1.15);const aa=a*0.4*M.min(1,D*0.8/w)*(k===0?1.3:k===3?0.8:k===7?1.1:1)*(k===3?1.7-smooth(22,70,mpp)*1.1:(k===2||k===7)?1-smooth(40,130,mpp)*0.5:1);band(L,col,M.min(1,aa),w)}}
   if(!any)return;
   g.setTransform(1,0,0,1,0,0);g.globalCompositeOperation='source-over';const im=g.getImageData(0,0,W,H),d=im.data;
-  for(let i=0;i<d.length;i+=4){const m=d[i]>d[i+1]?(d[i]>d[i+2]?d[i]:d[i+2]):(d[i+1]>d[i+2]?d[i+1]:d[i+2]);if(m<1){d[i+3]=0;continue}const f=255/m;d[i]=d[i]*f;d[i+1]=d[i+1]*f;d[i+2]=d[i+2]*f;d[i+3]=m}
+  const u=new Uint32Array(d.buffer,d.byteOffset,d.length>>2);for(let q=0,i=0;q<u.length;q++,i+=4){if((u[q]&0xffffff)===0){u[q]=0;continue}const m=d[i]>d[i+1]?(d[i]>d[i+2]?d[i]:d[i+2]):(d[i+1]>d[i+2]?d[i+1]:d[i+2]);const f=255/m;d[i]=d[i]*f;d[i+1]=d[i+1]*f;d[i+2]=d[i+2]*f;d[i+3]=m}
   g.putImageData(im,0,0);ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.globalCompositeOperation='lighter';ctx.drawImage(LG_,0,0);ctx.restore()}
 const BLA=[0,0.95,0.7,0.62,0.3,0.06,0.9,0.3,0.12,0.55,0.45,0.25,0.8,0.3,0.7,0.5,0.55,0.45,0.3,0.85,0.02,0.7,0.66,0.4];
 const ZLA={air2:0.2,ref:0.42,port:0.36,ind:0.2,air:0.16,pow:0.26,solar:0,gas:0.55,stn:0.42,agro:0.5,farm:0.08,dacha:0.1,quarry:0.05,cem:0};
