@@ -6,7 +6,8 @@ import fs from 'node:fs';
 import { execSync } from 'node:child_process';
 import { launch, server } from '../lib/game.mjs';
 
-const ref = process.argv[2] || 'origin/main';
+const ref = process.argv.find((a, i) => i > 1 && !a.startsWith('--')) || 'origin/main';
+const ONLY = (process.argv.find((a) => a.startsWith('--only=')) || '').slice(7).split(',').filter(Boolean);
 const OUT = '.work/parity';
 fs.mkdirSync(OUT, { recursive: true });
 const git = (p) => execSync(`git show ${ref}:${p}`, { encoding: 'utf8', maxBuffer: 1 << 26 });
@@ -47,7 +48,7 @@ async function shoot(tag, files) {
   await page.waitForFunction(() => window.__world && window.__world.W && window.__world.cache && window.__world.cache.size > 4, null, { timeout: 90000 });
   await page.evaluate(() => { __world.stop(); });
   const res = [];
-  for (const [name, wx, wy, m, tod, w, dx] of VIEWS) {
+  for (const [name, wx, wy, m, tod, w, dx] of VIEWS.filter((v) => !ONLY.length || ONLY.includes(v[0]))) {
     await page.evaluate(async ([wx, wy, m, tod, w, dx]) => {
       const A = window.__world, W = A.W, sl = (ms) => new Promise((r) => setTimeout(r, ms));
       window.__dt = null; window.__T = null;
@@ -56,7 +57,7 @@ async function shoot(tag, files) {
       if (wx === 'city') { x = c.x; y = c.y } else if (wx === 'port') { const z = W.zones.find((q) => q.zk === 'port') || c; x = z.x; y = z.y }
       A.setTod(tod); A.setWeather(w); A.setSpeed(0); A.closeInsp && A.closeInsp();
       A.cam.x = x + dx; A.cam.y = y; A.cam.m = m === 'max' ? A.maxM() : m;
-      let q = 0, sig = ''; for (let i = 0; i < 400; i++) { await sl(100); const s = A.stats(), g = s.tiles + '/' + s.lights; if (!s.queue && !s.pending && g === sig) { if (++q > 10) break } else q = 0; sig = g }
+      let q = 0, sig = ''; for (let i = 0; i < 1200; i++) { await sl(100); const s = A.stats(), g = s.tiles + '/' + s.lights; if (!s.queue && !s.pending && g === sig) { if (++q > 10) break } else q = 0; sig = g }
       // freeze the clock at the same moment in both runs: T is read from the engine and set by stepping dt
       window.__dt = 0; window.__T = 100000; await sl(900);
     }, [wx, wy, m, tod, w, dx]);
@@ -77,4 +78,4 @@ const o = await shoot('old', OLD);
 const n = await shoot('new', NEW);
 (await browserP).close(); srv.close();
 console.log('errors old', o.errs, 'new', n.errs);
-console.log(execSync(`python tests/visual/diff.py ${OUT} ${VIEWS.map((v) => v[0]).join(' ')}`, { encoding: 'utf8' }));
+console.log(execSync(`python tests/visual/diff.py ${OUT} ${VIEWS.filter((v) => !ONLY.length || ONLY.includes(v[0])).map((v) => v[0]).join(' ')}`, { encoding: 'utf8' }));

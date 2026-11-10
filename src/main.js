@@ -296,11 +296,14 @@ function drawTiles(){
   if(z<12&&queue.length<4){const z2=z+1,n2=1<<z2,t2=WORLD/n2;const cx=M.floor(cam.x/t2),cy=M.floor(cam.y/t2);for(let y=cy-1;y<=cy+1;y++)for(let x=cx-1;x<=cx+1;x++)if(x>=0&&y>=0&&x<n2&&y<n2)request(z2,x,y,1e5)}
   return z}
 // night lights: sharp layer at the current LOD + two blurred "bloom" layers from coarser LODs
-function lightLevel(z,a,L,prio){const n=1<<z,ts=WORLD/n,mp=LCS[L];
+// cover: every grid cell gets draws of total alpha a (an empty slot fills the gap) — the bloom rides on these draws
+function lightLevel(z,a,L,prio,cover){const n=1<<z,ts=WORLD/n,mp=LCS[L];
   const tx0=M.max(0,M.floor(vx0/ts)),tx1=M.min(n-1,M.floor(vx1/ts)),ty0=M.max(0,M.floor(vy0/ts)),ty1=M.min(n-1,M.floor(vy1/ts));ctx.globalAlpha=a;
   for(let ty=ty0;ty<=ty1;ty++)for(let tx=tx0;tx<=tx1;tx++){const k=tkey(z,tx,ty);const e=mp.get(k);const [X0,X1,Y0,Y1]=tileRect(tx,ty,ts);
-    if(e){e.f=frameNo;let u=e.t0===undefined?1:(T-e.t0)/FADE;if(u>=1){e.t0=undefined;u=1}else{u=u<0?0:u*u*(3-2*u);const o=LST[L].get(k);ctx.globalAlpha=a*(1-u);if(o){o.f=frameNo;drawE(o,LPOOL,0,0,256,256,X0,Y0,X1-X0,Y1-Y0)}else ancestor(mp,z,tx,ty,X0,Y0,X1,Y1,L===1?1:2)}ctx.globalAlpha=a*u;drawE(e,LPOOL,0,0,256,256,X0,Y0,X1-X0,Y1-Y0);ctx.globalAlpha=a;continue}
-    requestL(z,tx,ty,prio+M.hypot((tx+0.5)*ts-cam.x,(ty+0.5)*ts-cam.y)/ts,L);{const o=LST[L].get(k);if(o){o.f=frameNo;drawE(o,LPOOL,0,0,256,256,X0,Y0,X1-X0,Y1-Y0)}else ancestor(mp,z,tx,ty,X0,Y0,X1,Y1,L===1?1:2)}}}
+    let w=0;
+    if(e){e.f=frameNo;let u=e.t0===undefined?1:(T-e.t0)/FADE;if(u>=1){e.t0=undefined;u=1}else{u=u<0?0:u*u*(3-2*u);const o=LST[L].get(k);ctx.globalAlpha=a*(1-u);if(o){o.f=frameNo;if(drawE(o,LPOOL,0,0,256,256,X0,Y0,X1-X0,Y1-Y0))w+=1-u}else if(ancestor(mp,z,tx,ty,X0,Y0,X1,Y1,L===1?1:2))w+=1-u}ctx.globalAlpha=a*u;if(drawE(e,LPOOL,0,0,256,256,X0,Y0,X1-X0,Y1-Y0))w+=u}
+    else{requestL(z,tx,ty,prio+M.hypot((tx+0.5)*ts-cam.x,(ty+0.5)*ts-cam.y)/ts,L);const o=LST[L].get(k);if(o){o.f=frameNo;if(drawE(o,LPOOL,0,0,256,256,X0,Y0,X1-X0,Y1-Y0))w=1}else if(ancestor(mp,z,tx,ty,X0,Y0,X1,Y1,L===1?1:2))w=1}
+    if(cover&&w<0.999){ctx.globalAlpha=a*(1-w);ctx.tile(LPOOL,EMPTY,0,0,256,256,X0,Y0,X1-X0,Y1-Y0)}ctx.globalAlpha=a}}
 function drawLights(z,a){if(a<0.01)return;ctx.setTransform(1,0,0,1,0,0);ctx.globalCompositeOperation='lighter';
   const fogB=1+wcur.fog*0.9+wcur.rain*0.3;
   requestL(0,0,0,-1e9,1);
@@ -308,10 +311,14 @@ function drawLights(z,a){if(a<0.01)return;ctx.setTransform(1,0,0,1,0,0);ctx.glob
   // stage 6: the two bloom levels (coarser LODs, already blurred in the tiles) are summed in a half-resolution buffer and
   // added in one pass — they carry no detail a full-resolution pass would keep; the sharp level stays full resolution
   if(DBG.bloomFull){lightLevel(M.max(0,z-2),a*(lowQ?0.7:0.45)*fogB*far,3,-2e5);if(!lowQ)lightLevel(M.max(0,z-1),a*0.42*fogB,2,-1e5)}
-  else{const bw=M.ceil(cv.width/2),bh=M.ceil(cv.height/2);BLB.resize(bw,bh);ctx.target(BLB);ctx.clear(0,0,0,0);ctx.setTransform(bw/cv.width,0,0,bh/cv.height,0,0);ctx.globalCompositeOperation='lighter';
+  else if(!DBG.bloom){const bw=M.ceil(cv.width/2),bh=M.ceil(cv.height/2);BLB.resize(bw,bh);ctx.target(BLB);ctx.clear(0,0,0,0);ctx.setTransform(bw/cv.width,0,0,bh/cv.height,0,0);ctx.globalCompositeOperation='lighter';
     lightLevel(M.max(0,z-2),a*(lowQ?0.7:0.45)*fogB*far,3,-2e5);if(!lowQ)lightLevel(M.max(0,z-1),a*0.42*fogB,2,-1e5);
-    ctx.target(null);ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='lighter';ctx.drawImage(BLB,0,0,bw,bh,0,0,cv.width,cv.height)}
-  ctx.setTransform(1,0,0,1,0,0);lightLevel(z,a*(1-wcur.fog*0.3),1,0.3);
+    ctx.target(null);ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='lighter';
+    // the bloom is added by the draws of the sharp level (one pass; the grid covers the screen) — or alone where the world
+    // does not cover the screen
+    const a1=a*(1-wcur.fog*0.3);if(inWorldNow()&&!DBG.L1&&a1>0.001){ctx.tileOverlay(BLB,bw,bh,0,0,cv.width,cv.height,true,1/a1);lightLevel(z,a1,1,0.3,true);ctx.tileOverlay(null);bloomDone=true}
+    else ctx.drawImage(BLB,0,0,bw,bh,0,0,cv.width,cv.height)}
+  ctx.setTransform(1,0,0,1,0,0);if(!DBG.L1&&!bloomDone)lightLevel(z,a*(1-wcur.fog*0.3),1,0.3);bloomDone=false;
   {const g=camGoal();if(g){const zt=tileZAt(g[2]);if(zt!==z){preRect(M.max(0,zt-2),g[0],g[1],g[2],g[3],3);if(!lowQ)preRect(M.max(0,zt-1),g[0],g[1],g[2],g[3]+20,2);preRect(zt,g[0],g[1],g[2],g[3]+40,1)}}}
   ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}
 
@@ -438,6 +445,9 @@ function drawFlightLights(a){if(a<0.02||!FLB.length)return;ctx.globalCompositeOp
 // or the tint changed. A still camera blits one image per pass.
 const CLL=[{c:ctx.layer(4,4),key:'',cx:0,cy:0},{c:ctx.layer(4,4),key:'',cx:0,cy:0}];
 const BLB=ctx.layer(4,4); // half-resolution bloom buffer of the night lights
+let bloomDone=false;const inWorldNow=()=>sxw(0)<=0&&syw(0)<=0&&sxw(WORLD)>=VW&&syw(WORLD)>=VH;
+// a permanently empty slot of the light pool: cells without lights still carry the bloom (lightLevel cover)
+const EMPTY=LPOOL.upload(mk(256,256));
 // get: return where the layer goes ({L, sw, sh, dx, dy, dw, dh} in device px, null — nothing) instead of drawing it
 function drawClouds(shadowPass,get){const H=camH();const cloudFar=1; // clouds are seen from orbit too (stage 5.5); near the cloud layer they dissolve (game)
   const span=WORLD*1.3;
@@ -541,7 +551,7 @@ function drawSel(){if(!sel)return;const ctx=octx;ctx.setTransform(DPR,0,0,DPR,0,
   ctx.stroke();ctx.setLineDash([])}
 
 // ------------------------------------------------------------ main loop
-const VIGC=[0,8/255,20/255];
+const VIGC=[0,8/255,20/255],CLRC=[0,0,0,1];
 // debug switches of the frame passes (F3 profiling, tests): __world.dbg.tiles = true skips the tiles, etc.
 const DBG={};
 let last=performance.now(),fpsA=60,hudT=0,zNow=0,lowQ=false,qT=0,pfT=0,CAMMV=false,pcm=0;
@@ -559,6 +569,14 @@ function frameBody(now){const dt=M.min(0.06,(now-last)/1000);last=now;T+=dt;fram
   // exact (compositing is linear in colour) and saves the full-screen multiply pass of stages 1–5
   const AMBON=!DBG.amb&&(A[0]<0.995||A[1]<0.995||A[2]<0.995);
   ctx.begin();if(AMBON)ctx.ambient(A[0],A[1],A[2]);ctx.clear(14/255*(AMBON?A[0]:1),46/255*(AMBON?A[1]:1),82/255*(AMBON?A[2]:1),1);ctx.setTransform(DPR,0,0,DPR,0,0);
+  // the vignette (stage 6): 'cloud' — in the pass of the cloud layer, 'spatial' — a factor of every draw (no pass of its
+  // own: night, close views), 'pass' — a separate pass (the edge of the world is in view, haze or lightning)
+  let CLB=null;if(opt.clouds&&!DBG.clouds){const c=LG.cloud;tintClouds(c[0],c[1],c[2],flash>0.05?0:0.92);CLB=drawClouds(false,true)}
+  const hz=smooth(40,600,cam.m)*0.16;const wX0=sxw(0),wY0=syw(0),wX1=sxw(WORLD),wY1=syw(WORLD),inWorld=wX0<=0&&wY0<=0&&wX1>=VW&&wY1>=VH;
+  const VM=DBG.vign?'off':hz>0||flash>0.01?'pass':covers(CLB)?'cloud':CLB||!inWorld||DBG.vigPass?'pass':'spatial';
+  if(VM==='spatial'){ctx.spatialVignette([VW/2*DPR,VH/2*DPR,vg.r0*DPR,vg.r1*DPR,VIGC[0],VIGC[1],VIGC[2],0.38]);
+    // the clear colour shows through the translucent water of the tiles: there it is drawn as a quad, so it is vignetted
+    if(waterClip()){ctx.fillStyle=CLRC;CLRC[0]=14/255*(AMBON?A[0]:1);CLRC[1]=46/255*(AMBON?A[1]:1);CLRC[2]=82/255*(AMBON?A[2]:1);for(const q of WCLIP)ctx.fillRect(q[0],q[1],q[2],q[3])}}
   // animated water glints (seen through translucent water in tiles)
   // world-anchored octaves: texel size 0.08*2^k m; the two octaves around the current zoom cross-fade,
   // so ripples stay glued to the water and never look like a stretched picture
@@ -571,7 +589,7 @@ function frameBody(now){const dt=M.min(0.06,(now-last)/1000);last=now;T+=dt;fram
         ctx.globalAlpha=(l?0.45:NLW===1?0.8:0.65)*wgt*ga;ctx.pattern(wavePat,[ca,sa,-sa,ca,(dx-cam.x)/cam.m+VW/2,(dy-cam.y)/cam.m+VH/2],WCLIP)}}ctx.globalAlpha=1;ctx.restore()}
   // the cloud shadow layer is composited over the tiles in the tile pass (stage 6): no separate full-screen pass
   const SHB=opt.clouds&&!DBG.shadows?drawClouds(true,true):null;if(SHB)ctx.tileOverlay(SHB.L,SHB.sw,SHB.sh,SHB.dx,SHB.dy,SHB.dw,SHB.dh);
-  pf('water');zNow=DBG.tiles?tileZ():drawTiles();ctx.tileOverlay(null);pf('tiles');
+  pf('water');ctx.vignetteAdd(true);zNow=DBG.tiles?tileZ():drawTiles();ctx.vignetteAdd(false);ctx.tileOverlay(null);pf('tiles');
   {ctx.setTransform(DPR,0,0,DPR,0,0);ctx.fillStyle='rgba(14,46,82,0.8)';const X0=sxw(0),Y0=syw(0),X1=sxw(WORLD),Y1=syw(WORLD);if(X0>0||Y0>0||X1<VW||Y1<VH){ // outside the world: four bands around it
     const a=M.max(-5,M.min(VH+5,Y0)),b=M.max(-5,M.min(VH+5,Y1));if(a>-5)ctx.fillRect(-5,-5,VW+10,a+5);if(b<VH+5)ctx.fillRect(-5,b,VW+10,VH+5-b);
     if(X0>-5)ctx.fillRect(-5,a,M.min(VW+5,X0)+5,b-a);if(X1<VW+5){const l=M.max(-5,X1);ctx.fillRect(l,a,VW+5-l,b-a)}}}
@@ -584,21 +602,18 @@ function frameBody(now){const dt=M.min(0.06,(now-last)/1000);last=now;T+=dt;fram
   // ambient light (dusk / night / overcast)
   ctx.ambient(1,1,1); // the ambient point: from here on (lights, precipitation, clouds) nothing is darkened
   // emissive layers
-  if(NL>0.01&&!DBG.lights){drawLights(zNow,NL);if(trafficOn){drawCarLights(NL);if(cam.m<8)drawTrains(rs,NL)}if(opt.traffic||cam.m<120)drawShips(NL);drawTurbines(NL);}
+  if(NL>0.01&&!DBG.lights){drawLights(zNow,NL);if(trafficOn&&!DBG.carl){drawCarLights(NL);if(cam.m<8)drawTrains(rs,NL)}if(opt.traffic||cam.m<120)drawShips(NL);drawTurbines(NL);}
   drawFlares(NL);if(opt.traffic)drawFlightLights(LG.night);pf('lights');
   dispatch();pf('dispatch');
   pf('lights');drawPrecip(dt);
-  let CLB=null;if(opt.clouds&&!DBG.clouds){const c=LG.cloud;tintClouds(c[0],c[1],c[2],flash>0.05?0:0.92);CLB=drawClouds(false,true)}
-  const hz=smooth(40,600,cam.m)*0.16;
-  // the clouds take the vignette into their pass when nothing is drawn between them (haze, lightning) and they cover the screen
-  const merge=!DBG.vign&&covers(CLB)&&hz<=0&&flash<=0.01;if(CLB){ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;
+  const merge=VM==='cloud';if(CLB){ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;
     if(merge){ctx.setTransform(DPR,0,0,DPR,0,0);ctx.drawImageVignette(CLB.L,0,0,CLB.sw,CLB.sh,CLB.dx,CLB.dy,CLB.dw,CLB.dh,VW/2,VH/2,vg.r0,vg.r1,VIGC,0.38)}
     else ctx.drawImage(CLB.L,0,0,CLB.sw,CLB.sh,CLB.dx,CLB.dy,CLB.dw,CLB.dh)}
   ctx.setTransform(DPR,0,0,DPR,0,0);
   if(hz>0){ctx.fillStyle=`rgba(${160*A[0]|0},${195*A[1]|0},${230*A[2]|0},${hz})`;ctx.fillRect(0,0,VW,VH)}
   if(wcur.storm>0.3){nextBolt-=dt;if(nextBolt<0){flash=1;nextBolt=3+M.random()*12}}
   if(flash>0.01){const f=flash*(0.6+0.4*M.sin(T*60));ctx.globalCompositeOperation='lighter';ctx.fillStyle=`rgba(190,200,255,${0.3*f})`;ctx.fillRect(0,0,VW,VH);ctx.globalCompositeOperation='source-over';flash*=M.exp(-dt*7)}
-  pf('clouds');if(!DBG.vign&&!merge)ctx.vignette(VW/2,VH/2,vg.r0,vg.r1,VIGC,0.38);ctx.end();
+  pf('clouds');if(VM==='pass')ctx.vignette(VW/2,VH/2,vg.r0,vg.r1,VIGC,0.38);ctx.spatialVignette(null);ctx.end();
   // the 2D overlay: labels, the game layer, the selection
   octx.setTransform(1,0,0,1,0,0);octx.clearRect(0,0,ov.width,ov.height);
   if(opt.labels)drawLabels();pf('labels');
