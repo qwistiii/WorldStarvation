@@ -3,7 +3,7 @@
   --txt:#d9dee4;--mut:#7f8b97;--ok:#6fbf73;--bad:#e0574f;--r:3px;--ui:1;--mono:ui-monospace,'Cascadia Mono','Consolas','DejaVu Sans Mono',monospace}
 *{box-sizing:border-box}html,body{margin:0;height:100%;overflow:hidden;background:#0e2c4c;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--txt);user-select:none;-webkit-user-select:none}
 body{font-size:calc(13px*var(--ui))}
-#c{position:fixed;inset:0;width:100%;height:100%;touch-action:none;cursor:grab}#c:active{cursor:grabbing}
+#c{position:fixed;inset:0;width:100%;height:100%;touch-action:none;cursor:grab}#c2{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}#c:active{cursor:grabbing}
 body.placing #c{cursor:crosshair}
 .pn,.pn2,.win{background:var(--bg);backdrop-filter:blur(12px) saturate(1.2);-webkit-backdrop-filter:blur(12px) saturate(1.2);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 10px 34px rgba(0,0,0,0.38),inset 0 1px 0 rgba(255,255,255,0.05)}
 .pn{position:fixed}
