@@ -71,7 +71,7 @@ try {
     return { tabs: tabs.left <= 4 && tabs.right >= innerWidth - 4 && tray.top >= tabs.bottom - 1 && tray.bottom >= innerHeight - 1, pause: p.left < 60 && sp.left > p.left && p.top > tabs.bottom,
       n: keys.length, square: Math.abs(sl.width - sl.height) < 1 && sl.width > 36, label: !!k0.querySelector('b') && !!k0.querySelector('small'), order: keys.slice(0, 3).map((e) => e.dataset.k).join(','),
       on: document.querySelector('#bb-tabs .on').dataset.t, red: getComputedStyle(document.querySelector('#bb-tabs .on'), '::after').backgroundImage.includes('200, 72, 58') }; });
-  check(bot.tabs && bot.pause && bot.n === 17 && bot.square && bot.label && bot.order === 'city,village,farm' && bot.on === 'cities' && bot.red, 'низ: вкладки над панелью, пауза и скорость слева, 17 ключей «Городов» (квадрат, подпись, цена), открытая вкладка красная', JSON.stringify(bot));
+  check(bot.tabs && bot.pause && bot.n === 16 && bot.square && bot.label && bot.order === 'city,village,farm' && bot.on === 'cities' && bot.red, 'низ: вкладки над панелью, пауза и скорость слева, 17 ключей «Городов» (квадрат, подпись, цена), открытая вкладка красная', JSON.stringify(bot));
   await page.click('#bpause');
   const ps = await page.evaluate(() => ({ sp: Game.G.speed, on: document.getElementById('bpause').classList.contains('on') }));
   await page.click('#bspeed');

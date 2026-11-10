@@ -2637,6 +2637,17 @@ function drawLightPrims(ctx,P,mpp,ind){const s=1/mpp;
     else if(k==='lflood'){for(let y=p.y+p.sp/2;y<p.y+p.h;y+=p.sp)for(let x=p.x+p.sp/2;x<p.x+p.w;x+=p.sp){fdot(ctx,p.c,x,y,p.r*2,0.38);fdot(ctx,p.c,x,y,2.5,1)}}
   }}
 const LAMP=[[[0],48,26,'sod',0.75],[[6.8],55,19,'sod',0.7],[[10.8,-10.8],32,16,'wled',0.6],[[5.6,-5.6],38,13,'sod',0.55],[[3.6],80,11,'warm',0.5],null,[[0],40,16,'sod',0.6],[[12.8,-12.8],30,16,'wled',0.62],null];
+// stage 6.1: street lights are objects of the world. One placement for both: the light tiles draw their pools on the ground,
+// the frame draws the lit heads at their height (Parallax). Along a lit street at the step of its class (offsets: kerb
+// sides or the median), plus one at each end of the street — at the crossing. HEADMPP: light tiles finer than this leave
+// the head out (the frame draws it with parallax); coarser tiles keep it baked (a head is under a pixel there)
+let LHB=false;const HEADMPP=2.5,LAMPH=[12,12,9,8,7,0,8,9,0];
+function roadLamps(r,out){const S=LAMP[r.k];if(!S)return;const offs=S[0],sp=S[1],col=S[3],ph=hr(r.id,3,3)*sp;
+  for(let oi=0;oi<offs.length;oi++){const off=offs[oi];for(let q=ph+oi*sp/2;q<r.L;q+=sp){const p=posAt(r,q);out.push(p[0]-p[3]*off,p[1]+p[2]*off,col)}}
+  if(r.L>sp*0.6){const off=offs[0]||0;for(const q of [M.min(5,r.L/2),M.max(r.L-5,r.L/2)]){const p=posAt(r,q);out.push(p[0]-p[3]*off,p[1]+p[2]*off,col)}}}
+// the street lights in a box, for the frame: [x, y, h, colour, …] (the same roads the light tiles see)
+function lampsIn(x0,y0,x1,y1){let rl=queryRoads(x0-60,y0-60,x1+60,y1+60);if(DEADN||HID.size)rl=rl.filter(r=>!r.dead&&!rHid(r));if(GROW.size)rl=growRoads(rl,true);
+  const tmp=[],out=[];for(const r of rl){if(!LAMP[r.k])continue;tmp.length=0;roadLamps(r,tmp);for(let i=0;i<tmp.length;i+=3){const x=tmp[i],y=tmp[i+1];if(x<x0||x>=x1||y<y0||y>=y1)continue;out.push(x,y,LAMPH[r.k],tmp[i+2])}}return out}
 // street lighting. All of it is drawn as opaque light intensity on black into its own layer G, where light from
 // different roads and lamps combines by maximum ('lighten'), so a crossing is no brighter than the street and pools do
 // not stack up; the glow along a road is a feathered band (three nested strokes), not a flat strip with hard edges.
@@ -2657,9 +2668,8 @@ function lightRoads(ctx,list,mpp,bx0,by0,bx1,by1){const s=1/mpp,W=ctx.canvas.wid
   for(const k of [4,3,6,2,7,1,0]){const L=byK[k];if(!L.length||!LAMP[k])continue;if((k===3&&mpp>70)||((k===2||k===7)&&mpp>130)||(k===4&&mpp>45)||(k===6&&mpp>30))continue;
     const [offs,sp,D,col,a]=LAMP[k];LCNT+=L.length;any=true;
     if(D*s>2.4){band(L,col,0.07,RW[k]*1.15);
-      for(const r of L){if(r.bb[2]<bx0-D||r.bb[0]>bx1+D||r.bb[3]<by0-D||r.bb[1]>by1+D)continue;const ph=hr(r.id,3,3)*sp;
-        for(let oi=0;oi<offs.length;oi++){const off=offs[oi];for(let q=ph+oi*sp/2;q<r.L;q+=sp){const p=posAt(r,q);const x=p[0]-p[3]*off,y=p[1]+p[2]*off;
-          if(x<bx0-D||x>bx1+D||y<by0-D||y>by1+D)continue;fdotO(g,col,x,y,D,a);fdotO(g,col,x,y,D*0.12,1)}}}}
+      const head=LHB?mpp>HEADMPP*4:mpp>HEADMPP,P=[];for(const r of L){if(r.bb[2]<bx0-D||r.bb[0]>bx1+D||r.bb[3]<by0-D||r.bb[1]>by1+D)continue;P.length=0;roadLamps(r,P);
+        for(let i=0;i<P.length;i+=3){const x=P[i],y=P[i+1];if(x<bx0-D||x>bx1+D||y<by0-D||y>by1+D)continue;fdotO(g,col,x,y,D,a);if(head)fdotO(g,col,x,y,D*0.12,1)}}}
     else{const w=M.max(D*0.8,mpp*1.15);const aa=a*0.4*M.min(1,D*0.8/w)*(k===0?1.3:k===3?0.8:k===7?1.1:1)*(k===3?1.7-smooth(22,70,mpp)*1.1:(k===2||k===7)?1-smooth(40,130,mpp)*0.5:1);band(L,col,M.min(1,aa),w)}}
   if(!any)return;
   g.setTransform(1,0,0,1,0,0);g.globalCompositeOperation='source-over';const im=g.getImageData(0,0,W,H),d=im.data;
@@ -2696,7 +2706,7 @@ function renderLights(z,tx,ty,hb){
   const ext=tsz+2*PAD*mpp;const mg=mpp<6?300:mpp*45;const qx0=x0-mg,qy0=y0-mg,qx1=x0+ext+mg,qy1=y0+ext+mg;
   let feats=queryF(qx0,qy0,qx1,qy1),rl=queryRoads(x0-mpp*20-60,y0-mpp*20-60,x0+ext+mpp*20+60,y0+ext+mpp*20+60);
   if(DEADN||HID.size){feats=feats.filter(f=>!f.dead&&!(f.kind==='zone'&&zHid(f)));rl=rl.filter(r=>!r.dead&&!rHid(r))}if(GROW.size){feats=feats.filter(featOn);rl=growRoads(rl,true)}
-  blockCache=new Map();mppG=mpp;LITE=mpp>2.2;LITE2=mpp>4.5;
+  blockCache=new Map();mppG=mpp;LITE=mpp>2.2;LITE2=mpp>4.5;LHB=!!hb; // the bloom levels used close up leave the heads out too
   ctx.setTransform(s,0,0,s,-x0*s,-y0*s);lightRoads(ctx,rl,mpp,x0-40,y0-40,x0+ext+40,y0+ext+40);
   for(const f of feats){if(f.kind==='city'||f.kind==='zone')lightFeat(ctx,f,x0,y0,s,mpp,qx0,qy0,qx1,qy1)}
   blockCache=null;if(!LCNT)return null;if(!hb)return cv;
@@ -2846,7 +2856,7 @@ function plazaPrims(f){if(f._pz)return f._pz;const R=rng(f.seed^0x77aa),P=[],r=f
 // zone cylinder shadows need stroke not fill: patch drawPrims pass1 for cyl via stroke
 const _dp=drawPrims;
 
-return {padFieldAt,padAt,padField,air2Rw:z=>{const y=AIR2RY,p=(x)=>[z.x+x*z.ca-y*z.sa,z.y+x*z.sa+y*z.ca];return [p(-900),p(900)]},roadShown,addPlace,addZone,removeZone,addDeposits,removeDeposit,moveDeposit,addRail,removeRail,railPts,zoneUp,setHidden,drawUav:(ctx,v,c,s)=>drawUav(ctx,v,c,s,0),isHid:id=>HID.has(id),
+return {padFieldAt,padAt,padField,lampsIn,HEADMPP,LC:()=>LC,air2Rw:z=>{const y=AIR2RY,p=(x)=>[z.x+x*z.ca-y*z.sa,z.y+x*z.sa+y*z.ca];return [p(-900),p(900)]},roadShown,addPlace,addZone,removeZone,addDeposits,removeDeposit,moveDeposit,addRail,removeRail,railPts,zoneUp,setHidden,drawUav:(ctx,v,c,s)=>drawUav(ctx,v,c,s,0),isHid:id=>HID.has(id),
   fieldReach:c=>EMPTY?fieldR(c)*1.3+3500:c.R+4700,blkFrame,cU,cW,deps:DEPS,zoneDead:id=>!zones[id]||!!zones[id].dead,forestAt,portAt:(x,y)=>portAt(x,y,820,900),setGrow,growOf:id=>GROW.has(id)?GROW.get(id):1,opt:OPT,setSeason,season:()=>SEASON,renderLights,WORLD,TS,SUNX,SUNY,WDX,WDY,LEANX,LEANY,cities:live,roads,zones,farms,ships,flights,emitters,airports,queryRoads,queryF,posAt,renderTile,sprites,drawShip,drawPlane,baseH,landE,rng,hh,noise,genTime:Date.now()-T0,mkCanvas,_dbg:{genVillage,genBlock,RW,riverV,riverW,avoidZ,zoneOnPath,waterRunOK,zoneExit,projOn,fieldOn,fieldR}};
 }
 
