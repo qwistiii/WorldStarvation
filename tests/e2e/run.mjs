@@ -137,14 +137,14 @@ async function scenario(browser, dev, opts) {
       if (k === ORDER[0]) await shot('ghost');
       const okb = await ev(() => { const b = document.getElementById('pbok'), r = b.getBoundingClientRect(), e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return { dis: b.disabled, top: e === b || b.contains(e) ? 'ok' : (e && (e.id || e.className)), x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
       if (okb.dis || okb.top !== 'ok') check(dev, false, `«${k}»: кнопка ✓ недоступна или перекрыта`, JSON.stringify(okb) + ' ' + JSON.stringify(await ev(() => Game._test.PL.state.bad)));
-      await tapSel('#pbok'); await page.waitForTimeout(150);
+      await tapSel('#pbok'); await page.waitForFunction((n0) => Game.G.states[0].builds.length > n0 || !!Game._test.PL.state.bad, n0, { timeout: 5000 }).catch(() => {});
     } else {
       await page.mouse.move(sx, sy); await page.waitForTimeout(120);
       if (k === 'factory') { await page.keyboard.press('KeyR'); await page.keyboard.press('Shift+KeyR'); }
       const st = await ev(() => ({ has: Game._test.PL.state.has, bad: Game._test.PL.state.bad, ang: Game._test.PL.state.ang }));
       check(dev, st.has && !st.bad, `«${k}»: призрак под курсором, место годится`, JSON.stringify(st));
       if (k === 'factory') await shot('ghost');
-      await page.mouse.click(sx, sy); await page.waitForTimeout(280);
+      await page.mouse.click(sx, sy); await page.waitForFunction((n0) => Game.G.states[0].builds.length > n0 || !!Game._test.PL.state.bad, n0, { timeout: 5000 }).catch(() => {});
     }
     const res = await ev((n0) => { const p = Game.G.states[0]; const q = p.builds[p.builds.length - 1]; return { n: p.builds.length - n0, k: q && q.k, a: q && q.a, armed: Game.G.build, bar: document.getElementById('pbar').classList.contains('show') }; }, n0);
     check(dev, res.n === 1 && res.k === k && !res.armed && !res.bar, `«${k}»: построено, режим закрыт`, JSON.stringify(res));
@@ -185,8 +185,9 @@ async function scenario(browser, dev, opts) {
     const a = Game.api, L = a.lights, p = Game.G.states[0], sl = (ms) => new Promise((r) => setTimeout(r, ms)); Game.setSpeed(0); Game._test.syncLights();
     const q = p.builds.find((b) => b.k === 'lamp' && b.done); if (!q) return { err: 'нет фонаря' }; const lid = q.uid * 8, lg = () => L.get(lid); if (!lg()) return { err: 'у фонаря нет источника света' };
     const px = async () => { await sl(1400); const g = __world.gl.gl; let v = 0; await new Promise((r) => requestAnimationFrame(() => { const b = new Uint8Array(4 * 9), w = g.drawingBufferWidth, h = g.drawingBufferHeight; g.readPixels((w >> 1) - 1, (h >> 1) - 1, 3, 3, g.RGBA, g.UNSIGNED_BYTE, b); for (let i = 0; i < 9; i++) v += b[i * 4] + b[i * 4 + 1] + b[i * 4 + 2]; v /= 27; r() })); return v };
-    a.setTod(23); a.cam.x = q.x + 5; a.cam.y = q.y + 5; a.cam.m = 0.3; const on = await px(); const lvN = lg().lv; L.setMode(lid, 'off'); const off = await px(); L.setMode(lid, 'auto');
-    a.setTod(12); await sl(1500); const lvD = lg().lv; a.setTod(23); await sl(1200);
+    const until = async (f, ms) => { const t = performance.now(); while (!f() && performance.now() - t < ms) await sl(100); };
+    a.setTod(23); a.cam.x = q.x + 5; a.cam.y = q.y + 5; a.cam.m = 0.3; await until(() => lg().lv === 1, 8000); const on = await px(); const lvN = lg().lv; L.setMode(lid, 'off'); await until(() => lg().lv === 0, 8000); const off = await px(); L.setMode(lid, 'auto');
+    a.setTod(12); await until(() => lg().lv === 0, 8000); const lvD = lg().lv; a.setTod(23); await sl(1200);
     // the cap: 2000 extra lights around the camera
     for (let i = 0; i < 2000; i++) L.add({ x: q.x + (i % 50) * 9 - 225, y: q.y + Math.floor(i / 50) * 9 - 180, mode: 'on', owner: 'test' }); await sl(800);
     const st = a.stats().lights; L.removeOwner('test'); a.setTod(12);
