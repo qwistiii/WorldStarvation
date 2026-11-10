@@ -538,37 +538,55 @@ function drawCaps(ctx,A){const m=A.cam.m;if(m<3)return;for(const s of G.states){
     if(X<-40||Y<-40||X>A.VW+40||Y>A.VH+40)continue;const f=s._fc||(s._fc=flagCanvas(s.flag,30,20));
     ctx.fillStyle='rgba(6,10,16,0.55)';ctx.fillRect(X-17,Y-12,34,24);ctx.drawImage(f,X-15,Y-10,30,20);ctx.strokeStyle=s.isP?'#ffd25a':'rgba(255,255,255,0.55)';ctx.lineWidth=s.isP?2:1;ctx.strokeRect(X-15.5,Y-10.5,31,21);
     ctx.fillStyle=s.isP?'#ffd25a':'#fff';star(ctx,X,Y+16,5.5)}}
+// stage 6.1: one style for every ring and ghost on the map, as DroneFlames draws them: a solid ring (dark "rubber" under a
+// thin colour line), an optional translucent band inside, the area tinted green (fits) or red (does not); no dashes
+const GH={ok:{fill:'rgba(89,255,115,0.22)',edge:'#bfffcc',ring:'#33f259'},bad:{fill:'rgba(255,77,64,0.24)',edge:'#ff8c80',ring:'#f24d33'},amber:{ring:'#ffb000'},sky:{ring:'#78c8ff'}};
+function ring(ctx,X,Y,r,col,fill,band){ctx.save();ctx.setLineDash([]);ctx.beginPath();ctx.arc(X,Y,r,0,7);if(fill){ctx.fillStyle=fill;ctx.fill()}
+  if(band&&r>14){ctx.globalAlpha=0.18;ctx.lineWidth=10;ctx.strokeStyle=col;ctx.beginPath();ctx.arc(X,Y,r-5,0,7);ctx.stroke();ctx.globalAlpha=1;ctx.beginPath();ctx.arc(X,Y,r,0,7)}
+  ctx.lineWidth=3.5;ctx.strokeStyle='rgba(11,20,48,0.8)';ctx.stroke();ctx.lineWidth=1.6;ctx.strokeStyle=col;ctx.stroke();ctx.restore()}
+function cross(ctx,X,Y,k,col){ctx.save();ctx.lineCap='butt';for(const [w,c] of [[4,'rgba(11,20,48,0.8)'],[2,col]]){ctx.lineWidth=w;ctx.strokeStyle=c;ctx.beginPath();ctx.moveTo(X-k,Y);ctx.lineTo(X+k,Y);ctx.moveTo(X,Y-k);ctx.lineTo(X,Y+k);ctx.stroke()}ctx.restore()}
 function star(ctx,x,y,r){ctx.beginPath();for(let i=0;i<10;i++){const a=-M.PI/2+i*M.PI/5,rr=i%2?r*0.45:r;ctx.lineTo(x+M.cos(a)*rr,y+M.sin(a)*rr)}ctx.closePath();ctx.fill();ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=1;ctx.stroke()}
-// stage 5.9: deposits are map pins as in DroneFlames — a teardrop in the colour of the resource with a white glyph,
-// a dark outline; the point of the pin stands on the deposit (48 × 60, anchor at the bottom centre)
-function oreIcon(k){if(ICONS['o'+k])return ICONS['o'+k];const c=document.createElement('canvas');c.width=48;c.height=60;const x=c.getContext('2d'),o=ORES[k],C=24,Y=22,oc=hexRgb(o.c);
-  const pin=()=>{x.beginPath();x.arc(C,Y,17,M.PI*0.78,M.PI*2.22);x.lineTo(C,55);x.closePath()};
-  x.save();x.translate(0,2);pin();x.fillStyle='rgba(0,0,0,0.45)';x.fill();x.restore();
-  pin();x.lineWidth=5;x.strokeStyle='#1b120c';x.stroke();
-  const lt=v=>M.min(255,v*1.35+40)|0,dk=v=>v*0.62|0;let g=x.createLinearGradient(0,4,0,52);g.addColorStop(0,`rgb(${lt(oc[0])},${lt(oc[1])},${lt(oc[2])})`);g.addColorStop(1,`rgb(${dk(oc[0])},${dk(oc[1])},${dk(oc[2])})`);
-  pin();x.fillStyle=g;x.fill();x.lineWidth=1.5;x.strokeStyle='rgba(255,255,255,0.45)';x.beginPath();x.arc(C,Y,14.5,M.PI*1.05,M.PI*1.7);x.stroke();
-  x.beginPath();x.arc(C,Y,11.5,0,M.PI*2);x.fillStyle='rgba(16,12,8,0.38)';x.fill();
-  x.fillStyle='#fbf3e0';x.strokeStyle='#fbf3e0';x.lineJoin='round';x.lineCap='round';
+// stage 6.1: deposits are map badges as in DroneFlames (its ore tiles), drawn as vectors: a rounded square, cream body,
+// dark ink outline, the glyph in the colour of the resource with an ink outline; centred on the deposit (48 × 48).
+// v: 0 — free, 1 — taken by another state (the caller fades it), 2 — our mine (dark body, as DroneFlames)
+const INK='#0b1430';
+function oreGlyph(x,o,C,Y,fill,acc){x.fillStyle=fill;x.strokeStyle=fill;x.lineJoin='round';x.lineCap='round';
   switch(o.k){
   case 'oil':x.beginPath();x.moveTo(C,Y-9);x.bezierCurveTo(C+4,Y-2,C+7,Y+1,C+7,Y+4);x.arc(C,Y+4,7,0,M.PI);x.bezierCurveTo(C-7,Y+1,C-4,Y-2,C,Y-9);x.fill();break;
-  case 'gas':x.beginPath();x.moveTo(C,Y-10);x.bezierCurveTo(C+8,Y-2,C+7,Y+7,C,Y+8);x.bezierCurveTo(C-7,Y+7,C-8,Y-2,C,Y-10);x.fill();x.fillStyle=o.c;x.beginPath();x.moveTo(C,Y-2);x.bezierCurveTo(C+4,Y+2,C+3,Y+6,C,Y+6);x.bezierCurveTo(C-3,Y+6,C-4,Y+2,C,Y-2);x.fill();break;
+  case 'gas':x.beginPath();x.moveTo(C,Y-10);x.bezierCurveTo(C+8,Y-2,C+7,Y+7,C,Y+8);x.bezierCurveTo(C-7,Y+7,C-8,Y-2,C,Y-10);x.fill();x.fillStyle=acc;x.beginPath();x.moveTo(C,Y-2);x.bezierCurveTo(C+4,Y+2,C+3,Y+6,C,Y+6);x.bezierCurveTo(C-3,Y+6,C-4,Y+2,C,Y-2);x.fill();break;
   case 'coal':for(const [a,b,r] of [[-4,3,5],[4,4,4.4],[0,-4,4.6]]){x.beginPath();for(let q=0;q<6;q++){const t=q/6*M.PI*2+0.3;x.lineTo(C+a+M.cos(t)*r,Y+b+M.sin(t)*r)}x.closePath();x.fill()}break;
   case 'iron':case 'copper':for(const [a,b] of [[-5,4],[5,4],[0,-3]]){x.beginPath();x.moveTo(C+a-4,Y+b-2);x.lineTo(C+a+4,Y+b-2);x.lineTo(C+a+6,Y+b+3);x.lineTo(C+a-6,Y+b+3);x.closePath();x.fill()}break;
-  case 'gold':x.beginPath();x.moveTo(C-8,Y-3);x.lineTo(C-4,Y-8);x.lineTo(C+4,Y-8);x.lineTo(C+8,Y-3);x.lineTo(C,Y+8);x.closePath();x.fill();x.strokeStyle=o.c;x.lineWidth=1.2;x.beginPath();x.moveTo(C-8,Y-3);x.lineTo(C+8,Y-3);x.moveTo(C-4,Y-8);x.lineTo(C-2,Y-3);x.lineTo(C,Y+8);x.lineTo(C+2,Y-3);x.lineTo(C+4,Y-8);x.stroke();break;
+  case 'gold':x.beginPath();x.moveTo(C-8,Y-3);x.lineTo(C-4,Y-8);x.lineTo(C+4,Y-8);x.lineTo(C+8,Y-3);x.lineTo(C,Y+8);x.closePath();x.fill();x.strokeStyle=acc;x.lineWidth=1.2;x.beginPath();x.moveTo(C-8,Y-3);x.lineTo(C+8,Y-3);x.moveTo(C-4,Y-8);x.lineTo(C-2,Y-3);x.lineTo(C,Y+8);x.lineTo(C+2,Y-3);x.lineTo(C+4,Y-8);x.stroke();break;
   case 'uran':x.beginPath();x.arc(C,Y,2.4,0,M.PI*2);x.fill();for(let q=0;q<3;q++){const a=-M.PI/2+q*M.PI*2/3;x.beginPath();x.moveTo(C+M.cos(a-0.5)*4,Y+M.sin(a-0.5)*4);x.arc(C,Y,9,a-0.5,a+0.5);x.lineTo(C+M.cos(a+0.5)*4,Y+M.sin(a+0.5)*4);x.closePath();x.fill()}break;
   case 'lith':for(const [a,h,w] of [[-4,8,3],[4,7,3],[0,10,3.4]]){x.beginPath();x.moveTo(C+a,Y-h);x.lineTo(C+a+w,Y-h+3);x.lineTo(C+a+w,Y+7);x.lineTo(C+a-w,Y+7);x.lineTo(C+a-w,Y-h+3);x.closePath();x.fill()}break}
-  return ICONS['o'+k]=c}
+}
+function oreIcon(k,v){v=v||0;const key='o'+k+':'+v;if(ICONS[key])return ICONS[key];const c=document.createElement('canvas');c.width=48;c.height=48;const x=c.getContext('2d'),o=ORES[k];
+  const rr=(p,r)=>{x.beginPath();x.roundRect?x.roundRect(p,p,48-p*2,48-p*2,r):x.rect(p,p,48-p*2,48-p*2)};
+  const body=v===2?'#2a3142':'#f4efe0';
+  rr(2,9);x.fillStyle=INK;x.fill();                                  // ink frame
+  rr(5,6);x.fillStyle=body;x.fill();                                 // body
+  x.fillStyle=v===2?'rgba(0,0,0,0.25)':'rgba(60,48,30,0.14)';x.fillRect(6,36,36,5); // the lower lip, as the tiles of DroneFlames
+  if(v===0){x.lineWidth=1.2;x.strokeStyle='rgba(255,241,196,0.9)';rr(1.2,10);x.stroke()}
+  // the glyph: an ink outline (the glyph dilated), then the colour; the glyph is scaled into the body
+  const g=document.createElement('canvas');g.width=g.height=48;const gx=g.getContext('2d');gx.translate(24,24);gx.scale(0.95,0.95);gx.translate(-24,-22);
+  oreGlyph(gx,o,24,22,INK,INK);
+  for(const [dx,dy] of [[-2,0],[2,0],[0,-2],[0,2],[-1.4,-1.4],[1.4,-1.4],[-1.4,1.4],[1.4,1.4]])x.drawImage(g,dx,dy);
+  gx.setTransform(1,0,0,1,0,0);gx.clearRect(0,0,48,48);gx.translate(24,24);gx.scale(0.95,0.95);gx.translate(-24,-22);
+  const lt=o.k==='oil'?'#5b5b66':o.k==='coal'?'#7a7a80':o.c;oreGlyph(gx,o,24,22,lt,body);x.drawImage(g,0,0);
+  return ICONS[key]=c}
 function drawDeposits(ctx,A){const m=A.cam.m,fd=G.phase==='found';if(!fd&&(mapMode==='off'||(mapMode==='pol'&&m>40)))return;const z=(mapMode==='res'||fd?1:smoothst(40,18,m))*smoothst(75,45,m);if(z<=0.02)return;ctx.globalAlpha=z;
   for(const d of G.dep){if(!d.known)continue;const X=A.sxw(d.x),Y=A.syw(d.y);if(X<-20||Y<-20||X>A.VW+20||Y>A.VH+20)continue;
-    if(d.used>=0&&mapMode!=='res'&&A.cam.m<12)continue;const sz=mapMode==='res'?26:21;const ic=oreIcon(d.k);ctx.globalAlpha=z*(d.amt<=0?0.35:d.used>=0?0.55:1)*(G.sel&&G.sel.dep===G.dep.indexOf(d)?1:1);ctx.drawImage(ic,X-sz/2,Y-sz*1.25,sz,sz*1.25);
-    if(d.max!==Infinity&&mapMode==='res'){ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(X-10,Y+2,20,3);ctx.fillStyle=ORES[d.k].c;ctx.fillRect(X-10,Y+2,20*d.amt/d.max,3)}
-    const o=own?own[d.c]:0;if(o&&mapMode==='res'){ctx.fillStyle=G.states[o-1].color;ctx.beginPath();ctx.arc(X+sz/2-2,Y-sz*1.15,3.5,0,7);ctx.fill()}}ctx.globalAlpha=1}
-function drawPlacement(ctx,A){if(pend){const X=A.sxw(pend.x),Y=A.syw(pend.y),r=M.max(12,2900/A.cam.m),q=(A.T*1.2)%1;ctx.save();ctx.strokeStyle='rgba(255,210,90,0.95)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(X,Y,r,0,M.PI*2);ctx.stroke();
-    ctx.globalAlpha=1-q;ctx.beginPath();ctx.arc(X,Y,r*(1+q*0.8),0,M.PI*2);ctx.stroke();ctx.globalAlpha=1;ctx.fillStyle='#ffd25a';star(ctx,X,Y,7);ctx.restore();return}
-  if(!placing||!A.hover.on)return;const [x,y]=A.toWorld(A.hover.x,A.hover.y);const bad=validSite(x,y);const r=2900/A.cam.m;const X=A.hover.x,Y=A.hover.y;
-  ctx.save();ctx.textAlign='left';ctx.strokeStyle=bad?'rgba(255,107,90,0.95)':'rgba(255,210,90,0.95)';ctx.fillStyle=bad?'rgba(255,107,90,0.12)':'rgba(255,210,90,0.12)';ctx.lineWidth=2;ctx.setLineDash([10,7]);ctx.lineDashOffset=-A.T*24;
-  ctx.beginPath();ctx.arc(X,Y,M.max(10,r),0,M.PI*2);ctx.fill();ctx.stroke();ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(X-8,Y);ctx.lineTo(X+8,Y);ctx.moveTo(X,Y-8);ctx.lineTo(X,Y+8);ctx.stroke();
-  const t=bad||'Основать столицу здесь';ctx.font='600 12px Rubik,system-ui,sans-serif';const w=ctx.measureText(t).width+16;ctx.fillStyle='rgba(10,15,23,0.85)';ctx.fillRect(X+14,Y+12,w,22);ctx.fillStyle=bad?'#ff9c8e':'#ffd25a';ctx.textBaseline='middle';ctx.fillText(t,X+22,Y+23);ctx.restore()}
+    if(d.used>=0&&mapMode!=='res'&&A.cam.m<12)continue;const sz=mapMode==='res'?24:20;const mine=d.used>=0&&own&&own[d.c]===1;const ic=oreIcon(d.k,mine?2:0);ctx.globalAlpha=z*(d.amt<=0?0.35:d.used>=0&&!mine?0.5:1);ctx.drawImage(ic,M.round(X-sz/2),M.round(Y-sz/2),sz,sz);
+    if(d.max!==Infinity&&mapMode==='res'){ctx.fillStyle=INK;ctx.fillRect(X-10,Y+sz/2+1,20,4);ctx.fillStyle=ORES[d.k].c;ctx.fillRect(X-9,Y+sz/2+2,18*d.amt/d.max,2)}
+    const o=own?own[d.c]:0;if(o&&mapMode==='res'){ctx.fillStyle=INK;ctx.fillRect(X+sz/2-5,Y-sz/2-2,7,7);ctx.fillStyle=G.states[o-1].color;ctx.fillRect(X+sz/2-4,Y-sz/2-1,5,5)}}ctx.globalAlpha=1}
+function drawPlacement(ctx,A){if(pend){const X=A.sxw(pend.x),Y=A.syw(pend.y),r=M.max(12,2900/A.cam.m);ring(ctx,X,Y,r,GH.ok.ring,GH.ok.fill);ctx.fillStyle='#ffd25a';star(ctx,X,Y,7);return}
+  if(!placing||!A.hover.on){capPrompt(null);return}const [x,y]=A.toWorld(A.hover.x,A.hover.y);const bad=validSite(x,y);const r=2900/A.cam.m;const X=A.hover.x,Y=A.hover.y,c=bad?GH.bad:GH.ok;
+  // the game draws the only crosshair (the system cursor is hidden over the map while the capital is placed)
+  ring(ctx,X,Y,M.max(10,r),c.ring,c.fill);cross(ctx,X,Y,12,c.ring);capPrompt(bad||'')}
+// the capital prompt in the placement bar on top (as the prompt box of DroneFlames), not a label at the cursor
+let capSig=null;function capPrompt(bad){const el=$('pbar');if(!el)return;if(bad===null){if(capSig!==null&&!(G&&G.phase==='play'&&G.build))el.classList.remove('show');capSig=null;return}
+  el.classList.add('show');if(bad===capSig)return;capSig=bad;el.classList.toggle('bad',!!bad);el.classList.remove('touch');$('pbi').className='ic ic-capital';$('pbt').textContent='Столица';$('pbs').innerHTML=bad?`<span class="neg">${esc(bad)}</span>`:'Кликните по карте: здесь встанет столица. Лучше равнина у реки или моря';
+  for(const b of ['pbrot','pbok','pbno'])$(b).hidden=true}
 function drawMini(mx,s){if(!G||G.phase!=='play'||!own)return;const S=W.WORLD*s;if(polC){mx.globalAlpha=0.55;mx.imageSmoothingEnabled=true;mx.drawImage(polC,0,0,S,S);mx.globalAlpha=1}
   drawMiniBuilds(mx,s);for(const st of G.states){if(!st.cap||!seenAt(st.cap.x,st.cap.y))continue;mx.fillStyle=st.isP?'#ffd25a':'#fff';mx.fillRect(st.cap.x*s-2,st.cap.y*s-2,4,4)}}
 
@@ -764,10 +782,10 @@ function placeConfirm(){const r=PL.confirm(false);if(r==='built')placeDone(false
 function updPbar(){const el=$('pbar');if(!el)return;const k=G&&G.phase==='play'?G.build:null;el.classList.toggle('show',!!k);document.body.classList.toggle('placing-k',!!k);if(!k)return;const S=PL.state,b=BLD[k];
   el.classList.toggle('touch',!!S.touch);el.classList.toggle('bad',!!(S.has&&S.bad));$('pbi').className='ic ic-b-'+k;$('pbt').textContent=b.n+' ('+fmt(b.cost)+')';
   $('pbs').textContent=S.has&&S.bad?S.bad:S.touch?(S.has?'Нажмите ✓, чтобы построить. Перетащите метку или коснитесь другого места':'Коснитесь карты, где поставить'):'Клик — построить · R — повернуть · Shift+клик — ещё одну · Esc или ПКМ — отмена';
-  $('pbrot').hidden=!rotK(k);$('pbok').disabled=!(S.has&&!S.bad)}
+  $('pbrot').hidden=!rotK(k);$('pbok').hidden=false;$('pbno').hidden=false;$('pbok').disabled=!(S.has&&!S.bad)}
 function setBuild(k){if(!G||G.phase!=='play')return;G.build=k;if(k){G.mode=null;railDrag=null}if(!k||!BLD[k].mod&&k!=='solar')G.forPort=null;document.body.classList.toggle('placing',!!k);if(k){const t=tabOf(k);if(t&&t!==tab)setTab(t)}
   if(k){if(PL.state.k!==k){const c=api.toWorld(api.VW/2,api.VH*0.45);PL.select(k,lastTouch,c[0],c[1])}}else PL.cancel();updPbar();updCatalog()}
-function setPlacing(v){placing=v;document.body.classList.toggle('placing',v);panelSig='';if(G&&G.phase==='found'&&tab!=='cities')setTab('cities');updPanel();updCatalog();if(v)hint(1);closeConfirm()}
+function setPlacing(v){placing=v;document.body.classList.toggle('placing',v);document.body.classList.toggle('placing-cap',v);panelSig='';if(G&&G.phase==='found'&&tab!=='cities')setTab('cities');updPanel();updCatalog();if(v)hint(1);closeConfirm()}
 function closeConfirm(){$('confirm').classList.remove('show');pend=null;askFn=null;if(G)G.railAsk=null}
 // the same box asks other questions (build this railway?) with a callback
 let askFn=null;
@@ -778,13 +796,36 @@ function openAsk(t,sub,fn,sx,sy){pend=null;askFn=fn;const c=$('confirm');$('cft'
 function openConfirm(x,y,sx,sy){askFn=null;pend={x,y};const c=$('confirm');$('cft').textContent='Основать столицу здесь?';$('cfy').textContent='Да';const e=W.landE(x,y,0);
   $('cfs').innerHTML=`Высота ${M.round(e*2600)} м<br>Город вырастет здесь сам, к соседям проложат магистрали`;placeAsk(c,sx,sy)}
 // news as in DroneFlames: the red icon block (a flag, or the icon of the building), the text, ✕ and the bar of the time left
-function toast(html,fl,btns,ms){ms=ms||6500;const t=document.createElement('div');t.className='toast';const ic=document.createElement('span');ic.className='t-i';
-  if(fl&&typeof fl==='object')ic.appendChild(flagCanvas(fl,28,19));else ic.innerHTML=`<span class="ic ${fl||'ic-warn'}"></span>`;t.appendChild(ic);
-  const b=document.createElement('div');b.className='t-b';b.innerHTML=html;t.appendChild(b);let dead=false;const kill=()=>{if(dead)return;dead=true;t.classList.add('out');setTimeout(()=>t.remove(),350)};
-  if(btns){const r=document.createElement('div');r.className='tb';btns.forEach(([n,f],i)=>{const q=document.createElement('button');q.className='btn sm'+(i===0?(/^Снести|^Объявить/.test(n)?' danger':' primary'):'');q.textContent=n;q.onclick=()=>{f();kill()};r.appendChild(q)});b.appendChild(r)}
-  const x=document.createElement('button');x.className='xb st';x.textContent='✕';x.title='Закрыть';x.onclick=kill;t.appendChild(x);
-  const bar=document.createElement('span');bar.className='t-bar';bar.innerHTML=`<i style="animation-duration:${ms}ms"></i>`;t.appendChild(bar);
-  const box=$('toasts');box.prepend(t);while(box.children.length>3)box.lastChild.remove();setTimeout(kill,ms)}
+// stage 6.1: notifications as the lane of DroneFlames (ui24/notif_lane.gd): at most 2 cards at once (1 on a phone), the
+// rest wait in a short queue (a card older than 15 s is dropped, unless it asks something); the same text does not make a
+// second card — the shown one lives longer; cards of one kind waiting in the queue merge into one with ×N; a card leaves
+// by itself (errors 3.5 s, news 7 s, offers 20 s) or on a tap; «+N» tells how many wait. One place: top centre, 316 px.
+const LANE={shown:[],queue:[],seq:0};const LANE_AGE=15000;
+function laneMax(){return innerWidth<760?1:2}
+function toast(html,fl,btns,ms){const txt=String(html).replace(/<[^>]+>/g,''),cat=fl&&typeof fl==='object'?'flag':(fl||'ic-warn'),now=performance.now();
+  ms=ms||(btns?20000:cat==='ic-warn'?3500:7000);
+  for(const it of LANE.shown)if(it.txt===txt){it.until=M.max(it.until,now+ms);return}
+  for(const it of LANE.queue)if(it.txt===txt){it.ms=M.max(it.ms,ms);return}
+  if(!btns)for(const it of LANE.queue)if(!it.btns&&it.cat===cat&&cat!=='ic-warn'){it.n++;it.html=html;it.txt=txt;it.fl=fl;it.t0=now;laneSync();return}
+  LANE.queue.push({id:++LANE.seq,html,txt,fl,cat,btns,ms,n:1,t0:now});
+  while(LANE.queue.length>6){const i=LANE.queue.findIndex(q=>!q.btns);LANE.queue.splice(i<0?0:i,1)}
+  laneSync()}
+function laneKill(it){if(it.dead)return;it.dead=true;const t=it.el;LANE.shown=LANE.shown.filter(q=>q!==it);if(t){t.classList.add('out');setTimeout(()=>t.remove(),160)}setTimeout(laneSync,170)}
+function laneCard(it){const t=document.createElement('div');t.className='toast'+(it.btns?' ask':'');const ic=document.createElement('span');ic.className='t-i';
+  if(it.fl&&typeof it.fl==='object')ic.appendChild(flagCanvas(it.fl,28,19));else ic.innerHTML=`<span class="ic ${it.fl||'ic-warn'}"></span>`;t.appendChild(ic);
+  const b=document.createElement('div');b.className='t-b';b.innerHTML=it.html;t.appendChild(b);
+  if(it.n>1){const n=document.createElement('span');n.className='t-n';n.textContent='×'+it.n;t.appendChild(n)}
+  if(it.btns){const r=document.createElement('div');r.className='tb';it.btns.forEach(([n,f],i)=>{const q=document.createElement('button');q.className='btn sm'+(i===0?(/^Снести|^Объявить/.test(n)?' danger':' primary'):'');q.textContent=n;q.onclick=e=>{e.stopPropagation();f();laneKill(it)};r.appendChild(q)});b.appendChild(r)}
+  else t.onclick=()=>laneKill(it);
+  return t}
+function laneSync(){const box=$('toasts');if(!box)return;const now=performance.now();
+  LANE.queue=LANE.queue.filter(q=>q.btns||now-q.t0<LANE_AGE);
+  while(LANE.shown.length<laneMax()&&LANE.queue.length){const it=LANE.queue.shift();it.until=now+it.ms;it.el=laneCard(it);box.insertBefore(it.el,$('t-more'));LANE.shown.push(it)}
+  let mo=$('t-more');if(!mo){mo=document.createElement('button');mo.id='t-more';mo.className='t-more';mo.onclick=()=>{const o=LANE.shown.find(q=>!q.btns)||LANE.shown[0];if(o)laneKill(o)};box.appendChild(mo)}
+  mo.textContent='+'+LANE.queue.length;mo.title='Ещё уведомлений: '+LANE.queue.length+' — нажмите, чтобы показать следующее';mo.style.display=LANE.queue.length?'':'none'}
+function laneTick(){const now=performance.now();for(const it of LANE.shown.slice())if(now>it.until)laneKill(it);if(LANE.queue.length&&LANE.shown.length<laneMax())laneSync()}
+setInterval(laneTick,250);
+function laneClear(){for(const it of LANE.shown)it.dead=true;LANE.shown=[];LANE.queue=[];const box=$('toasts');if(box)box.innerHTML=''}
 // hints: the step-by-step guide («План развития»); [text, what finishes the step]
 const HINTS=[
   ['Выберите место для <b>столицы</b>: нажмите «Основать столицу» слева или просто кликните по карте','found'],
@@ -800,7 +841,8 @@ const HINTS=[
   ['Расширяйтесь: поставьте <b>новый город</b> — он вырастет сам и принесёт налоги и земли','city'],
   ['<b>Солнечные панели</b> — резерв энергии: днём заряжают аккумулятор, а ночью или когда ТЭЦ стоит, он держит заводы','solar'],
   ['<b>Рудник</b> — на месторождении угля, железа, меди, золота, урана или лития: металл (для дронов) или деньги','mine'],
-  ['Железная дорога: поставьте <b>Вокзал</b>, нажмите «Ж/Д путь», затем нажмите на вокзал и, не отпуская, ведите линию к другому вокзалу или в поле','rail'],
+  ['Железная дорога начинается с вокзала: во вкладке <b>Города</b> поставьте <b>Вокзал</b> в городе, у дороги','station'],
+  ['Теперь <b>Ж/Д путь</b>: нажмите ключ «Ж/Д путь», затем нажмите на вокзал и, не отпуская, ведите линию к другому вокзалу или в поле — там встанет новый вокзал','rail'],
   ['Защита: <b>Военная часть</b> (вкладка «Армия», армия до 12 бойцов) и <b>ПВО</b> (вкладка «ПВО», сбивает вражеские дроны). Боты могут начать войну не раньше 10–12 минуты','defense'],
   ['Вкладка <b>Удар</b>: <b>Дронопорт</b>, к нему <b>Рампа</b>, затем <b>Цех БПЛА</b> — закажите в нём Ланцет или Орлан-10 (нужен металл с рудника)','uav'],
   ['Кликните по военной части или по значку армии на карте: «Армия №1», выберите <b>Сборку</b> — состав армии','assembly'],
@@ -838,10 +880,12 @@ function drawObjects(ctx,A){const m=A.cam.m,T=A.T;drawPennants(ctx,A);ctx.textAl
     ctx.fillStyle='rgba(10,15,23,0.55)';ctx.beginPath();ctx.arc(X,Y,r,0,7);ctx.fill();ctx.strokeStyle=s.isP?'#ffd25a':s.color;ctx.lineWidth=3;ctx.beginPath();ctx.arc(X,Y,r,-M.PI/2,-M.PI/2+M.PI*2*q.t/q.time);ctx.stroke();
     ctx.strokeStyle='rgba(255,255,255,0.25)';ctx.lineWidth=1;ctx.setLineDash([4,4]);ctx.lineDashOffset=-T*10;ctx.beginPath();ctx.arc(X,Y,r+5,0,7);ctx.stroke();ctx.setLineDash([]);
     const ic=bIcon(q.k);ctx.drawImage(ic,X-11,Y-11,22,22)}
-  // railways under construction: a dashed line between the stations with the progress
+  // railways under construction (as DroneFlames): the track is laid along the real route as the work goes, the rest is the
+  // earthworks; until both stations stand — the earthworks only, and a chip «ждёт вокзалы»
   for(const s of G.states){if(!mine(s))continue;for(const q of s.builds){if(q.k!=='rail'||q.done)continue;const a=byUid(s,q.a),b=byUid(s,q.b);if(!a||!b)continue;
-    ctx.save();ctx.strokeStyle='rgba(255,210,90,0.85)';ctx.lineWidth=2;ctx.setLineDash([9,6]);ctx.lineDashOffset=-T*20;ctx.beginPath();ctx.moveTo(A.sxw(a.x),A.syw(a.y));ctx.lineTo(A.sxw(b.x),A.syw(b.y));ctx.stroke();ctx.setLineDash([]);
-    const mx=(A.sxw(a.x)+A.sxw(b.x))/2,my=(A.syw(a.y)+A.syw(b.y))/2;ctx.font='600 11px Rubik,system-ui,sans-serif';const t=(a.done&&b.done?M.round(q.t/q.time*100)+' %':'ждёт вокзалы');const w=ctx.measureText(t).width+12;ctx.fillStyle='rgba(10,15,23,0.85)';ctx.fillRect(mx-w/2,my-10,w,20);ctx.fillStyle='#ffd25a';ctx.fillText(t,mx,my);ctx.restore()}}
+    const ready=a.done&&b.done&&a.id>=0&&b.id>=0;if(ready&&!q._P){const P=W.railPts(W.zones[a.id],W.zones[b.id],railBlk(s));q._P=typeof P==='string'||!P?[a.x,a.y,b.x,b.y]:P}
+    const P=q._P||[a.x,a.y,b.x,b.y],sp=[];for(let i=0;i<P.length;i+=2){sp.push(A.sxw(P[i]),A.syw(P[i+1]))}trackLine(ctx,sp,ready?q.t/q.time:0);
+    if(!ready){const mx=(A.sxw(a.x)+A.sxw(b.x))/2,my=(A.syw(a.y)+A.syw(b.y))/2;ctx.font='700 11px Rubik,system-ui,sans-serif';const t='ждёт вокзалы',w=ctx.measureText(t).width+14;ctx.fillStyle=INK;ctx.fillRect(mx-w/2-1,my-11,w+2,22);ctx.fillStyle='#24211a';ctx.fillRect(mx-w/2,my-10,w,20);ctx.fillStyle='#ffd25a';ctx.fillText(t,mx,my)}}}
   for(const s of G.states)for(const a of s.armies){if(!a.units.length||(!mine(s)&&!seenNow(a.x,a.y)))continue;const X=A.sxw(a.x),Y=A.syw(a.y);if(X<-40||Y<-40||X>A.VW+40||Y>A.VH+40)continue;const sel=G.sel&&G.sel.army===a;
     if(a.tx!==null&&(s.isP||sel)){ctx.strokeStyle=s.isP?'rgba(255,210,90,0.8)':'rgba(255,107,90,0.8)';ctx.lineWidth=2;ctx.setLineDash([7,6]);ctx.lineDashOffset=-T*25;ctx.beginPath();ctx.moveTo(X,Y);ctx.lineTo(A.sxw(a.tx),A.syw(a.ty));ctx.stroke();ctx.setLineDash([])}
     if(a.fight){for(let k=0;k<3;k++){const f=(T*3+k*0.33)%1;ctx.fillStyle=`rgba(255,${160+k*30},60,${1-f})`;ctx.beginPath();ctx.arc(X+M.sin(T*9+k)*12,Y+M.cos(T*7+k)*9,3+f*6,0,7);ctx.fill()}}
@@ -859,31 +903,45 @@ function drawObjects(ctx,A){const m=A.cam.m,T=A.T;drawPennants(ctx,A);ctx.textAl
   // build preview
   if(G.build&&!PL.state.touch&&A.hover.on){const [hx,hy]=A.toWorld(A.hover.x,A.hover.y);PL.hover(hx,hy)}
   if(G.build&&PL.state.has){const S=PL.state,x=S.x,y=S.y,k=G.build,b=BLD[k],bad=S.bad,X=A.sxw(x),Y=A.syw(y);ctx.save();
-    ctx.strokeStyle=bad?'rgba(255,107,90,0.95)':'rgba(127,209,139,0.95)';ctx.fillStyle=bad?'rgba(255,107,90,0.14)':'rgba(127,209,139,0.14)';ctx.lineWidth=2;ctx.setLineDash([8,6]);ctx.lineDashOffset=-T*24;
+    const c=bad?GH.bad:GH.ok;ctx.strokeStyle=c.edge;ctx.fillStyle=c.fill;ctx.lineWidth=2;
     if(b.zk){const w=M.max(8,b.W/m),h=M.max(8,b.H/m),an=k==='station'?stationAng(player(),x,y):rotK(k)?S.ang:0;ctx.save();ctx.translate(X,Y);ctx.rotate(an);ctx.beginPath();ctx.rect(-w/2,-h/2,w,h);ctx.fill();ctx.stroke();
       // the front of the building (its gate side) — so the angle reads
-      if(rotK(k)){ctx.setLineDash([]);ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-w/2,h/2);ctx.lineTo(w/2,h/2);ctx.stroke()}ctx.restore()}else{const r=M.max(10,(k==='city'?b.R:b.point?b.r:320)/m);ctx.beginPath();ctx.arc(X,Y,r,0,7);ctx.fill();ctx.stroke()}
-    if(b.mod||k==='solar'){ctx.setLineDash([3,5]);ctx.strokeStyle='rgba(255,210,90,0.65)';for(const q of player().builds)if(q.k==='droneport'){ctx.beginPath();ctx.arc(A.sxw(q.x),A.syw(q.y),(b.mod?1100:700)/m,0,7);ctx.stroke()}}
-    if(k==='village'||k==='farm'){ctx.setLineDash([3,5]);ctx.strokeStyle='rgba(255,210,90,0.6)';for(const p of player().places)if(p.k==='village'){ctx.beginPath();ctx.arc(A.sxw(p.x),A.syw(p.y),1400/m,0,7);ctx.stroke()}}
-    ctx.setLineDash([]);
+      if(rotK(k)){ctx.setLineDash([]);ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-w/2,h/2);ctx.lineTo(w/2,h/2);ctx.stroke()}ctx.restore()}else{const r=M.max(10,(k==='city'?b.R:b.point?b.r:320)/m);ring(ctx,X,Y,r,c.ring,c.fill)}
+    // where it may stand: the cover rings of DroneFlames (band, rubber, amber line)
+    if(b.mod||k==='solar'){for(const q of player().builds)if(q.k==='droneport')ring(ctx,A.sxw(q.x),A.syw(q.y),(b.mod?1100:700)/m,GH.amber.ring,null,true)}
+    if(k==='village'||k==='farm'){for(const p of player().places)if(p.k==='village')ring(ctx,A.sxw(p.x),A.syw(p.y),1400/m,GH.amber.ring,null,true)}
     // touch: a round handle to drag the ghost (the name and the reason are in the placement bar)
     if(S.touch){ctx.lineWidth=2;ctx.strokeStyle=bad?'rgba(255,140,120,0.95)':'rgba(255,255,255,0.95)';ctx.fillStyle='rgba(10,15,23,0.6)';ctx.beginPath();ctx.arc(X,Y,22,0,7);ctx.fill();ctx.stroke()}
     ctx.drawImage(bIcon(k),X-12,Y-12,24,24);
-    if(!S.touch){const t=bad||b.n+' · '+fmt(b.cost);ctx.font='600 12px Rubik,system-ui,sans-serif';ctx.textAlign='left';const w=ctx.measureText(t).width+16;
-      ctx.fillStyle='rgba(10,15,23,0.88)';ctx.fillRect(X+16,Y+14,w,22);ctx.fillStyle=bad?'#ff9c8e':'#9fe3aa';ctx.fillText(t,X+24,Y+25)}ctx.restore()}
+    ctx.restore()}
   if(G.mode==='rail'||G.railAsk)drawRailTool(ctx,A);
-  if(G.mode&&G.mode.startsWith('uav:')&&A.hover.on&&DRN[G.mode.slice(4)].recon){ctx.save();ctx.strokeStyle='rgba(120,200,255,0.8)';ctx.setLineDash([6,6]);ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(A.hover.x,A.hover.y,REVR/m,0,7);ctx.stroke();ctx.restore()}
+  if(G.mode&&G.mode.startsWith('uav:')&&A.hover.on&&DRN[G.mode.slice(4)].recon){ring(ctx,A.hover.x,A.hover.y,REVR/m,GH.sky.ring,'rgba(120,200,255,0.08)',true);cross(ctx,A.hover.x,A.hover.y,10,GH.sky.ring)}
   if(G.mode&&G.mode.startsWith('uav:')&&A.hover.on){ctx.strokeStyle='#ff6b5a';ctx.lineWidth=2;const X=A.hover.x,Y=A.hover.y;ctx.beginPath();ctx.arc(X,Y,14,0,7);ctx.moveTo(X-20,Y);ctx.lineTo(X+20,Y);ctx.moveTo(X,Y-20);ctx.lineTo(X,Y+20);ctx.stroke()}}
 // the railway tool on the map: rings over the own stations, the line being drawn (green: can be built, red: the reason)
+// stage 6.1: a railway on the map as DroneFlames draws it (world/rail_layer.gd), in vectors: dark edge, ballast, sleepers
+// across at a fixed step, two rails; a part not built yet is the earthworks (earth bed, stacked sleepers). pts — screen
+// points [x0,y0,x1,y1,…]; from/to — the built fraction; tint — the ghost colour of the rail tool (green / red / amber)
+function trackLine(ctx,pts,built,tint){const n=pts.length>>1;if(n<2)return;let L=0;const S=[0];for(let i=1;i<n;i++){L+=M.hypot(pts[i*2]-pts[i*2-2],pts[i*2+1]-pts[i*2-1]);S.push(L)}
+  const cut=L*(built==null?1:built);
+  const path=(a,b)=>{ctx.beginPath();let on=false;for(let i=0;i<n;i++){const s0=S[i];if(s0<a&&i<n-1&&S[i+1]<a)continue;if(s0>b&&on){const t=(b-S[i-1])/(s0-S[i-1]||1);ctx.lineTo(pts[i*2-2]+(pts[i*2]-pts[i*2-2])*t,pts[i*2-1]+(pts[i*2+1]-pts[i*2-1])*t);break}
+    if(!on){if(s0>=a){ctx.moveTo(pts[i*2],pts[i*2+1])}else{const t=(a-s0)/(S[i+1]-s0||1);ctx.moveTo(pts[i*2]+(pts[i*2+2]-pts[i*2])*t,pts[i*2+1]+(pts[i*2+3]-pts[i*2+1])*t)}on=true;if(s0<a)continue}ctx.lineTo(pts[i*2],pts[i*2+1])}};
+  const ties=(a,b,col,w,len,step)=>{ctx.strokeStyle=col;ctx.lineWidth=w;ctx.beginPath();for(let i=1;i<n;i++){const x0=pts[i*2-2],y0=pts[i*2-1],dx=pts[i*2]-x0,dy=pts[i*2+1]-y0,l=S[i]-S[i-1];if(l<=0)continue;const ux=dx/l,uy=dy/l;
+    for(let d=M.ceil(M.max(S[i-1],a)/step)*step;d<=M.min(S[i],b);d+=step){const t=d-S[i-1],x=x0+ux*t,y=y0+uy*t;ctx.moveTo(x-uy*len,y+ux*len);ctx.lineTo(x+uy*len,y-ux*len)}}ctx.stroke()};
+  ctx.save();ctx.lineCap='butt';ctx.lineJoin='round';ctx.setLineDash([]);
+  if(cut<L){path(cut,L);ctx.strokeStyle='rgba(58,44,30,0.55)';ctx.lineWidth=8;ctx.stroke();ctx.strokeStyle='rgba(150,116,78,0.85)';ctx.lineWidth=5;ctx.stroke();ties(cut,L,'rgba(92,66,40,0.7)',1.6,3,14)}
+  if(cut>0){path(0,cut);ctx.strokeStyle='#2c2b27';ctx.lineWidth=8;ctx.stroke();ctx.strokeStyle='#7d786c';ctx.lineWidth=6;ctx.stroke();ties(0,cut,'#5c4328',1.7,3.4,5);
+    // two rails: offsets of the centre line by ±1.5 px
+    for(const [o,c] of [[1.5,'#e3e1d8'],[-1.5,'#b9b7ae']]){ctx.strokeStyle=c;ctx.lineWidth=1;ctx.beginPath();let first=true;for(let i=0;i<n;i++){if(S[i]>cut&&i>0){const t=(cut-S[i-1])/(S[i]-S[i-1]||1);const x0=pts[i*2-2],y0=pts[i*2-1],dx=pts[i*2]-x0,dy=pts[i*2+1]-y0,l=M.hypot(dx,dy)||1;ctx.lineTo(x0+dx*t-dy/l*o,y0+dy*t+dx/l*o);break}
+      const j=M.min(i,n-2),dx=pts[j*2+2]-pts[j*2],dy=pts[j*2+3]-pts[j*2+1],l=M.hypot(dx,dy)||1,x=pts[i*2]-dy/l*o,y=pts[i*2+1]+dx/l*o;if(first){ctx.moveTo(x,y);first=false}else ctx.lineTo(x,y)}ctx.stroke()}}
+  if(tint){path(0,L);ctx.globalAlpha=0.38;ctx.strokeStyle=tint;ctx.lineWidth=10;ctx.stroke();ctx.globalAlpha=1}
+  ctx.restore()}
 function drawRailTool(ctx,A){const m=A.cam.m,T=A.T,p=player();ctx.save();
   for(const q of p.builds){if(q.k!=='station'||!q.done)continue;const X=A.sxw(q.x),Y=A.syw(q.y),r=M.max(18,170/m),f=(T*1.1)%1;
-    ctx.strokeStyle='rgba(255,210,90,0.95)';ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(X,Y,r,0,7);ctx.stroke();ctx.globalAlpha=1-f;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(X,Y,r*(1+f*0.6),0,7);ctx.stroke();ctx.globalAlpha=1;
-    ctx.fillStyle='#ffd25a';ctx.beginPath();ctx.arc(X,Y,3.5,0,7);ctx.fill()}
+    ring(ctx,X,Y,r,GH.amber.ring,'rgba(255,176,0,0.10)',true);cross(ctx,X,Y,6,GH.amber.ring)}
   let ev=G.railAsk;if(railDrag){const d=railDrag;if(!d.ev||performance.now()-d.et>110){d.et=performance.now();d.ev=railEval(d.a,d.x,d.y,d.sx,d.sy)}ev=d.ev;
-    if(ev&&!ev.P){ctx.strokeStyle='rgba(255,107,90,0.9)';ctx.lineWidth=2;ctx.setLineDash([8,6]);ctx.beginPath();ctx.moveTo(A.sxw(d.a.x),A.syw(d.a.y));ctx.lineTo(d.sx,d.sy);ctx.stroke();ctx.setLineDash([])}}
-  if(ev&&ev.P){const P=ev.P,ok=!ev.bad,amb=!!G.railAsk&&!railDrag;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='rgba(8,12,18,0.7)';ctx.lineWidth=6;ctx.beginPath();for(let i=0;i<P.length;i+=2){const X=A.sxw(P[i]),Y=A.syw(P[i+1]);if(i)ctx.lineTo(X,Y);else ctx.moveTo(X,Y)}ctx.stroke();
-    ctx.strokeStyle=amb?'#ffd25a':ok?'#7fd18b':'#ff6b5a';ctx.lineWidth=3;ctx.setLineDash([10,7]);ctx.lineDashOffset=-T*24;ctx.stroke();ctx.setLineDash([])}
-  if(ev&&ev.nb){const w=M.max(8,BLD.station.W/m),h=M.max(5,BLD.station.H/m);ctx.save();ctx.translate(A.sxw(ev.nb.x),A.syw(ev.nb.y));ctx.rotate(ev.nb.ang);ctx.fillStyle=ev.bad?'rgba(255,107,90,0.2)':'rgba(127,209,139,0.2)';ctx.strokeStyle=ev.bad?'#ff6b5a':G.railAsk&&!railDrag?'#ffd25a':'#7fd18b';ctx.lineWidth=2;ctx.beginPath();ctx.rect(-w/2,-h/2,w,h);ctx.fill();ctx.stroke();ctx.restore()}
+    if(ev&&!ev.P)trackLine(ctx,[A.sxw(d.a.x),A.syw(d.a.y),d.sx,d.sy],0,GH.bad.ring)}
+  if(ev&&ev.P){const P=ev.P,ok=!ev.bad,amb=!!G.railAsk&&!railDrag,sp=[];for(let i=0;i<P.length;i+=2)sp.push(A.sxw(P[i]),A.syw(P[i+1]));trackLine(ctx,sp,1,amb?GH.amber.ring:ok?GH.ok.ring:GH.bad.ring)}
+  if(ev&&ev.nb){const w=M.max(8,BLD.station.W/m),h=M.max(5,BLD.station.H/m);ctx.save();ctx.translate(A.sxw(ev.nb.x),A.syw(ev.nb.y));ctx.rotate(ev.nb.ang);ctx.fillStyle=ev.bad?GH.bad.fill:GH.ok.fill;ctx.strokeStyle=ev.bad?GH.bad.edge:G.railAsk&&!railDrag?GH.amber.ring:GH.ok.edge;ctx.lineWidth=2;ctx.beginPath();ctx.rect(-w/2,-h/2,w,h);ctx.fill();ctx.stroke();ctx.restore()}
   if(railDrag&&ev){const t=ev.bad||`${fmtKm(ev.L)} · ${fmt(ev.cost)}${ev.nb?' · новый вокзал':''}`;ctx.font='600 12px Rubik,system-ui,sans-serif';ctx.textAlign='left';ctx.textBaseline='middle';const w=ctx.measureText(t).width+16;
     ctx.fillStyle='rgba(10,15,23,0.9)';ctx.fillRect(railDrag.sx+16,railDrag.sy+14,w,22);ctx.fillStyle=ev.bad?'#ff9c8e':'#9fe3aa';ctx.fillText(t,railDrag.sx+24,railDrag.sy+25)}
   ctx.restore()}
@@ -1062,7 +1120,7 @@ function initState(c){cfg=c;tutorial=!!c.tutorial;hintsOff=!ui.settings().hints;
   closeWins();oreCss();oreSig='';hqSig=''}
 // every window of a game closes when a game starts AND when it ends: a panel left open (the free deposits, the HQ…) stayed
 // on top of the main menu after «Выйти в главное меню» (stage 6.1)
-function closeWins(){for(const w of ['over','dip','mystate','store','orep','hqp','ktip','pbar'])$(w).classList.remove('show');for(const b of ['b-ores','b-hq'])$(b).classList.remove('on');$('toasts').innerHTML=''}
+function closeWins(){for(const w of ['over','dip','mystate','store','orep','hqp','ktip','pbar'])$(w).classList.remove('show');for(const b of ['b-ores','b-hq'])$(b).classList.remove('on');laneClear()}
 function depOp(){return {f:'addDeposits',q:G.dep.map(d=>[d.k,M.round(d.x),M.round(d.y),M.round(200+ORES[d.k].v*14)])}}
 function newGame(c){initState(c);const MT={normal:'обычная карта',cont:'материки',arch:'архипелаг',islands:'острова'};ui.loading('Создание мира',`Сид ${c.seed} · ${MT[c.map.type]} · рельеф, реки, леса, месторождения`);setTimeout(()=>{boot(null,()=>{ui.loaded();analyse();G.dep=genDeposits();const o=depOp();api.op(o.f,o.q);hint(0);updHUD()});document.body.className='m-game';updHUD()},60)}
 // founding: bots pick their sites, the world is rebuilt with the capitals; land is taken around them
@@ -1092,7 +1150,7 @@ function load(sv){const c=sv.cfg;initState(c);const g=sv.g;G.t=g.t;G.phase=g.pha
       for(let k=0;k<N*N;k++)if(own[k]){const s=G.states[own[k]-1],i=k%N,j=(k/N)|0;s.cells++;const b=s.bb||(s.bb=[i,j,i,j]);if(i<b[0])b[0]=i;if(j<b[1])b[1]=j;if(i>b[2])b[2]=i;if(j>b[3])b[3]=j}
       updPop();dirtyPol=true;dirtyFog=true;hint(g.hint>=2?g.hint:2)}else hint(0);
     if(G.over)setSpeed(0);updHUD()},60)}
-function exit(){if(G&&!G.over)save(true);if(api){api.destroy();api=null}G=null;W=null;own=null;placing=false;document.body.classList.remove('placing','placing-k','sel');closeConfirm();hideHint();closeWins()}
+function exit(){if(G&&!G.over)save(true);if(api){api.destroy();api=null}G=null;W=null;own=null;placing=false;document.body.classList.remove('placing','placing-k','placing-cap','sel');capSig=null;closeConfirm();hideHint();closeWins()}
 
 // ---------- DOM wiring (once)
 function wire(u){ui=u;
@@ -1130,6 +1188,6 @@ function wire(u){ui=u;
   $('overm').onclick=()=>{$('over').classList.remove('show');ui.toMenu()};$('overk').onclick=()=>$('over').classList.remove('show')}
 return {wire,newGame,load,save,exit,setSpeed:v=>G&&setSpeed(v),get G(){return G},get api(){return api},paused:()=>G?G.speed===0:true,
   pauseInfo:()=>G?`${esc(player().name)} · ${gameClock()} · ${fmt(player().score)} очков · ячейка ${cfg.slot||1}`:'',setIcon:(k,img)=>{ICONIMG[k]=img},
-  _prof:PRF,_dbg:DBG,_test:{startBuildFor:(i,k,x,y)=>startBuild(G.states[i],k,x,y),canBuildFor:(i,k,x,y)=>canBuild(G.states[i],k,x,y),signVisa:i=>signVisa(player(),G.states[i]),visa:i=>visa(player(),G.states[i]),flightPath,demolish:q=>demolish(player(),q),run:sec=>{for(let t=0;t<sec;t+=0.1)sim(0.1)},validSite:(x,y)=>validSite(x,y),found,get own(){return own},chooseCaps,canBuild:(k,x,y,a)=>canBuild(player(),k,x,y,a),startBuild:(k,x,y,a)=>startBuild(player(),k,x,y,a),PL,setBuild,placeTap,placeConfirm,syncLights,set touch(v){lastTouch=v},set shift(v){shiftDown=v},BLD,declareWar:(i)=>declareWar(player(),G.states[i]),launchDrone,launchUav:(k,x,y,to)=>launchUav(player(),k,x,y,to),startRail:(a,b,L)=>startRail(player(),a,b,L),railEval,buildRailway,
+  _prof:PRF,_dbg:DBG,_test:{toast,LANE,HINTS,hint:(i)=>hint(i,true),hintStep:()=>hintStep,startBuildFor:(i,k,x,y)=>startBuild(G.states[i],k,x,y),canBuildFor:(i,k,x,y)=>canBuild(G.states[i],k,x,y),signVisa:i=>signVisa(player(),G.states[i]),visa:i=>visa(player(),G.states[i]),flightPath,demolish:q=>demolish(player(),q),run:sec=>{for(let t=0;t<sec;t+=0.1)sim(0.1)},validSite:(x,y)=>validSite(x,y),found,get own(){return own},chooseCaps,canBuild:(k,x,y,a)=>canBuild(player(),k,x,y,a),startBuild:(k,x,y,a)=>startBuild(player(),k,x,y,a),PL,setBuild,placeTap,placeConfirm,syncLights,set touch(v){lastTouch=v},set shift(v){shiftDown=v},BLD,declareWar:(i)=>declareWar(player(),G.states[i]),launchDrone,launchUav:(k,x,y,to)=>launchUav(player(),k,x,y,to),startRail:(a,b,L)=>startRail(player(),a,b,L),railEval,buildRailway,
     buyUp:(q,u)=>buyUp(player(),q,u),clearDeps,updHidden,DRN,oreIcon,uavCap:()=>uavCap(player()),daylight,stationAtScreen,get hidSig(){return hidSig},get vis(){return vis}}};
 })();
