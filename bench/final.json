@@ -1,0 +1,902 @@
+{
+ "label": "final",
+ "date": "2026-11-10T17:39:27.061Z",
+ "runs": [
+  {
+   "device": "desktop",
+   "viewport": {
+    "width": 1920,
+    "height": 1080
+   },
+   "dpr": 1,
+   "cpuThrottle": 1,
+   "load": {
+    "menuMs": 5269,
+    "worldMs": 2462,
+    "foundMs": 10260,
+    "settleMs": 8036
+   },
+   "scen": {
+    "orbit": {
+     "cost": {
+      "avg": 6.85,
+      "p50": 6.8,
+      "p95": 7.7,
+      "p99": 8.5,
+      "max": 8.9,
+      "n": 175
+     },
+     "js": {
+      "avg": 0.46,
+      "p50": 0.4,
+      "p95": 0.9,
+      "p99": 1.1,
+      "max": 1.1,
+      "n": 175
+     },
+     "thr": {
+      "avg": 3.24,
+      "p50": 3.23,
+      "p95": 3.53,
+      "p99": 3.7,
+      "max": 3.7,
+      "n": 87
+     },
+     "fpsThr": 308.6,
+     "fps": 146,
+     "fps95": 129.9,
+     "rafFps": 100.1,
+     "drawCalls": 27,
+     "drawCallsMax": 27,
+     "tiles": 150,
+     "texMB": 52.6,
+     "heapMB": 16.3,
+     "cars": 0,
+     "lowQ": false,
+     "prof": {
+      "water": 0.05,
+      "tiles": 0.02,
+      "edge": 0,
+      "shadows": 0,
+      "traffic": 0,
+      "emit": 0,
+      "flights": 0,
+      "fog": 0,
+      "lights": 0,
+      "dispatch": 0,
+      "clouds": 0.02,
+      "labels": 0.16,
+      "hook": 0.05,
+      "js": 0.42
+     }
+    },
+    "region": {
+     "cost": {
+      "avg": 7.61,
+      "p50": 7.4,
+      "p95": 9,
+      "p99": 10.5,
+      "max": 11.2,
+      "n": 175
+     },
+     "js": {
+      "avg": 0.54,
+      "p50": 0.5,
+      "p95": 0.9,
+      "p99": 1.2,
+      "max": 1.3,
+      "n": 175
+     },
+     "thr": {
+      "avg": 4.14,
+      "p50": 4.13,
+      "p95": 4.7,
+      "p99": 5.47,
+      "max": 5.47,
+      "n": 84
+     },
+     "fpsThr": 241.5,
+     "fps": 131.4,
+     "fps95": 111.1,
+     "rafFps": 99.3,
+     "drawCalls": 35,
+     "drawCallsMax": 36,
+     "tiles": 215,
+     "texMB": 67.1,
+     "heapMB": 16.3,
+     "cars": 0,
+     "lowQ": false,
+     "prof": {
+      "water": 0.03,
+      "tiles": 0.08,
+      "edge": 0,
+      "shadows": 0,
+      "traffic": 0,
+      "emit": 0,
+      "flights": 0,
+      "fog": 0,
+      "lights": 0,
+      "dispatch": 0,
+      "clouds": 0,
+      "labels": 0.2,
+      "hook": 0.05,
+      "js": 0.45
+     }
+    },
+    "city": {
+     "cost": {
+      "avg": 7.29,
+      "p50": 7.1,
+      "p95": 8.2,
+      "p99": 9.3,
+      "max": 19,
+      "n": 175
+     },
+     "js": {
+      "avg": 0.59,
+      "p50": 0.5,
+      "p95": 0.9,
+      "p99": 1.3,
+      "max": 1.4,
+      "n": 175
+     },
+     "thr": {
+      "avg": 4.25,
+      "p50": 4.08,
+      "p95": 6.1,
+      "p99": 6.6,
+      "max": 6.6,
+      "n": 82
+     },
+     "fpsThr": 235.3,
+     "fps": 137.2,
+     "fps95": 122,
+     "rafFps": 98.8,
+     "drawCalls": 33,
+     "drawCallsMax": 33,
+     "tiles": 263,
+     "texMB": 81.4,
+     "heapMB": 16.3,
+     "cars": 0,
+     "lowQ": false,
+     "prof": {
+      "water": 0.08,
+      "tiles": 0.04,
+      "edge": 0,
+      "shadows": 0,
+      "traffic": 0.04,
+      "emit": 0,
+      "flights": 0,
+      "fog": 0,
+      "lights": 0,
+      "dispatch": 0,
+      "clouds": 0,
+      "labels": 0.23,
+      "hook": 0.03,
+      "js": 0.57
+     }
+    },
+    "street": {
+     "cost": {
+      "avg": 8.16,
+      "p50": 8.1,
+      "p95": 10.2,
+      "p99": 15.4,
+      "max": 21.3,
+      "n": 175
+     },
+     "js": {
+      "avg": 0.61,
+      "p50": 0.6,
+      "p95": 1,
+      "p99": 1.3,
+      "max": 1.5,
+      "n": 175
+     },
+     "thr": {
+      "avg": 4.63,
+      "p50": 4.38,
+      "p95": 6.65,
+      "p99": 9.97,
+      "max": 9.97,
+      "n": 75
+     },
+     "fpsThr": 216,
+     "fps": 122.5,
+     "fps95": 98,
+     "rafFps": 96.1,
+     "drawCalls": 7,
+     "drawCallsMax": 7,
+     "tiles": 344,
+     "texMB": 100.9,
+     "heapMB": 16.3,
+     "cars": 33,
+     "lowQ": false,
+     "prof": {
+      "water": 0.07,
+      "tiles": 0.03,
+      "edge": 0.01,
+      "shadows": 0,
+      "traffic": 0.06,
+      "emit": 0,
+      "flights": 0,
+      "fog": 0,
+      "lights": 0,
+      "dispatch": 0,
+      "clouds": 0.01,
+      "labels": 0.24,
+      "hook": 0.01,
+      "js": 0.52
+     }
+    },
+    "night": {
+     "cost": {
+      "avg": 9.47,
+      "p50": 9.6,
+      "p95": 11.2,
+      "p99": 12.8,
+      "max": 16.9,
+      "n": 175
+     },
+     "js": {
+      "avg": 0.72,
+      "p50": 0.6,
+      "p95": 1.2,
+      "p99": 1.6,
+      "max": 2.5,
+      "n": 175
+     },
+     "thr": {
+      "avg": 6.01,
+      "p50": 5.85,
+      "p95": 7.47,
+      "p99": 11.53,
+      "max": 11.53,
+      "n": 58
+     },
+     "fpsThr": 166.4,
+     "fps": 105.6,
+     "fps95": 89.3,
+     "rafFps": 90.4,
+     "drawCalls": 10,
+     "drawCallsMax": 10,
+     "tiles": 330,
+     "texMB": 119.4,
+     "heapMB": 16.3,
+     "cars": 239,
+     "lowQ": false,
+     "prof": {
+      "water": 0.07,
+      "tiles": 0.04,
+      "edge": 0.01,
+      "shadows": 0,
+      "traffic": 0.15,
+      "emit": 0,
+      "flights": 0,
+      "fog": 0,
+      "lights": 0.04,
+      "dispatch": 0,
+      "clouds": 0,
+      "labels": 0.25,
+      "hook": 0.01,
+      "js": 0.76
+     }
+    },
+    "clouds": {
+     "cost": {
+      "avg": 8.89,
+      "p50": 8.8,
+      "p95": 11,
+      "p99": 14.2,
+      "max": 16.9,
+      "n": 175
+     },
+     "js": {
+      "avg": 0.65,
+      "p50": 0.6,
+      "p95": 1.1,
+      "p99": 1.4,
+      "max": 1.7,
+      "n": 175
+     },
+     "thr": {
+      "avg": 4.93,
+      "p50": 4.9,
+      "p95": 5.95,
+      "p99": 6.63,
+      "max": 6.63,
+      "n": 70
+     },
+     "fpsThr": 202.8,
+     "fps": 112.5,
+     "fps95": 90.9,
+     "rafFps": 94.4,
+     "drawCalls": 36,
+     "drawCallsMax": 36,
+     "tiles": 297,
+     "texMB": 108.1,
+     "heapMB": 16.3,
+     "cars": 238,
+     "lowQ": false,
+     "prof": {
+      "water": 0.02,
+      "tiles": 0.08,
+      "edge": 0,
+      "shadows": 0,
+      "traffic": 0,
+      "emit": 0,
+      "flights": 0,
+      "fog": 0,
+      "lights": 0,
+      "dispatch": 0,
+      "clouds": 0.01,
+      "labels": 0.25,
+      "hook": 0.1,
+      "js": 0.6
+     }
+    },
+    "pan": {
+     "cost": {
+      "avg": 9.19,
+      "p50": 9,
+      "p95": 11.8,
+      "p99": 16.4,
+      "max": 22.7,
+      "n": 175
+     },
+     "js": {
+      "avg": 1.17,
+      "p50": 1.1,
+      "p95": 1.8,
+      "p99": 3.8,
+      "max": 4.2,
+      "n": 175
+     },
+     "thr": {
+      "avg": 6.14,
+      "p50": 5.7,
+      "p95": 9.97,
+      "p99": 11,
+      "max": 11,
+      "n": 56
+     },
+     "fpsThr": 162.9,
+     "fps": 108.8,
+     "fps95": 84.7,
+     "rafFps": 89.8,
+     "drawCalls": 17,
+     "drawCallsMax": 18,
+     "tiles": 326,
+     "texMB": 104.9,
+     "heapMB": 16.3,
+     "cars": 215,
+     "lowQ": false,
+     "prof": {
+      "water": 0.19,
+      "tiles": 0.17,
+      "edge": 0.01,
+      "shadows": 0,
+      "traffic": 0.17,
+      "emit": 0,
+      "flights": 0,
+      "fog": 0,
+      "lights": 0,
+      "dispatch": 0.01,
+      "clouds": 0,
+      "labels": 0.34,
+      "hook": 0.01,
+      "js": 1.09
+     }
+    },
+    "zoom": {
+     "cost": {
+      "avg": 10.05,
+      "p50": 9.7,
+      "p95": 13,
+      "p99": 16.4,
+      "max": 26.6,
+      "n": 175
+     },
+     "js": {
+      "avg": 1.46,
+      "p50": 1.3,
+      "p95": 2.6,
+      "p99": 3.9,
+      "max": 8.4,
+      "n": 175
+     },
+     "thr": {
+      "avg": 6.26,
+      "p50": 5.98,
+      "p95": 8.6,
+      "p99": 9,
+      "max": 9,
+      "n": 55
+     },
+     "fpsThr": 159.7,
+     "fps": 99.5,
+     "fps95": 76.9,
+     "rafFps": 89.4,
+     "drawCalls": 27,
+     "drawCallsMax": 45,
+     "tiles": 290,
+     "texMB": 109.9,
+     "heapMB": 16.3,
+     "cars": 1480,
+     "lowQ": false,
+     "prof": {
+      "water": 0.35,
+      "tiles": 0.1,
+      "edge": 0,
+      "shadows": 0,
+      "traffic": 0.23,
+      "emit": 0.01,
+      "flights": 0,
+      "fog": 0,
+      "lights": 0,
+      "dispatch": 0.01,
+      "clouds": 0,
+      "labels": 0.3,
+      "hook": 0.03,
+      "js": 1.21
+     }
+    }
+   },
+   "heap": {
+    "usedMB": 21.4,
+    "totalMB": 76.3,
+    "nodes": 1644
+   },
+   "gpu": "ANGLE (Intel, Intel(R) UHD Graphics (0x0000A78B) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+   "errors": []
+  },
+  {
+   "device": "phone",
+   "viewport": {
+    "width": 390,
+    "height": 844
+   },
+   "dpr": 3,
+   "cpuThrottle": 4,
+   "load": {
+    "menuMs": 13901,
+    "worldMs": 2968,
+    "foundMs": 19026,
+    "settleMs": 19656
+   },
+   "scen": {
+    "orbit": {
+     "cost": {
+      "avg": 6.1,
+      "p50": 5.4,
+      "p95": 10.4,
+      "p99": 12.2,
+      "max": 15.4,
+      "n": 175
+     },
+     "js": {
+      "avg": 0.87,
+      "p50": 0.7,
+      "p95": 1.9,
+      "p99": 2.2,
+      "max": 2.2,
+      "n": 175
+     },
+     "thr": {
+      "avg": 2.2,
+      "p50": 2.2,
+      "p95": 3.13,
+      "p99": 5.35,
+      "max": 5.35,
+      "n": 84
+     },
+     "fpsThr": 454.5,
+     "fps": 163.9,
+     "fps95": 96.2,
+     "rafFps": 99,
+     "drawCalls": 21,
+     "drawCallsMax": 21,
+     "tiles": 51,
+     "texMB": 14,
+     "heapMB": 16.3,
+     "cars": 0,
+     "lowQ": false,
+     "prof": {
+      "water": 0.13,
+      "tiles": 0.13,
+      "edge": 0.02,
+      "shadows": 0,
+      "traffic": 0,
+      "emit": 0,
+      "flights": 0,
+      "fog": 0,
+      "lights": 0,
+      "dispatch": 0,
+      "clouds": 0.05,
+      "labels": 0.11,
+      "hook": 0.22,
+      "js": 0.87
+     }
+    },
+    "region": {
+     "cost": {
+      "avg": 6.78,
+      "p50": 6.3,
+      "p95": 10.2,
+      "p99": 13.6,
+      "max": 14.8,
+      "n": 176
+     },
+     "js": {
+      "avg": 1.52,
+      "p50": 1.3,
+      "p95": 3.1,
+      "p99": 5.1,
+      "max": 5.3,
+      "n": 176
+     },
+     "thr": {
+      "avg": 2.7,
+      "p50": 2.57,
+      "p95": 4.03,
+      "p99": 5.18,
+      "max": 5.18,
+      "n": 88
+     },
+     "fpsThr": 370.4,
+     "fps": 147.5,
+     "fps95": 98,
+     "rafFps": 100.5,
+     "drawCalls": 14,
+     "drawCallsMax": 14,
+     "tiles": 64,
+     "texMB": 17,
+     "heapMB": 16.3,
+     "cars": 0,
+     "lowQ": false,
+     "prof": {
+      "water": 0.1,
+      "tiles": 0.14,
+      "edge": 0.02,
+      "shadows": 0,
+      "traffic": 0,
+      "emit": 0,
+      "flights": 0,
+      "fog": 0,
+      "lights": 0.01,
+      "dispatch": 0,
+      "clouds": 0.06,
+      "labels": 0.77,
+      "hook": 0.12,
+      "js": 1.59
+     }
+    },
+    "city": {
+     "cost": {
+      "avg": 6.41,
+      "p50": 6,
+      "p95": 10.6,
+      "p99": 14.2,
+      "max": 14.6,
+      "n": 175
+     },
+     "js": {
+      "avg": 1.44,
+      "p50": 1.2,
+      "p95": 3.1,
+      "p99": 5.1,
+      "max": 5.8,
+      "n": 175
+     },
+     "thr": {
+      "avg": 2.4,
+      "p50": 2.25,
+      "p95": 3.78,
+      "p99": 4.32,
+      "max": 4.32,
+      "n": 87
+     },
+     "fpsThr": 416.7,
+     "fps": 156,
+     "fps95": 94.3,
+     "rafFps": 100.2,
+     "drawCalls": 11,
+     "drawCallsMax": 11,
+     "tiles": 72,
+     "texMB": 20,
+     "heapMB": 16.3,
+     "cars": 0,
+     "lowQ": false,
+     "prof": {
+      "water": 0.1,
+      "tiles": 0.15,
+      "edge": 0,
+      "shadows": 0,
+      "traffic": 0.07,
+      "emit": 0,
+      "flights": 0,
+      "fog": 0,
+      "lights": 0,
+      "dispatch": 0,
+      "clouds": 0,
+      "labels": 0.78,
+      "hook": 0.09,
+      "js": 1.34
+     }
+    },
+    "street": {
+     "cost": {
+      "avg": 6.89,
+      "p50": 6.5,
+      "p95": 10.7,
+      "p99": 13.9,
+      "max": 14.3,
+      "n": 175
+     },
+     "js": {
+      "avg": 1.57,
+      "p50": 1.4,
+      "p95": 3.4,
+      "p99": 5.1,
+      "max": 8.2,
+      "n": 175
+     },
+     "thr": {
+      "avg": 2.6,
+      "p50": 2.5,
+      "p95": 3.95,
+      "p99": 5.47,
+      "max": 5.47,
+      "n": 88
+     },
+     "fpsThr": 384.6,
+     "fps": 145.1,
+     "fps95": 93.5,
+     "rafFps": 100.4,
+     "drawCalls": 7,
+     "drawCallsMax": 7,
+     "tiles": 105,
+     "texMB": 27,
+     "heapMB": 16.3,
+     "cars": 11,
+     "lowQ": false,
+     "prof": {
+      "water": 0.14,
+      "tiles": 0.1,
+      "edge": 0.01,
+      "shadows": 0,
+      "traffic": 0.14,
+      "emit": 0.01,
+      "flights": 0,
+      "fog": 0,
+      "lights": 0,
+      "dispatch": 0.01,
+      "clouds": 0,
+      "labels": 0.65,
+      "hook": 0.02,
+      "js": 1.38
+     }
+    },
+    "night": {
+     "cost": {
+      "avg": 7.54,
+      "p50": 7,
+      "p95": 12.2,
+      "p99": 16.7,
+      "max": 17.3,
+      "n": 175
+     },
+     "js": {
+      "avg": 1.97,
+      "p50": 1.6,
+      "p95": 4.8,
+      "p99": 7.4,
+      "max": 8.8,
+      "n": 175
+     },
+     "thr": {
+      "avg": 3.21,
+      "p50": 3.13,
+      "p95": 4.15,
+      "p99": 6.57,
+      "max": 6.57,
+      "n": 88
+     },
+     "fpsThr": 311.5,
+     "fps": 132.6,
+     "fps95": 82,
+     "rafFps": 100.6,
+     "drawCalls": 10,
+     "drawCallsMax": 10,
+     "tiles": 116,
+     "texMB": 32,
+     "heapMB": 16.3,
+     "cars": 49,
+     "lowQ": false,
+     "prof": {
+      "water": 0.11,
+      "tiles": 0.1,
+      "edge": 0.01,
+      "shadows": 0,
+      "traffic": 0.15,
+      "emit": 0,
+      "flights": 0,
+      "fog": 0,
+      "lights": 0.09,
+      "dispatch": 0.01,
+      "clouds": 0,
+      "labels": 0.71,
+      "hook": 0.06,
+      "js": 1.62
+     }
+    },
+    "clouds": {
+     "cost": {
+      "avg": 7.31,
+      "p50": 7,
+      "p95": 11.5,
+      "p99": 16.1,
+      "max": 16.1,
+      "n": 175
+     },
+     "js": {
+      "avg": 1.78,
+      "p50": 1.5,
+      "p95": 4.2,
+      "p99": 7.4,
+      "max": 8.6,
+      "n": 175
+     },
+     "thr": {
+      "avg": 3.01,
+      "p50": 2.88,
+      "p95": 4.25,
+      "p99": 5.33,
+      "max": 5.33,
+      "n": 88
+     },
+     "fpsThr": 332.2,
+     "fps": 136.8,
+     "fps95": 87,
+     "rafFps": 100.6,
+     "drawCalls": 25,
+     "drawCallsMax": 25,
+     "tiles": 140,
+     "texMB": 38,
+     "heapMB": 16.3,
+     "cars": 49,
+     "lowQ": false,
+     "prof": {
+      "water": 0.1,
+      "tiles": 0.36,
+      "edge": 0.02,
+      "shadows": 0,
+      "traffic": 0,
+      "emit": 0,
+      "flights": 0.01,
+      "fog": 0,
+      "lights": 0,
+      "dispatch": 0,
+      "clouds": 0.02,
+      "labels": 0.66,
+      "hook": 0.15,
+      "js": 1.59
+     }
+    },
+    "pan": {
+     "cost": {
+      "avg": 10.28,
+      "p50": 9.8,
+      "p95": 18.2,
+      "p99": 22.8,
+      "max": 23.8,
+      "n": 160
+     },
+     "js": {
+      "avg": 7.12,
+      "p50": 7,
+      "p95": 16,
+      "p99": 20.4,
+      "max": 21.6,
+      "n": 160
+     },
+     "thr": {
+      "avg": 4.87,
+      "p50": 4.68,
+      "p95": 8.22,
+      "p99": 10.53,
+      "max": 10.53,
+      "n": 56
+     },
+     "fpsThr": 205.3,
+     "fps": 97.3,
+     "fps95": 54.9,
+     "rafFps": 84.4,
+     "drawCalls": 5,
+     "drawCallsMax": 6,
+     "tiles": 152,
+     "texMB": 32,
+     "heapMB": 16.3,
+     "cars": 45,
+     "lowQ": false,
+     "prof": {
+      "water": 1.06,
+      "tiles": 0.23,
+      "edge": 0.04,
+      "shadows": 0.01,
+      "traffic": 0.29,
+      "emit": 0.03,
+      "flights": 0.01,
+      "fog": 0,
+      "lights": 0.01,
+      "dispatch": 0.02,
+      "clouds": 0.01,
+      "labels": 1.79,
+      "hook": 0.13,
+      "js": 4.35
+     }
+    },
+    "zoom": {
+     "cost": {
+      "avg": 9.21,
+      "p50": 8.5,
+      "p95": 15.8,
+      "p99": 19,
+      "max": 19.3,
+      "n": 166
+     },
+     "js": {
+      "avg": 5.44,
+      "p50": 5.1,
+      "p95": 11.7,
+      "p99": 16.2,
+      "max": 16.9,
+      "n": 166
+     },
+     "thr": {
+      "avg": 3.61,
+      "p50": 3.45,
+      "p95": 5.58,
+      "p99": 7.05,
+      "max": 7.05,
+      "n": 74
+     },
+     "fpsThr": 277,
+     "fps": 108.6,
+     "fps95": 63.3,
+     "rafFps": 93.3,
+     "drawCalls": 13,
+     "drawCallsMax": 25,
+     "tiles": 116,
+     "texMB": 32.8,
+     "heapMB": 16.3,
+     "cars": 251,
+     "lowQ": false,
+     "prof": {
+      "water": 1.36,
+      "tiles": 0.41,
+      "edge": 0.02,
+      "shadows": 0.01,
+      "traffic": 0.51,
+      "emit": 0.01,
+      "flights": 0,
+      "fog": 0,
+      "lights": 0.02,
+      "dispatch": 0.03,
+      "clouds": 0.01,
+      "labels": 1.23,
+      "hook": 0.07,
+      "js": 4.13
+     }
+    }
+   },
+   "heap": {
+    "usedMB": 27.9,
+    "totalMB": 77.8,
+    "nodes": 2002
+   },
+   "gpu": "ANGLE (Intel, Intel(R) UHD Graphics (0x0000A78B) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+   "errors": []
+  }
+ ]
+}
