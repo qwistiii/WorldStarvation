@@ -111,7 +111,7 @@ function demolish(s,q){if(!q.done||q.k==='city'||q.k==='village')return false;co
   // a station takes its lines with it, a drone port its modules
   if(q.k==='station')for(const r of s.builds.slice())if(r.k==='rail'&&(r.a===q.uid||r.b===q.uid)){if(r.done)demolish(s,r);else s.builds.splice(s.builds.indexOf(r),1)}
   if(q.k==='droneport')for(const r of s.builds.slice())if(r.port===q.uid&&BLD[r.k]&&BLD[r.k].mod){if(r.done)demolish(s,r);else s.builds.splice(s.builds.indexOf(r),1)}
-  const a=s.armies.find(x=>x.home===q);if(a)s.armies.splice(s.armies.indexOf(a),1);if(s.res.money!==Infinity)s.res.money+=cost*0.3;if(s.isP)toast(`Снесено: <b>${bName(q)}</b> · возвращено ${fmt(cost*0.3)}`,'ic-b-demolish');updPop();capUav(s);return true}
+  lightsDirty=true;const a=s.armies.find(x=>x.home===q);if(a)s.armies.splice(s.armies.indexOf(a),1);if(s.res.money!==Infinity)s.res.money+=cost*0.3;if(s.isP)toast(`Снесено: <b>${bName(q)}</b> · возвращено ${fmt(cost*0.3)}`,'ic-b-demolish');updPop();capUav(s);return true}
 const bName=q=>q.k==='rail'?'ЖД путь':BLD[q.k].n;
 // territory as merging drops: a cell is taken where the sum of (r/d)^2 over the state's places and buildings reaches 1,
 // so neighbouring places join into one land; a new place's reach grows in over ~40 s
@@ -156,6 +156,8 @@ const BLD={
   dramp:{n:'Пусковая рампа',cost:800,time:8,d:'Модуль дронопорта: запуск Ланцетов и Орланов',zk:'dramp',W:84,H:40,area:'dport',mod:1},
   drwy:{n:'ВПП',cost:1500,time:12,d:'Модуль дронопорта: взлёт реактивных Гераней-3',zk:'drwy',W:460,H:56,area:'dport',mod:1},
   dstore:{n:'Склад БПЛА',cost:900,time:8,d:'Модуль дронопорта: +6 мест для дронов',zk:'dstore',W:120,H:76,area:'dport',mod:1},
+  // stage 6: a street lamp — a point object (no grounds): lights the ground around it at night
+  lamp:{n:'Фонарь',cost:60,time:3,d:'Уличный фонарь (8 м): ночью освещает землю и всё вокруг в радиусе 34 м. Режимы: авто (по времени суток), вкл, выкл',area:'own',point:1,r:34},
   dronefab:{n:'Цех БПЛА',cost:4000,time:20,d:'Производство дронов: Ланцет, Герань-3, Орлан-10. Улучшения: солнечные панели, противодронная сетка, бетон',zk:'dfab',W:400,H:280,area:'town',need:{energy:6}}};
 const BORDER=['village','farm','factory','power','sawmill','oil','refinery','port','airport','city','barracks','sam','solar','mine','gaswell','station','droneport','dronefab'];
 const RES=['food','goods','wood','oil','fuel','metal'];const RESN={money:'Деньги',food:'Еда',goods:'Товары',energy:'Энергия',wood:'Древесина',oil:'Нефть',fuel:'Топливо',metal:'Металл'};
@@ -169,6 +171,11 @@ const DRN={lancet:{n:'Ланцет',cost:260,metal:6,fuel:0,time:14,from:'dramp'
 const UPG={sol:{n:'Солнечные панели',cost:900,d:'Цеху нужно на 4 энергии меньше'},net:{n:'Противодронная сетка',cost:700,d:'Половина попавших дронов застревает в сетке'},con:{n:'Бетонная защита',cost:1200,d:'После попадания цех стоит вдвое меньше'}};
 // can state s build kind k at (x,y)?  → null or the reason
 function canBuild(s,k,x,y,ang){const b=BLD[k];if(!b)return 'Неизвестная постройка';if(x<5000||y<5000||x>W.WORLD-5000||y>W.WORLD-5000)return 'Слишком близко к краю мира';
+  if(b.point){if(W.landE(x,y,0.002)<0)return 'Здесь вода';if(ownerAt(x,y)!==s.id+1)return 'Только на своей территории';
+    // in a town a lamp stands at a street (its kerb), never inside a block; outside the towns anywhere on the land
+    {const town=W.cities.find(c=>c.type>=1&&cityF(c,x,y)<1.05);if(town){const RW=W._dbg.RW;let ok=false,on=false;for(const r of W.queryRoads(x-30,y-30,x+30,y+30)){if(r.dead||r.k===8||r.k===5)continue;const q=W._dbg.projOn(r,x,y),d=M.hypot(q[0]-x,q[1]-y),hw=RW[r.k]/2;if(d<hw-0.5)on=true;else if(d<hw+6)ok=true}
+      if(on)return 'Не на проезжей части — у края улицы';if(!ok)return 'В городе фонарь ставят у улицы'}}
+    for(const z of W.zones)if(!z.dead&&rectHit(z,x,y,2,2))return 'Здесь постройка';for(const q of s.builds)if(q.k==='lamp'&&M.hypot(q.x-x,q.y-y)<10)return 'Рядом уже стоит фонарь';return null}
   const a=ang!=null?ang:k==='station'?stationAng(s,x,y):0;
   // a well or a mine stands on the centre of its deposit: check the footprint there
   {const dk=b.area==='oil'?(d=>ORES[d.k].k==='oil'):b.area==='gas'?(d=>ORES[d.k].k==='gas'):b.area==='ore'?(d=>!!MINE[d.k]):null;if(dk){const d=G.dep.find(d=>dk(d)&&d.known&&d.used<0&&M.hypot(d.x-x,d.y-y)<800);if(d){x=d.x;y=d.y}}}
@@ -217,7 +224,7 @@ function startBuild(s,k,x,y,ang){const b=BLD[k],c=creative()&&s.isP?0:b.cost;if(
   const q={k,x,y,t:0,time:b.time*(s.isP?1:[1.3,1,0.8][s.diff]),done:false,id:-1,off:0,uid:++G.uid};
   const dk=k==='oil'?(d=>ORES[d.k].k==='oil'):k==='gaswell'?(d=>ORES[d.k].k==='gas'):k==='mine'?(d=>!!MINE[d.k]):null;
   if(dk){const d=G.dep.find(d=>dk(d)&&d.known&&d.used<0&&M.hypot(d.x-x,d.y-y)<800);if(d){d.used=s.id;q.dep=G.dep.indexOf(d);q.x=d.x;q.y=d.y}}
-  if(k==='station')q.a=ang!=null?ang:stationAng(s,x,y);
+  if(k==='station')q.a=ang!=null?ang:stationAng(s,x,y);else if(ang!=null&&b.zk&&ang)q.a=ang;
   if(b.mod){const p=portNear(s,x,y,1100);if(p)q.port=p.uid}
   if(k==='dronefab'){q.queue=[];q.pt=0;q.up={}}
   s.builds.push(q);if(k==='city'||k==='village')placeNow(s,q);if(s.isP)onBuilt(k,false);return true}
@@ -234,7 +241,8 @@ function finishBuild(s,q){q.done=true;
   if(q.k==='rail'){const A=byUid(s,q.a),B=byUid(s,q.b);let P=null;if(A&&B&&A.id>=0&&B.id>=0){P=W.railPts(W.zones[A.id],W.zones[B.id],railBlk(s));if(typeof P==='string')P=null}
     q.id=P?api.op('addRail',{a:A.id,b:B.id,st:s.id,P:P.map(v=>M.round(v*10)/10)}):-1;if(q.id<0){q.failed=true;if(s.isP)toast('ЖД путь не удалось проложить','ic-b-rail');return}
     if(s.isP){toast(`Построено: <b>ЖД путь</b> ${fmtKm(q.L)}`,'ic-b-rail');onBuilt('rail',true)}return}
-  const b=BLD[q.k];
+  const b=BLD[q.k];lightsDirty=true;
+  if(b.point){q.id=-1;q.on=q.on||'auto';if(s.isP){toast(`Построено: <b>${b.n}</b>`,'ic-b-'+q.k);onBuilt(q.k,true)}return}
   if(q.k==='city'||q.k==='village'){let p=s.places.find(o=>o.bq===q.uid);if(!p){placeNow(s,q);p=s.places.find(o=>o.bq===q.uid)}
     if(p){p.grow=q.k==='city'?M.max(p.grow,0.12):1;syncPlace(p)}}
   else{const h=homeOf(s,q.x,q.y);const o={zk:b.zk,x:q.x,y:q.y,city:h.id,st:s.id,W:b.W,H:b.H};if(q.a!=null)o.a=q.a;if(q.dep!=null)o.ore=G.dep[q.dep].k;
@@ -450,7 +458,7 @@ function rebuildPol(){if(!polC){polC=document.createElement('canvas');polC.width
         switch(m){case 1:case 14:seg(lft,bot);break;case 2:case 13:seg(bot,rgt);break;case 3:case 12:seg(lft,rgt);break;case 4:case 11:seg(top,rgt);break;case 6:case 9:seg(top,bot);break;case 7:case 8:seg(lft,top);break;
           case 5:seg(lft,top);seg(bot,rgt);break;case 10:seg(top,rgt);seg(lft,bot);break}}a=b;e=c}}
     s.lx=(sx/s.cells+0.5)*CSZ;s.ly=(sy/s.cells+0.5)*CSZ;const LS=chainLines(SG),P=new Path2D();s._L=[];
-    for(const pl of LS){const q=new Path2D();let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(let k=0;k<pl.length;k+=2){const X=pl[k]*CSZ,Y=pl[k+1]*CSZ;if(k){q.lineTo(X,Y);P.lineTo(X,Y)}else{q.moveTo(X,Y);P.moveTo(X,Y)}x0=M.min(x0,X);y0=M.min(y0,Y);x1=M.max(x1,X);y1=M.max(y1,Y)}s._L.push({P:q,bb:[x0,y0,x1,y1]})}
+    for(const pl of LS){const q=new Path2D(),W=new Float32Array(pl.length);let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(let k=0;k<pl.length;k+=2){const X=pl[k]*CSZ,Y=pl[k+1]*CSZ;W[k]=X;W[k+1]=Y;if(k){q.lineTo(X,Y);P.lineTo(X,Y)}else{q.moveTo(X,Y);P.moveTo(X,Y)}x0=M.min(x0,X);y0=M.min(y0,Y);x1=M.max(x1,X);y1=M.max(y1,Y)}s._L.push({P:q,W,bb:[x0,y0,x1,y1]})}
     s._P=P;borders.push([s,P])}
   dirtyPol=false;dirtyOv=true;bordDirty=true}
 // far views: all borders are rasterised into one 2048 x 2048 world layer (64 m per texel) when they change, then blitted
@@ -491,7 +499,7 @@ function drawOverlay(ctx,A){if(!G||(G.phase==='play'&&!own))return;const m=A.cam
     if(mapMode!=='off'&&borders&&!DBG.border){ctx.save();ctx.setTransform(A.DPR/m,0,0,A.DPR/m,A.DPR*(VW/2-A.cam.x/m),A.DPR*(VH/2-A.cam.y/m));ctx.lineCap='round';ctx.lineJoin='round';
       const near=m<45,bw=m<5?1.3:2,far=m>50,vx0=A.cam.x-VW/2*m,vy0=A.cam.y-VH/2*m,vx1=A.cam.x+VW/2*m,vy1=A.cam.y+VH/2*m;ctx.globalAlpha=m<5?0.75:1;
       if(far){if(bordDirty&&performance.now()-bordT>700)prf('bord',rasterBorders);ctx.restore();if(bordC){ctx.save();ctx.imageSmoothingEnabled=true;ctx.drawImage(bordC,X0,Y0,S,S);ctx.restore()}}
-      else for(const [s,P] of borders){const col=s._bc||(s._bc=`rgb(${s.rgb.map(v=>M.min(255,v*1.15+20)|0).join(',')})`);
+      else if(A.gl)glB=true;else for(const [s,P] of borders){const col=s._bc||(s._bc=`rgb(${s.rgb.map(v=>M.min(255,v*1.15+20)|0).join(',')})`);
         if(far)continue;
         const vis=s._L.filter(l=>l.bb[2]>vx0&&l.bb[0]<vx1&&l.bb[3]>vy0&&l.bb[1]<vy1);if(!vis.length)continue;
         if(near){ctx.strokeStyle='rgba(6,10,16,0.5)';ctx.lineWidth=(bw+2.2)*m;for(const l of vis)ctx.stroke(l.P)}ctx.strokeStyle=col;ctx.lineWidth=bw*m;for(const l of vis)ctx.stroke(l.P)}ctx.restore()}
@@ -503,11 +511,21 @@ function drawOverlay(ctx,A){if(!G||(G.phase==='play'&&!own))return;const m=A.cam
       if(fg&&(X0>0||Y0>0||X0+S<VW||Y0+S<VH)){ctx.fillStyle='rgba(7,12,20,0.83)';ctx.beginPath();ctx.rect(-10,-10,VW+20,VH+20);ctx.rect(X0+0.5,Y0+0.5,S-1,S-1);ctx.fill('evenodd')}ctx.restore()}
     if(!DBG.dep)drawDeposits(ctx,A);if(!DBG.caps)drawCaps(ctx,A);if(mapMode!=='off'&&!DBG.names)drawNames(ctx,A)}
   if(G.phase==='found'){drawDeposits(ctx,A);drawPlacement(ctx,A)}}
+// stage 6: the near state borders through GL (A.gl.polyline): the same two strokes (dark outline when near, then the colour),
+// device px, only the visible polylines; Canvas 2D re-tessellated these long paths every frame (~0.8 ms)
+let glB=false;const BPT=[];
+function glBorders(g,A){if(!glB||!borders)return;glB=false;const m=A.cam.m,VW=A.VW,VH=A.VH,D=A.DPR,near=m<45,bw=(m<5?1.3:2)*D,vx0=A.cam.x-VW/2*m,vy0=A.cam.y-VH/2*m,vx1=A.cam.x+VW/2*m,vy1=A.cam.y+VH/2*m;
+  g.globalAlpha=m<5?0.75:1;const k=D/m,ox=D*VW/2-A.cam.x*k,oy=D*VH/2-A.cam.y*k,dark=[6/255,10/255,16/255,0.5];
+  for(const pass of near?[0,1]:[1])for(const [s] of borders){if(!s._L)continue;const col=pass?(s._bcg||(s._bcg=s.rgb.map(v=>M.min(255,v*1.15+20)/255).concat(1))):dark;
+    for(const l of s._L){if(!(l.bb[2]>vx0&&l.bb[0]<vx1&&l.bb[3]>vy0&&l.bb[1]<vy1))continue;const W=l.W,n=W.length/2;if(BPT.length<W.length)BPT.length=W.length;
+      for(let i=0;i<W.length;i+=2){BPT[i]=W[i]*k+ox;BPT[i+1]=W[i+1]*k+oy}g.polyline(BPT,n,pass?bw:bw+2.2*D,col)}
+    if(!pass)g.linesFlush()}
+  g.globalAlpha=1}
 function smoothst(a,b,x){let t=(x-a)/(b-a);t=t<0?0:t>1?1:t;return t*t*(3-2*t)}
 // state names: each label is rendered once into its own canvas (per size step) and then just blitted
 const NAMEC=new Map();
 function nameCanvas(s,sz){const key=s.id+'|'+s.name+'|'+sz;let c=NAMEC.get(key);if(c)return c;if(NAMEC.size>80)NAMEC.clear();
-  const t=s.name.toUpperCase(),d=M_DPR(),x0=document.createElement('canvas').getContext('2d');x0.font=`700 ${sz}px system-ui,Segoe UI,sans-serif`;const sp=sz*0.18;const ws=[...t].map(ch=>x0.measureText(ch).width);
+  const t=s.name.toUpperCase(),d=M_DPR(),x0=document.createElement('canvas').getContext('2d');x0.font=`700 ${sz}px Rubik,system-ui,Segoe UI,sans-serif`;const sp=sz*0.18;const ws=[...t].map(ch=>x0.measureText(ch).width);
   const w=ws.reduce((a,b)=>a+b,0)+sp*(t.length-1),pad=M.ceil(sz*0.2)+2;c=document.createElement('canvas');c.width=M.ceil((w+pad*2)*d);c.height=M.ceil((sz*1.4+pad*2)*d);c.lw=w+pad*2;c.lh=sz*1.4+pad*2;
   const x=c.getContext('2d');x.scale(d,d);x.font=x0.font;x.textBaseline='middle';x.textAlign='center';x.lineJoin='round';x.lineWidth=M.max(2,sz*0.12);x.strokeStyle='rgba(6,10,16,0.6)';
   x.fillStyle=`rgb(${s.rgb.map(v=>M.min(255,v*0.5+128)|0).join(',')})`;let px=pad;for(let i=0;i<t.length;i++){x.strokeText(t[i],px+ws[i]/2,c.lh/2);x.fillText(t[i],px+ws[i]/2,c.lh/2);px+=ws[i]+sp}
@@ -550,7 +568,7 @@ function drawPlacement(ctx,A){if(pend){const X=A.sxw(pend.x),Y=A.syw(pend.y),r=M
   if(!placing||!A.hover.on)return;const [x,y]=A.toWorld(A.hover.x,A.hover.y);const bad=validSite(x,y);const r=2900/A.cam.m;const X=A.hover.x,Y=A.hover.y;
   ctx.save();ctx.textAlign='left';ctx.strokeStyle=bad?'rgba(255,107,90,0.95)':'rgba(255,210,90,0.95)';ctx.fillStyle=bad?'rgba(255,107,90,0.12)':'rgba(255,210,90,0.12)';ctx.lineWidth=2;ctx.setLineDash([10,7]);ctx.lineDashOffset=-A.T*24;
   ctx.beginPath();ctx.arc(X,Y,M.max(10,r),0,M.PI*2);ctx.fill();ctx.stroke();ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(X-8,Y);ctx.lineTo(X+8,Y);ctx.moveTo(X,Y-8);ctx.lineTo(X,Y+8);ctx.stroke();
-  const t=bad||'Основать столицу здесь';ctx.font='600 12px system-ui,sans-serif';const w=ctx.measureText(t).width+16;ctx.fillStyle='rgba(10,15,23,0.85)';ctx.fillRect(X+14,Y+12,w,22);ctx.fillStyle=bad?'#ff9c8e':'#ffd25a';ctx.textBaseline='middle';ctx.fillText(t,X+22,Y+23);ctx.restore()}
+  const t=bad||'Основать столицу здесь';ctx.font='600 12px Rubik,system-ui,sans-serif';const w=ctx.measureText(t).width+16;ctx.fillStyle='rgba(10,15,23,0.85)';ctx.fillRect(X+14,Y+12,w,22);ctx.fillStyle=bad?'#ff9c8e':'#ffd25a';ctx.textBaseline='middle';ctx.fillText(t,X+22,Y+23);ctx.restore()}
 function drawMini(mx,s){if(!G||G.phase!=='play'||!own)return;const S=W.WORLD*s;if(polC){mx.globalAlpha=0.55;mx.imageSmoothingEnabled=true;mx.drawImage(polC,0,0,S,S);mx.globalAlpha=1}
   drawMiniBuilds(mx,s);for(const st of G.states){if(!st.cap||!seenAt(st.cap.x,st.cap.y))continue;mx.fillStyle=st.isP?'#ffd25a':'#fff';mx.fillRect(st.cap.x*s-2,st.cap.y*s-2,4,4)}}
 
@@ -643,12 +661,15 @@ function buildPanel(el,q){const p=player(),b=q.k==='rail'?{n:'ЖД путь',d:'
   if(q.k==='station'){g+=stat('Линий',p.builds.filter(r=>r.k==='rail'&&(r.a===q.uid||r.b===q.uid)).length);keys+=card({id:'a-rail',n:'Ж/Д путь',sub:fmt(RAILK*1000)+' / км',ic:'ic-b-rail',cls:G.mode==='rail'?'on':'',tip:'Нажмите на вокзал и, не отпуская, ведите путь к другому вокзалу или в поле'})}
   if(q.k==='airport'){const F=(G.flights||[]).filter(f=>f.a===q),dest=[...new Set(F.map(f=>G.states[f.to].isP?'свой аэропорт':G.states[f.to].name))];
     g+=stat('В воздухе',F.length?F.map(f=>(f.kind==='pax'?'пассажирский':'грузовой')).join(', '):'нет')+stat('Куда летят',dest.length?dest.join(', '):'—')+stat('Безвиз',G.states.filter(t=>t!==p&&visa(p,t)).map(t=>t.name).join(', ')||'нет — договоритесь в «Дипломатии»')+stat('Рейсов выполнено',fmt(p.landed||0))}
+  if(q.k==='lamp'){const md=q.on||'auto';g+=stat('Режим',{auto:'авто — по времени суток',on:'включён',off:'выключен'}[md])+stat('Высота · радиус света','8 м · '+BLD.lamp.r+' м');
+    for(const [m,n] of [['auto','Авто'],['on','Вкл'],['off','Выкл']])keys+=card({n,sub:m===md?'сейчас':'',ic:'ic-b-lamp',data:`data-lmode="${m}"`,cls:m===md?'on':'',tip:{auto:'Горит ночью, гаснет на рассвете',on:'Горит всегда',off:'Не горит'}[m]})}
   if(q.k==='barracks')keys+=card({id:'a-army',n:'Армия',ic:'ic-b-army',tip:'Армия этой части: сборка и приказы'});
   keys+=card({id:'a-dem',n:'Снести',sub:fmt((b.cost||0)*0.3),ic:'ic-b-demolish',cls:'red',tip:'Снести постройку: вернётся 30 % цены'});
   el.innerHTML=pcHead(q.k==='rail'?'ic-b-rail':'ic-b-'+q.k,b.n,state+(pr?' · '+pr:''))+`<div class="pc-s">${PCS[q.k]||'Действия'}</div><div class="pc-r">${keys}</div>${more}<div class="pc-g">${g}</div><div class="pc-d">${b.d}</div>`;
   $('a-close').onclick=closeSel;$('a-dem').onclick=()=>{demolish(player(),q);closeSel();updHUD()};
   const ab=$('a-army');if(ab)ab.onclick=()=>{const a=player().armies.find(x=>x.home===q);if(a){G.sel={army:a};panelSig='';updPanel()}};
   const rb=$('a-rail');if(rb)rb.onclick=()=>{setBuild(null);G.mode=G.mode==='rail'?null:'rail';panelSig='';updCatalog();if(G.mode)toast('Нажмите на вокзал и, не отпуская, ведите путь к другому вокзалу или к месту нового','ic-b-rail')};
+  for(const e of el.querySelectorAll('[data-lmode]'))e.onclick=()=>{q.on=e.dataset.lmode;const l=api.lights.get(q.uid*8);if(l)api.lights.setMode(l.id,q.on);panelSig='';updPanel()};
   for(const e of el.querySelectorAll('[data-mod]'))e.onclick=()=>{G.forPort=q;setBuild(G.build===e.dataset.mod?null:e.dataset.mod);panelSig=''};
   for(const e of el.querySelectorAll('[data-make]'))e.onclick=()=>{const Q=q.queue||(q.queue=[]);if(Q.length>=6){toast('Очередь цеха полна (6)');return}Q.push(e.dataset.make);panelSig='';onBuilt('order',true)};
   const qc=$('a-qclr');if(qc)qc.onclick=()=>{if(q.paid){const d=DRN[q.queue[0]];if(p.res.money!==Infinity)p.res.money+=d.cost;p.res.metal+=d.metal;p.res.fuel+=d.fuel;q.paid=0}q.queue=[];q.pt=0;panelSig=''};
@@ -657,14 +678,14 @@ function buyUp(s,q,u){const c=creative()&&s.isP?0:UPG[u].cost;if(s.res.money<c){
 const atWarAny=()=>G.states.some(t=>atWar(0,t.id));
 // bottom panel (as in DroneFlames): tabs КАРТА ГОРОДА УДАР ПВО АРМИЯ ПОЛИТ. ФЛОТ on the panel: pause, speed, then the keys of the tab
 const TABS=[['map','Карта'],['cities','Города'],['strike','Удар'],['aa','ПВО'],['army','Армия'],['pol','Полит.'],['fleet','Флот']];
-const ECON=['city','village','farm','factory','power','solar','mine','sawmill','oil','gaswell','refinery','port','airport','station'];
+const ECON=['city','village','farm','factory','power','solar','mine','sawmill','oil','gaswell','refinery','port','airport','station','lamp'];
 const STRIKE=['droneport','dramp','drwy','dstore','dronefab'];
 const tabOf=k=>k==='sam'?'aa':k==='barracks'||k==='assembly'?'army':ECON.includes(k)||k==='rail'?'cities':STRIKE.includes(k)||k==='order'||k==='uav'?'strike':null;
 let tab='cities',tabSig='';
 const TABIC={map:'ic-tab-map',cities:'ic-tab-city',strike:'ic-tab-strike',aa:'ic-tab-aa',army:'ic-tab-army',pol:'ic-tab-pol',fleet:'ic-tab-fleet'};
 const TABSUB={map:'Слои карты и переходы',cities:'Экономика: города, сёла, заводы, энергия, добыча, железная дорога',strike:'Дронопорт, его модули, цех БПЛА и удары дронами',aa:'Противовоздушная оборона',army:'Военные части и армии',pol:'Государства, союзы, война и мир',fleet:'Порты и флот'};
 // the short names of the keys (the full one is in the tooltip)
-const SHORT={city:'Город',village:'Село',farm:'Колхоз',factory:'Завод',power:'ТЭЦ',solar:'Солнце',mine:'Рудник',sawmill:'Лесопилка',oil:'Нефть',gaswell:'Газ',refinery:'НПЗ',port:'Порт',airport:'Аэропорт',station:'Вокзал',
+const SHORT={lamp:'Фонарь',city:'Город',village:'Село',farm:'Колхоз',factory:'Завод',power:'ТЭЦ',solar:'Солнце',mine:'Рудник',sawmill:'Лесопилка',oil:'Нефть',gaswell:'Газ',refinery:'НПЗ',port:'Порт',airport:'Аэропорт',station:'Вокзал',
   barracks:'Воен. часть',sam:'ПВО',droneport:'Дронопорт',dramp:'Рампа',drwy:'ВПП',dstore:'Склад БПЛА',dronefab:'Цех БПЛА'};
 function buildTabs(){const t=$('bb-tabs');t.innerHTML='';TABS.forEach(([k,n],i)=>{const b=document.createElement('button');b.dataset.t=k;b.dataset.tn=n+' · клавиша '+(i+1);b.dataset.td=TABSUB[k];
   b.innerHTML=`<i>${i+1}</i><span class="ic ${TABIC[k]}"></span><b>${n}</b>`;b.onclick=()=>setTab(k,true);t.appendChild(b)})}
@@ -715,7 +736,37 @@ function cardClick(e){const d=e.dataset,p=player();$('ktip').classList.remove('s
   if(d.army!=null){const a=p.armies[+d.army];G.sel={army:a};G.mode=null;panelSig='';updPanel();api.flyTo(a.x,a.y,M.min(api.cam.m,8));return updCatalog()}
   if(d.st!=null){$('dip').classList.add('show');updDip();return}
   if(d.tab)return setTab(d.tab)}
-function setBuild(k){if(!G||G.phase!=='play')return;G.build=k;if(k){G.mode=null;railDrag=null}if(!k||!BLD[k].mod&&k!=='solar')G.forPort=null;document.body.classList.toggle('placing',!!k);if(k){const t=tabOf(k);if(t&&t!==tab)setTab(t)}updCatalog()}
+// ---------- placement (stage 6): src/place.js keeps the ghost, its angle and the touch confirmation
+// which buildings turn: the zones; a port is laid along its coast, a station along the tracks, towns are round
+const rotK=k=>!!(BLD[k]&&BLD[k].zk)&&k!=='port'&&k!=='station';
+let lastTouch=false,shiftDown=false;
+const PL=Placement({check:(k,x,y,a)=>canBuild(player(),k,x,y,rotK(k)?a:undefined),rotates:rotK,onChange:()=>updPbar(),
+  build:(k,x,y,a)=>{const p=player();if(p.res.money<BLD[k].cost&&!creative())return 'Не хватает денег: нужно '+fmt(BLD[k].cost);return startBuild(p,k,x,y,rotK(k)?a:undefined)?true:'Не удалось начать стройку'}});
+// after a building was placed: leave the mode (unless Shift keeps it), back to the drone port card for its modules
+// ---------- light sources (stage 6): built from the finished builds of all states — the lamps of the player, the
+// floodlights of every yard (at its corners, one mast for a small one). Ids are stable (uid*8 + n), so a light keeps its
+// level (no flicker) when the set is rebuilt
+let lightsDirty=true;
+function syncLights(){if(!api||!api.lights||!G)return;lightsDirty=false;const L=api.lights,mine=l=>typeof l.owner==='number'||(typeof l.owner==='string'&&l.owner[0]==='b'),prev=new Map(L.all().filter(mine).map(l=>[l.id,l.lv]));
+  // only the lights the game owns (of its builds) are rebuilt; lights added by others stay
+  for(const l of L.all())if(mine(l))L.remove(l.id);
+  for(const s of G.states)for(const q of s.builds){if(!q.done)continue;
+    if(q.k==='lamp'){L.add({id:q.uid*8,x:q.x,y:q.y,kind:'lamp',mode:q.on||'auto',owner:'b'+q.uid});continue}
+    if(q.id<0||q.k==='rail')continue;const z=W.zones[q.id],b=BLD[q.k];if(!z||z.dead||!b||!b.zk)continue;
+    // masts stand inside the yard near its corners (the light falls on the concrete, not on the grass of the apron)
+    const big=z.W*z.H>60000,ins=big?16:6,hw=z.W/2-ins,hh=z.H/2-ins,pts=big?[[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]]:[[hw,hh]],r=M.min(80,42+M.sqrt(z.W*z.H)/25);
+    pts.forEach(([u,v],i)=>L.add({id:q.uid*8+1+i,x:z.x+u*z.ca-v*z.sa,y:z.y+u*z.sa+v*z.ca,kind:'flood',owner:q.id,r}))}
+  for(const l of L.all())if(prev.has(l.id))l.lv=prev.get(l.id)}
+function placeDone(keep){const fp=G.forPort;if(!keep)setBuild(null);if(fp&&!keep){G.sel={build:fp};panelSig=''}updHUD();updPbar()}
+function placeTap(x,y){const r=PL.tap(x,y,lastTouch,shiftDown&&!lastTouch);if(r==='built')placeDone(shiftDown&&!lastTouch);else if(r==='bad'&&PL.state.bad&&!lastTouch)toast(PL.state.bad);return r}
+function placeConfirm(){const r=PL.confirm(false);if(r==='built')placeDone(false);else if(r==='bad'&&PL.state.bad)toast(PL.state.bad);return r}
+// the bar of the armed building (as the hint box of DroneFlames): name and price, what to do or why not, ⟲ ✓ ✕
+function updPbar(){const el=$('pbar');if(!el)return;const k=G&&G.phase==='play'?G.build:null;el.classList.toggle('show',!!k);document.body.classList.toggle('placing-k',!!k);if(!k)return;const S=PL.state,b=BLD[k];
+  el.classList.toggle('touch',!!S.touch);el.classList.toggle('bad',!!(S.has&&S.bad));$('pbi').className='ic ic-b-'+k;$('pbt').textContent=b.n+' ('+fmt(b.cost)+')';
+  $('pbs').textContent=S.has&&S.bad?S.bad:S.touch?(S.has?'Нажмите ✓, чтобы построить. Перетащите метку или коснитесь другого места':'Коснитесь карты, где поставить'):'Клик — построить · R — повернуть · Shift+клик — ещё одну · Esc или ПКМ — отмена';
+  $('pbrot').hidden=!rotK(k);$('pbok').disabled=!(S.has&&!S.bad)}
+function setBuild(k){if(!G||G.phase!=='play')return;G.build=k;if(k){G.mode=null;railDrag=null}if(!k||!BLD[k].mod&&k!=='solar')G.forPort=null;document.body.classList.toggle('placing',!!k);if(k){const t=tabOf(k);if(t&&t!==tab)setTab(t)}
+  if(k){if(PL.state.k!==k){const c=api.toWorld(api.VW/2,api.VH*0.45);PL.select(k,lastTouch,c[0],c[1])}}else PL.cancel();updPbar();updCatalog()}
 function setPlacing(v){placing=v;document.body.classList.toggle('placing',v);panelSig='';if(G&&G.phase==='found'&&tab!=='cities')setTab('cities');updPanel();updCatalog();if(v)hint(1);closeConfirm()}
 function closeConfirm(){$('confirm').classList.remove('show');pend=null;askFn=null;if(G)G.railAsk=null}
 // the same box asks other questions (build this railway?) with a callback
@@ -790,7 +841,7 @@ function drawObjects(ctx,A){const m=A.cam.m,T=A.T;drawPennants(ctx,A);ctx.textAl
   // railways under construction: a dashed line between the stations with the progress
   for(const s of G.states){if(!mine(s))continue;for(const q of s.builds){if(q.k!=='rail'||q.done)continue;const a=byUid(s,q.a),b=byUid(s,q.b);if(!a||!b)continue;
     ctx.save();ctx.strokeStyle='rgba(255,210,90,0.85)';ctx.lineWidth=2;ctx.setLineDash([9,6]);ctx.lineDashOffset=-T*20;ctx.beginPath();ctx.moveTo(A.sxw(a.x),A.syw(a.y));ctx.lineTo(A.sxw(b.x),A.syw(b.y));ctx.stroke();ctx.setLineDash([]);
-    const mx=(A.sxw(a.x)+A.sxw(b.x))/2,my=(A.syw(a.y)+A.syw(b.y))/2;ctx.font='600 11px system-ui,sans-serif';const t=(a.done&&b.done?M.round(q.t/q.time*100)+' %':'ждёт вокзалы');const w=ctx.measureText(t).width+12;ctx.fillStyle='rgba(10,15,23,0.85)';ctx.fillRect(mx-w/2,my-10,w,20);ctx.fillStyle='#ffd25a';ctx.fillText(t,mx,my);ctx.restore()}}
+    const mx=(A.sxw(a.x)+A.sxw(b.x))/2,my=(A.syw(a.y)+A.syw(b.y))/2;ctx.font='600 11px Rubik,system-ui,sans-serif';const t=(a.done&&b.done?M.round(q.t/q.time*100)+' %':'ждёт вокзалы');const w=ctx.measureText(t).width+12;ctx.fillStyle='rgba(10,15,23,0.85)';ctx.fillRect(mx-w/2,my-10,w,20);ctx.fillStyle='#ffd25a';ctx.fillText(t,mx,my);ctx.restore()}}
   for(const s of G.states)for(const a of s.armies){if(!a.units.length||(!mine(s)&&!seenNow(a.x,a.y)))continue;const X=A.sxw(a.x),Y=A.syw(a.y);if(X<-40||Y<-40||X>A.VW+40||Y>A.VH+40)continue;const sel=G.sel&&G.sel.army===a;
     if(a.tx!==null&&(s.isP||sel)){ctx.strokeStyle=s.isP?'rgba(255,210,90,0.8)':'rgba(255,107,90,0.8)';ctx.lineWidth=2;ctx.setLineDash([7,6]);ctx.lineDashOffset=-T*25;ctx.beginPath();ctx.moveTo(X,Y);ctx.lineTo(A.sxw(a.tx),A.syw(a.ty));ctx.stroke();ctx.setLineDash([])}
     if(a.fight){for(let k=0;k<3;k++){const f=(T*3+k*0.33)%1;ctx.fillStyle=`rgba(255,${160+k*30},60,${1-f})`;ctx.beginPath();ctx.arc(X+M.sin(T*9+k)*12,Y+M.cos(T*7+k)*9,3+f*6,0,7);ctx.fill()}}
@@ -806,13 +857,20 @@ function drawObjects(ctx,A){const m=A.cam.m,T=A.T;drawPennants(ctx,A);ctx.textAl
   for(const f of G.fx){const X=A.sxw(f.x),Y=A.syw(f.y),k=f.t/1.2;if(f.k==='boom'){ctx.fillStyle=`rgba(255,${200-k*140|0},80,${1-k})`;ctx.beginPath();ctx.arc(X,Y,4+k*22,0,7);ctx.fill();ctx.strokeStyle=`rgba(255,240,200,${1-k})`;ctx.lineWidth=2;ctx.beginPath();ctx.arc(X,Y,8+k*34,0,7);ctx.stroke()}
     else if(k<0.4){ctx.strokeStyle=`rgba(255,240,160,${1-k*2.5})`;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(X,Y);ctx.lineTo(A.sxw(f.x2),A.syw(f.y2));ctx.stroke()}}
   // build preview
-  if(G.build&&A.hover.on){const [x,y]=A.toWorld(A.hover.x,A.hover.y),k=G.build,b=BLD[k],bad=canBuild(player(),k,x,y),X=A.hover.x,Y=A.hover.y;ctx.save();
+  if(G.build&&!PL.state.touch&&A.hover.on){const [hx,hy]=A.toWorld(A.hover.x,A.hover.y);PL.hover(hx,hy)}
+  if(G.build&&PL.state.has){const S=PL.state,x=S.x,y=S.y,k=G.build,b=BLD[k],bad=S.bad,X=A.sxw(x),Y=A.syw(y);ctx.save();
     ctx.strokeStyle=bad?'rgba(255,107,90,0.95)':'rgba(127,209,139,0.95)';ctx.fillStyle=bad?'rgba(255,107,90,0.14)':'rgba(127,209,139,0.14)';ctx.lineWidth=2;ctx.setLineDash([8,6]);ctx.lineDashOffset=-T*24;
-    if(b.zk){const w=M.max(8,b.W/m),h=M.max(8,b.H/m),an=k==='station'?stationAng(player(),x,y):0;ctx.save();ctx.translate(X,Y);ctx.rotate(an);ctx.beginPath();ctx.rect(-w/2,-h/2,w,h);ctx.fill();ctx.stroke();ctx.restore()}else{const r=M.max(10,(k==='city'?b.R:320)/m);ctx.beginPath();ctx.arc(X,Y,r,0,7);ctx.fill();ctx.stroke()}
+    if(b.zk){const w=M.max(8,b.W/m),h=M.max(8,b.H/m),an=k==='station'?stationAng(player(),x,y):rotK(k)?S.ang:0;ctx.save();ctx.translate(X,Y);ctx.rotate(an);ctx.beginPath();ctx.rect(-w/2,-h/2,w,h);ctx.fill();ctx.stroke();
+      // the front of the building (its gate side) — so the angle reads
+      if(rotK(k)){ctx.setLineDash([]);ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-w/2,h/2);ctx.lineTo(w/2,h/2);ctx.stroke()}ctx.restore()}else{const r=M.max(10,(k==='city'?b.R:b.point?b.r:320)/m);ctx.beginPath();ctx.arc(X,Y,r,0,7);ctx.fill();ctx.stroke()}
     if(b.mod||k==='solar'){ctx.setLineDash([3,5]);ctx.strokeStyle='rgba(255,210,90,0.65)';for(const q of player().builds)if(q.k==='droneport'){ctx.beginPath();ctx.arc(A.sxw(q.x),A.syw(q.y),(b.mod?1100:700)/m,0,7);ctx.stroke()}}
     if(k==='village'||k==='farm'){ctx.setLineDash([3,5]);ctx.strokeStyle='rgba(255,210,90,0.6)';for(const p of player().places)if(p.k==='village'){ctx.beginPath();ctx.arc(A.sxw(p.x),A.syw(p.y),1400/m,0,7);ctx.stroke()}}
-    ctx.setLineDash([]);ctx.drawImage(bIcon(k),X-12,Y-12,24,24);const t=bad||b.n+' · '+fmt(b.cost);ctx.font='600 12px system-ui,sans-serif';ctx.textAlign='left';const w=ctx.measureText(t).width+16;
-    ctx.fillStyle='rgba(10,15,23,0.88)';ctx.fillRect(X+16,Y+14,w,22);ctx.fillStyle=bad?'#ff9c8e':'#9fe3aa';ctx.fillText(t,X+24,Y+25);ctx.restore()}
+    ctx.setLineDash([]);
+    // touch: a round handle to drag the ghost (the name and the reason are in the placement bar)
+    if(S.touch){ctx.lineWidth=2;ctx.strokeStyle=bad?'rgba(255,140,120,0.95)':'rgba(255,255,255,0.95)';ctx.fillStyle='rgba(10,15,23,0.6)';ctx.beginPath();ctx.arc(X,Y,22,0,7);ctx.fill();ctx.stroke()}
+    ctx.drawImage(bIcon(k),X-12,Y-12,24,24);
+    if(!S.touch){const t=bad||b.n+' · '+fmt(b.cost);ctx.font='600 12px Rubik,system-ui,sans-serif';ctx.textAlign='left';const w=ctx.measureText(t).width+16;
+      ctx.fillStyle='rgba(10,15,23,0.88)';ctx.fillRect(X+16,Y+14,w,22);ctx.fillStyle=bad?'#ff9c8e':'#9fe3aa';ctx.fillText(t,X+24,Y+25)}ctx.restore()}
   if(G.mode==='rail'||G.railAsk)drawRailTool(ctx,A);
   if(G.mode&&G.mode.startsWith('uav:')&&A.hover.on&&DRN[G.mode.slice(4)].recon){ctx.save();ctx.strokeStyle='rgba(120,200,255,0.8)';ctx.setLineDash([6,6]);ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(A.hover.x,A.hover.y,REVR/m,0,7);ctx.stroke();ctx.restore()}
   if(G.mode&&G.mode.startsWith('uav:')&&A.hover.on){ctx.strokeStyle='#ff6b5a';ctx.lineWidth=2;const X=A.hover.x,Y=A.hover.y;ctx.beginPath();ctx.arc(X,Y,14,0,7);ctx.moveTo(X-20,Y);ctx.lineTo(X+20,Y);ctx.moveTo(X,Y-20);ctx.lineTo(X,Y+20);ctx.stroke()}}
@@ -826,7 +884,7 @@ function drawRailTool(ctx,A){const m=A.cam.m,T=A.T,p=player();ctx.save();
   if(ev&&ev.P){const P=ev.P,ok=!ev.bad,amb=!!G.railAsk&&!railDrag;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='rgba(8,12,18,0.7)';ctx.lineWidth=6;ctx.beginPath();for(let i=0;i<P.length;i+=2){const X=A.sxw(P[i]),Y=A.syw(P[i+1]);if(i)ctx.lineTo(X,Y);else ctx.moveTo(X,Y)}ctx.stroke();
     ctx.strokeStyle=amb?'#ffd25a':ok?'#7fd18b':'#ff6b5a';ctx.lineWidth=3;ctx.setLineDash([10,7]);ctx.lineDashOffset=-T*24;ctx.stroke();ctx.setLineDash([])}
   if(ev&&ev.nb){const w=M.max(8,BLD.station.W/m),h=M.max(5,BLD.station.H/m);ctx.save();ctx.translate(A.sxw(ev.nb.x),A.syw(ev.nb.y));ctx.rotate(ev.nb.ang);ctx.fillStyle=ev.bad?'rgba(255,107,90,0.2)':'rgba(127,209,139,0.2)';ctx.strokeStyle=ev.bad?'#ff6b5a':G.railAsk&&!railDrag?'#ffd25a':'#7fd18b';ctx.lineWidth=2;ctx.beginPath();ctx.rect(-w/2,-h/2,w,h);ctx.fill();ctx.stroke();ctx.restore()}
-  if(railDrag&&ev){const t=ev.bad||`${fmtKm(ev.L)} · ${fmt(ev.cost)}${ev.nb?' · новый вокзал':''}`;ctx.font='600 12px system-ui,sans-serif';ctx.textAlign='left';ctx.textBaseline='middle';const w=ctx.measureText(t).width+16;
+  if(railDrag&&ev){const t=ev.bad||`${fmtKm(ev.L)} · ${fmt(ev.cost)}${ev.nb?' · новый вокзал':''}`;ctx.font='600 12px Rubik,system-ui,sans-serif';ctx.textAlign='left';ctx.textBaseline='middle';const w=ctx.measureText(t).width+16;
     ctx.fillStyle='rgba(10,15,23,0.9)';ctx.fillRect(railDrag.sx+16,railDrag.sy+14,w,22);ctx.fillStyle=ev.bad?'#ff9c8e':'#9fe3aa';ctx.fillText(t,railDrag.sx+24,railDrag.sy+25)}
   ctx.restore()}
 // army token: a framed counter in the state colour with the type symbol and the number of fighters
@@ -834,7 +892,7 @@ function armyToken(ctx,s,a,X,Y,sel){const comp={};for(const u of a.units)comp[u]
   ctx.save();ctx.translate(X,Y);ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillRect(-15,-9,32,22);ctx.fillStyle=s.color;ctx.fillRect(-16,-11,32,22);ctx.strokeStyle=sel?'#fff':'rgba(10,15,23,0.9)';ctx.lineWidth=sel?2.5:1.5;ctx.strokeRect(-16,-11,32,22);
   ctx.strokeStyle='rgba(10,15,23,0.85)';ctx.lineWidth=1.4;ctx.beginPath();
   if(main==='tank'){ctx.ellipse(0,0,10,5,0,0,7)}else if(main==='art'){ctx.arc(0,0,3,0,7)}else if(main==='at'){ctx.moveTo(-10,6);ctx.lineTo(0,-6);ctx.lineTo(10,6)}else{ctx.moveTo(-16,-11);ctx.lineTo(16,11);ctx.moveTo(16,-11);ctx.lineTo(-16,11);if(main==='mot'){ctx.moveTo(-3,-11);ctx.lineTo(-3,11);ctx.moveTo(3,-11);ctx.lineTo(3,11)}}
-  ctx.stroke();ctx.font='700 11px system-ui,sans-serif';ctx.lineWidth=3;ctx.strokeStyle='rgba(10,15,23,0.9)';ctx.strokeText(a.units.length,0,19);ctx.fillStyle='#fff';ctx.fillText(a.units.length,0,19);ctx.restore()}
+  ctx.stroke();ctx.font='700 11px Rubik,system-ui,sans-serif';ctx.lineWidth=3;ctx.strokeStyle='rgba(10,15,23,0.9)';ctx.strokeText(a.units.length,0,19);ctx.fillStyle='#fff';ctx.fillText(a.units.length,0,19);ctx.restore()}
 const BIC={};function bIcon(k){if(BIC[k])return BIC[k];const S=48,c=document.createElement('canvas');c.width=c.height=S;const x=c.getContext('2d');const src=getComputedStyle(document.documentElement).getPropertyValue('--ic-b-'+k);
   if(ICONIMG[k]){x.drawImage(ICONIMG[k],0,0,S,S)}return BIC[k]=c}
 const ICONIMG={};
@@ -951,22 +1009,24 @@ function drawPennants(ctx,A){const m=A.cam.m,a=smoothst(4,8,m)*smoothst(70,48,m)
     ctx.fillStyle='#131410';ctx.beginPath();ctx.moveTo(X-4,y0+s);ctx.lineTo(X+4,y0+s);ctx.lineTo(X,Y-1);ctx.closePath();ctx.fill();ctx.drawImage(bIcon(q.k),x0+2,y0+2,s-4,s-4)}ctx.restore()}
 function drawMiniBuilds(mx,s){const p=player();for(const q of p.builds){if(!q.done||q.k==='rail'||BLD[q.k].mod)continue;const x=q.x*s,y=q.y*s;mx.fillStyle='#131410';mx.fillRect(x-2.5,y-2.5,5,5);mx.fillStyle=PCOL[q.k]||'#fbf3e0';mx.fillRect(x-1.5,y-1.5,3,3)}}
 // ---------- engine hooks
-function ownBuildAt(x,y){for(const q of player().builds){if(!q.done||q.id<0||q.k==='rail')continue;const z=W.zones[q.id];if(z&&!z.dead&&rectHit(z,x,y,1,1))return q}return null}
+function ownBuildAt(x,y){for(const q of player().builds){if(q.done&&q.k==='lamp'&&M.hypot(q.x-x,q.y-y)<M.max(8,16*api.cam.m))return q;if(!q.done||q.id<0||q.k==='rail')continue;const z=W.zones[q.id];if(z&&!z.dead&&rectHit(z,x,y,1,1))return q}return null}
 function pickArmy(sx,sy){for(const s of G.states){if(!s.isP)continue;for(const a of s.armies){if(!a.units.length)continue;if(M.abs(api.sxw(a.x)-sx)<18&&M.abs(api.syw(a.y)-sy)<14)return a}}
   for(const s of G.states)if(s.isP)for(const a of s.armies){const q=a.home;if(!q.done)continue;const b=BLD.barracks;if(M.abs(q.x-api.toWorld(sx,sy)[0])<b.W/2&&M.abs(q.y-api.toWorld(sx,sy)[1])<b.H/2)return a}return null}
 const hooks={
-  pdown(x,y,sx,sy){if(!G||G.phase!=='play'||G.mode!=='rail')return false;const q=stationAtScreen(sx,sy);if(!q)return false;closeConfirm();railDrag={a:q,x,y,sx,sy,ev:null,et:0};return true},
-  pmove(x,y,sx,sy){if(railDrag){railDrag.x=x;railDrag.y=y;railDrag.sx=sx;railDrag.sy=sy}},
-  pup(x,y,sx,sy,cancel){if(!railDrag)return;const d=railDrag;railDrag=null;if(cancel)return;const ev=railEval(d.a,x,y,sx,sy);if(ev.bad){toast(ev.bad);return}
+  pdown(x,y,sx,sy){if(G&&G.phase==='play'&&G.build&&lastTouch){const b=BLD[G.build];if(PL.grab(x,y,(b.R||(b.W?M.max(b.W,b.H)/2:b.point?12:320))+16*api.cam.m))return true}
+    if(!G||G.phase!=='play'||G.mode!=='rail')return false;const q=stationAtScreen(sx,sy);if(!q)return false;closeConfirm();railDrag={a:q,x,y,sx,sy,ev:null,et:0};return true},
+  pmove(x,y,sx,sy){if(PL.state.drag){PL.move(x,y);return}if(railDrag){railDrag.x=x;railDrag.y=y;railDrag.sx=sx;railDrag.sy=sy}},
+  pup(x,y,sx,sy,cancel){if(PL.state.drag){PL.release();return}if(!railDrag)return;const d=railDrag;railDrag=null;if(cancel)return;const ev=railEval(d.a,x,y,sx,sy);if(ev.bad){toast(ev.bad);return}
     G.railAsk=ev;openAsk(`ЖД путь ${fmtKm(ev.L)}${ev.nb?' и новый вокзал':''}`,`${ev.B?'Соединит два вокзала':'В конце пути встанет вокзал'}<br>Стоимость <b>${fmt(ev.cost)}</b>`,()=>{if(buildRailway(ev)){onBuilt('rail',false);updHUD()}},sx,sy)},
-  frame(dt){if(!G||G.over&&G.speed===0){return}const sp=G.phase==='play'&&own&&api&&api.ready?G.speed:0;if(sp>0){simAcc+=dt*sp;prf('sim',()=>{while(simAcc>0.1){sim(0.1);simAcc-=0.1}})}
+  frame(dt){if(lightsDirty&&G&&api&&api.lights){lightsDirty=false;syncLights()}if(!G||G.over&&G.speed===0){return}const sp=G.phase==='play'&&own&&api&&api.ready?G.speed:0;if(sp>0){simAcc+=dt*sp;prf('sim',()=>{while(simAcc>0.1){sim(0.1);simAcc-=0.1}})}
     if(G.flights)for(const f of G.flights)f.g.s=flAt(f.g,G.t+simAcc-f.t0);
     G._hud=(G._hud||0)+dt;if(G._hud>0.25){G._hud=0;prf('hud',()=>{updHUD();updDip()})}},
   draw:(ctx,A)=>{drawOverlay(ctx,A);if(G&&G.phase==='play'&&own)drawObjects(ctx,A)},
+  glDraw:(g,A)=>glBorders(g,A),
   seen:(x,y)=>!G||!own||seenAt(x,y),
   mini:(mx,s)=>drawMini(mx,s),
   click(x,y,sx,sy){if(!G)return false;if(G.phase==='found'){const bad=validSite(x,y);if(bad){toast(bad);if(!placing)setPlacing(true);return true}if(!placing){setPlacing(true)}openConfirm(x,y,sx,sy);return true}
-    if(G.build){const k=G.build,p=player(),bad=canBuild(p,k,x,y);if(bad){toast(bad);return true}if(p.res.money<BLD[k].cost&&!creative()){toast('Не хватает денег: нужно '+fmt(BLD[k].cost));return true}startBuild(p,k,x,y);const fp=G.forPort;setBuild(null);if(fp){G.sel={build:fp};panelSig=''}updHUD();return true}
+    if(G.build){placeTap(x,y);return true}
     if(G.mode&&G.mode.startsWith('uav:')){const k=G.mode.slice(4),D=DRN[k],p=player();let to=null;
       if(!D.recon){const o=ownerAt(x,y)-1;if(o<0||!atWar(0,o)){toast('Цель — на земле государства, с которым идёт война');return true}to=o}
       const why=launchUav(p,k,x,y,to);if(why){toast(why);return true}toast(`${D.n} запущен${D.recon?' на разведку':''}`,'ic-b-'+D.ic);if(!(p.uav[k]>0))G.mode=null;panelSig='';updCatalog();return true}
@@ -980,14 +1040,15 @@ const hooks={
     if(fogOn()&&!seenAt(x,y))return true;if(G.sel){G.sel=null;G.mode=null;panelSig=''}return false},
   key(e){if(!G||document.body.classList.contains('m-settings'))return !!G;if(e.code==='Escape'){if($('confirm').classList.contains('show')){closeConfirm();return true}if(placing){setPlacing(false);return true}if(railDrag){railDrag=null;return true}
       if(G.build){setBuild(null);return true}if(G.mode||G.sel){G.mode=null;G.sel=null;panelSig='';updPanel();updCatalog();return true}for(const w of ['store','mystate','dip','orep','hqp'])if($(w).classList.contains('show')){$(w).classList.remove('show');updOres();return true}ui.pause(true);return true}
-    if(G.phase!=='play')return false;if(e.code==='Space'||e.code==='KeyP'){setSpeed(G.speed?0:(G._lastSp||1));e.preventDefault();return true}
+    if(G.phase!=='play')return false;if(G.build&&e.code==='KeyR'){PL.rotate(1,e.shiftKey);return true}if(G.build&&(e.code==='Enter'||e.code==='NumpadEnter')){placeConfirm();return true}
+    if(e.code==='Space'||e.code==='KeyP'){setSpeed(G.speed?0:(G._lastSp||1));e.preventDefault();return true}
     if(e.code==='KeyF'||e.code==='Tab'){const n={1:2,2:4,4:1}[G._lastSp||1];G._lastSp=n;setSpeed(n);e.preventDefault();return true}
     const d=/^Digit([1-7])$/.exec(e.code);if(d){setTab(TABS[+d[1]-1][0],true);return true}return false},
   inspect(c){const o=ownerAt(c.x,c.y);if(!o)return G&&G.phase==='play'?'<tr><td>Государство</td><td>ничейная земля</td></tr>':'';const s=G.states[o-1];
     return `<tr><td>Государство</td><td><span class="own"><i class="chip" style="background:${s.color}"></i>${esc(s.name)}${c.cap!==undefined?' · столица':''}</span></td></tr>`}};
 
 // ---------- boot / phases
-function boot(caps,onReady,ops){if(api){api.destroy();api=null}
+function boot(caps,onReady,ops){if(api){api.destroy();api=null}lightsDirty=true;
   const vo=ui.viewOpts();api=startWorld({seed:cfg.seed,opt:mapOpt(caps),ops:ops||[],mode:'game',tod:cfg.rules.dayNight?9.5:12.5,dayNight:cfg.rules.dayNight,view:vo,hooks,onReady:A=>{onReady&&onReady(A)}});
   W=api.W;ui.loading('Отрисовка карты',api.W.cities.length+' населённых пунктов · '+api.W.zones.length+' объектов');api.setTodRate(G.speed*4/60);if(!cfg.rules.dayNight)api.setTodRate(0);document.getElementById('fps').classList.toggle('hid',!vo.fps)}
 function mkState(i,o,isP){return {id:i,name:o.name,capital:o.capital,gov:o.gov,flag:o.flag,color:o.color,isP,diff:isP?1:o.diff,trait:o.trait==='random'?['trader','militarist','cautious','adventurer'][(hsh(i,77)*4)|0]:o.trait,
@@ -1041,7 +1102,21 @@ function wire(u){ui=u;
   $('a-found').onclick=()=>{if(G&&G.phase==='found')setPlacing(!placing)};$('a-found-x').onclick=()=>setPlacing(false);
   $('bmenu').onclick=()=>ui.pause(true);
   // the tooltip of the keys and tabs (as in DroneFlames: the title, the price, what it does)
-  const tip=$('ktip');document.addEventListener('mouseover',e=>{const k=e.target.closest&&e.target.closest('[data-tn]');if(!k){tip.classList.remove('show');return}
+  document.addEventListener('pointerdown',e=>{lastTouch=e.pointerType==='touch'||e.pointerType==='pen'},true);
+  addEventListener('keydown',e=>{if(e.key==='Shift')shiftDown=true});addEventListener('keyup',e=>{if(e.key==='Shift')shiftDown=false});addEventListener('blur',()=>{shiftDown=false});
+  // the right mouse button cancels the armed building (as Esc)
+  $('c').addEventListener('contextmenu',e=>{e.preventDefault();if(G&&G.build){setBuild(null)}else if(G&&G.mode){G.mode=null;railDrag=null;updCatalog()}});
+  $('pbrot').onclick=()=>PL.rotate(1,lastTouch);$('pbok').onclick=()=>placeConfirm();$('pbno').onclick=()=>setBuild(null);
+  // touch: a tap on any HUD button acts at once on pointerup (finger lifted on the same button, moved < 12 px). Chrome does
+  // not synthesise a click for a tap that follows a drag (of the map or of the ghost), and adds a delay otherwise; the late
+  // native click is swallowed so nothing acts twice. A swipe over the key tray still scrolls it.
+  let tdn=null,swal=null;
+  document.addEventListener('pointerdown',e=>{if(e.pointerType!=='touch'){tdn=null;return}const b=e.target.closest&&e.target.closest('button');tdn=b&&!b.disabled?{b,id:e.pointerId,x:e.clientX,y:e.clientY}:null},true);
+  document.addEventListener('pointerup',e=>{const d=tdn;tdn=null;if(!d||e.pointerId!==d.id||M.hypot(e.clientX-d.x,e.clientY-d.y)>12)return;const b=e.target.closest&&e.target.closest('button');
+    // the key tray is re-rendered while a finger is down: the same key is the same data-k / data-t / id
+    const same=b&&(b===d.b||(b.dataset.k&&b.dataset.k===d.b.dataset.k)||(b.dataset.t&&b.dataset.t===d.b.dataset.t)||(b.dataset.mode&&b.dataset.mode===d.b.dataset.mode)||(b.id&&b.id===d.b.id));if(!same||b.disabled)return;swal={b,t:performance.now()};b.click()},true);
+  document.addEventListener('click',e=>{if(swal&&e.isTrusted&&performance.now()-swal.t<800&&swal.b.contains(e.target)){e.stopPropagation();e.preventDefault();swal=null}},true);
+  const tip=$('ktip');document.addEventListener('pointerover',e=>{if(e.pointerType!=='mouse'){tip.classList.remove('show');return}const k=e.target.closest&&e.target.closest('[data-tn]');if(!k){tip.classList.remove('show');return}
     tip.innerHTML=`<b>${esc(k.dataset.tn)}</b>${k.dataset.tc?`<i>${esc(k.dataset.tc)}</i>`:''}${k.dataset.td?`<span>${esc(k.dataset.td)}</span>`:''}`;
     const r=k.getBoundingClientRect(),z=zf();tip.style.left=M.max(150*z,M.min(innerWidth-150*z,r.left+r.width/2))/z+'px';tip.style.top=M.max(60*z,r.top-8)/z+'px';tip.classList.add('show')});
   document.addEventListener('pointerdown',()=>tip.classList.remove('show'),true);
@@ -1052,6 +1127,6 @@ function wire(u){ui=u;
   $('overm').onclick=()=>{$('over').classList.remove('show');ui.toMenu()};$('overk').onclick=()=>$('over').classList.remove('show')}
 return {wire,newGame,load,save,exit,setSpeed:v=>G&&setSpeed(v),get G(){return G},get api(){return api},paused:()=>G?G.speed===0:true,
   pauseInfo:()=>G?`${esc(player().name)} · ${gameClock()} · ${fmt(player().score)} очков · ячейка ${cfg.slot||1}`:'',setIcon:(k,img)=>{ICONIMG[k]=img},
-  _prof:PRF,_dbg:DBG,_test:{startBuildFor:(i,k,x,y)=>startBuild(G.states[i],k,x,y),canBuildFor:(i,k,x,y)=>canBuild(G.states[i],k,x,y),signVisa:i=>signVisa(player(),G.states[i]),visa:i=>visa(player(),G.states[i]),flightPath,demolish:q=>demolish(player(),q),run:sec=>{for(let t=0;t<sec;t+=0.1)sim(0.1)},validSite:(x,y)=>validSite(x,y),found,get own(){return own},chooseCaps,canBuild:(k,x,y)=>canBuild(player(),k,x,y),startBuild:(k,x,y)=>startBuild(player(),k,x,y),BLD,declareWar:(i)=>declareWar(player(),G.states[i]),launchDrone,launchUav:(k,x,y,to)=>launchUav(player(),k,x,y,to),startRail:(a,b,L)=>startRail(player(),a,b,L),railEval,buildRailway,
+  _prof:PRF,_dbg:DBG,_test:{startBuildFor:(i,k,x,y)=>startBuild(G.states[i],k,x,y),canBuildFor:(i,k,x,y)=>canBuild(G.states[i],k,x,y),signVisa:i=>signVisa(player(),G.states[i]),visa:i=>visa(player(),G.states[i]),flightPath,demolish:q=>demolish(player(),q),run:sec=>{for(let t=0;t<sec;t+=0.1)sim(0.1)},validSite:(x,y)=>validSite(x,y),found,get own(){return own},chooseCaps,canBuild:(k,x,y,a)=>canBuild(player(),k,x,y,a),startBuild:(k,x,y,a)=>startBuild(player(),k,x,y,a),PL,setBuild,placeTap,placeConfirm,syncLights,set touch(v){lastTouch=v},set shift(v){shiftDown=v},BLD,declareWar:(i)=>declareWar(player(),G.states[i]),launchDrone,launchUav:(k,x,y,to)=>launchUav(player(),k,x,y,to),startRail:(a,b,L)=>startRail(player(),a,b,L),railEval,buildRailway,
     buyUp:(q,u)=>buyUp(player(),q,u),clearDeps,updHidden,DRN,oreIcon,uavCap:()=>uavCap(player()),daylight,stationAtScreen,get hidSig(){return hidSig},get vis(){return vis}}};
 })();

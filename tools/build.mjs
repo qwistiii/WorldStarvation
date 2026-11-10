@@ -8,7 +8,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 
 export function build() {
-  let html = read('index.html');
+  let html = read('index.html').split('\r\n').join('\n'); // Windows checkouts have CRLF
   const swap = (tag, inline) => {
     if (!html.includes(tag)) throw new Error(`В index.html не найден тег: ${tag}`);
     html = html.replace(tag, () => inline);
@@ -19,7 +19,7 @@ export function build() {
   const font = fs.readFileSync(path.join(root, 'src/fonts/rubik.woff2')).toString('base64');
   const css = read('src/style.css').replace('url(fonts/rubik.woff2)', () => `url(data:font/woff2;base64,${font})`);
   swap(`<link rel="stylesheet" href="src/style.css?v=${v}">\n`, `<style>\n${css}</style>`);
-  for (const f of ['flag', 'gen', 'main', 'game', 'ui']) swap(`<script src="src/${f}.js?v=${v}"></script>`, `<script>\n${read(`src/${f}.js`)}</script>`);
+  for (const f of ['flag', 'gen', 'parallax', 'gl', 'place', 'lights', 'main', 'game', 'ui']) swap(`<script src="src/${f}.js?v=${v}"></script>`, `<script>\n${read(`src/${f}.js`)}</script>`);
   return html;
 }
 

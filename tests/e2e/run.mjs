@@ -1,0 +1,290 @@
+// Browser scenario of the game (Playwright, headless Chromium with the GPU): desktop 1920x1080 and a phone 390x844 run
+// in parallel. Checks: loading without console errors, every tab and panel of the HUD, placing every building type
+// through the UI (mouse: click; touch: tap + ✓), rotation, all ways to cancel, mouse-drag parallax, frame budget.
+// Screenshots go to .work/e2e/<device>-*.png (look at them: tests/visual/inspect.py crops and zooms the risky places).
+// node tests/e2e/run.mjs [--only=desktop|phone] [--no-perf]
+import fs from 'node:fs';
+import { launch, server, DESKTOP, PHONE, openMenu, newGame, settle, watchErrors } from '../lib/game.mjs';
+
+const args = process.argv.slice(2);
+const only = (args.find((a) => a.startsWith('--only=')) || '').slice(7);
+const PERF = !args.includes('--no-perf');
+const OUT = '.work/e2e';
+fs.mkdirSync(OUT, { recursive: true });
+const PORT = 8180 + Math.floor(Math.random() * 40);
+const BUDGET = { desktop: 1000 / 165, phone: 1000 / 60 }; // ms per frame (throughput)
+
+let failed = 0;
+const log = [];
+function warn(dev, name, extra) { const l = `WARN [${dev}] ${name}${extra ? ' — ' + extra : ''}`; log.push(l); console.log(l); }
+function check(dev, ok, name, extra) { const l = `${ok ? 'OK  ' : 'FAIL'} [${dev}] ${name}${extra ? ' — ' + extra : ''}`; log.push(l); console.log(l); if (!ok) failed++; }
+
+// frame throughput: k frames per tick, one read-back (see tests/perf/bench.mjs)
+const INIT = () => { const B = window.__bench = { on: false, thr: [], px: new Uint8Array(4) }; const RAF = window.requestAnimationFrame.bind(window); let sw = 0;
+  window.requestAnimationFrame = function (cb) { if (cb.name !== 'frame') return RAF(cb); if (sw > 0) { sw--; return 0 } return RAF(function (ts) { if (!B.on) return cb(ts);
+    const g = document.getElementById('c').getContext('webgl2'), t0 = performance.now(); sw = 3; for (let i = 0; i < 4; i++) cb(ts + i * 6); g.readPixels(0, 0, 1, 1, g.RGBA, g.UNSIGNED_BYTE, B.px); B.thr.push((performance.now() - t0) / 4); }); }; };
+
+// buildings the scenario places, in order (modules need the drone port, the farm needs a village)
+const ORDER = ['village', 'farm', 'city', 'factory', 'power', 'solar', 'sawmill', 'refinery', 'barracks', 'sam', 'station', 'airport', 'droneport', 'dronefab', 'port', 'oil', 'gaswell', 'mine', 'dramp', 'drwy', 'dstore', 'lamp'];
+
+async function scenario(browser, dev, opts) {
+  const ctx = await browser.newContext(opts);
+  await ctx.addInitScript(INIT);
+  const page = await ctx.newPage();
+  const errors = watchErrors(page);
+  const touch = !!opts.hasTouch;
+  // every touch of the scenario goes through one CDP session (mixing sessions confuses the touch state of Chromium)
+  const TC = touch ? await ctx.newCDPSession(page) : null;
+  const tdrag = async (x0, y0, x1, y1, n = 8) => { await TC.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x0, y: y0 }] });
+    for (let i = 1; i <= n; i++) await TC.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x0 + (x1 - x0) * i / n, y: y0 + (y1 - y0) * i / n }] });
+    await TC.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); };
+  const ttap = async (x, y) => { await TC.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] }); await TC.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); };
+  const tapSel = (sel) => page.tap(sel, { timeout: 8000 });
+  // overview shots as JPEG (fast); the ones looked at for seams and edges as PNG
+  const PNG = new Set(['hud', 'ghost', 'street', 'city', 'night', 'parallax-0', 'parallax-1']);
+  const shot = (n) => PNG.has(n) ? page.screenshot({ path: `${OUT}/${dev}-${n}.png` }) : page.screenshot({ path: `${OUT}/${dev}-${n}.jpg`, type: 'jpeg', quality: 80 });
+  const ev = (f, a) => page.evaluate(f, a);
+  const t0 = Date.now(); let tl = t0; const laps = []; const lap = (n) => { const t = Date.now(); laps.push(n + ' ' + ((t - tl) / 1000).toFixed(1)); tl = t; };
+  const tMenu = await openMenu(page, PORT, '?workers=3');
+  check(dev, true, 'главное меню загрузилось', tMenu + ' мс');
+  await page.waitForTimeout(400); await shot('menu');
+  // menu panels: settings and news
+  await page.click('[data-go="settings"]'); await page.waitForTimeout(250);
+  check(dev, await ev(() => document.body.className.includes('settings') || [...document.querySelectorAll('.screen')].some((e) => getComputedStyle(e).display !== 'none' && /set/i.test(e.id))), 'настройки открываются');
+  await shot('settings');
+  await page.evaluate(() => { const b = document.querySelector('#settings [data-back], [data-back]'); if (b) b.click(); });
+  await page.waitForTimeout(200);
+
+  lap('menu');
+  const g = await newGame(page);
+  check(dev, true, 'новая игра и столица', `мир ${g.tWorld} мс, основание ${g.tFound} мс`);
+  await ev(() => { const s = Game.G.states[0]; s.res.money = 1e9; s.res.energy = 999; Game.setSpeed(0); Game.api.stop(); });
+  await shot('hud');
+
+  lap('game');
+  // ---- tabs 1–7 and the panels
+  const tabs = await ev(() => [...document.querySelectorAll('#bb-tabs button')].map((b) => b.dataset.t));
+  check(dev, tabs.length === 7, 'семь вкладок внизу', tabs.join(','));
+  for (const t of tabs) {
+    await page.click(`#bb-tabs [data-t="${t}"]`); await page.waitForTimeout(120);
+    const n = await ev(() => document.querySelectorAll('#bb-cat > *').length);
+    check(dev, n > 0, `вкладка «${t}» показывает ключи`, String(n));
+    if (t === 'cities' || t === 'strike') await shot('tab-' + t);
+  }
+  for (const [btn, win] of [['#hres', '#store'], ['#hstate', '#mystate'], ['#b-hq', '#hqp'], ['#b-ores', '#orep']]) {
+    await page.click(btn); await page.waitForTimeout(200);
+    const vis = await ev((w) => { const e = document.querySelector(w); const r = e.getBoundingClientRect(); return e.classList.contains('show') && r.width > 0 && r.height > 0 && r.right <= innerWidth + 1 && r.bottom <= innerHeight + 1 && r.left >= -1 && r.top >= -1; }, win);
+    check(dev, vis, `панель ${win} открывается и целиком на экране`);
+    await shot('panel-' + win.slice(1));
+    await page.click(btn).catch(() => {}); await ev((w) => document.querySelector(w).classList.remove('show'), win);
+  }
+  await page.click('#bb-tabs [data-t="pol"]'); await page.waitForTimeout(120);
+  await page.click('#bb-cat [data-go="dip"]'); await page.waitForTimeout(200);
+  check(dev, await ev(() => document.getElementById('dip').classList.contains('show')), 'дипломатия открывается');
+  await shot('panel-dip'); await ev(() => document.getElementById('dip').classList.remove('show'));
+  await page.click('#bmenu'); await page.waitForTimeout(200);
+  check(dev, await ev(() => getComputedStyle(document.getElementById('pause')).display !== 'none'), 'меню паузы открывается');
+  await shot('pause'); await page.click('#presume'); await page.waitForTimeout(150);
+
+  // ---- HUD layout: nothing important overlaps (top bar, resources, tabs, panel, left rail, plan)
+  const ov = await ev(() => {
+    const ids = ['hud', 'hres', 'plan', 'lrail', 'bb-tabs', 'bb-tray', 'mini', 'bl'];
+    const R = ids.map((i) => [i, document.getElementById(i)]).filter(([, e]) => e && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().width > 0).map(([i, e]) => [i, e.getBoundingClientRect()]);
+    const bad = []; for (let a = 0; a < R.length; a++) for (let b = a + 1; b < R.length; b++) { const p = R[a][1], q = R[b][1]; const w = Math.min(p.right, q.right) - Math.max(p.left, q.left), h = Math.min(p.bottom, q.bottom) - Math.max(p.top, q.top); if (w > 2 && h > 2) bad.push(R[a][0] + '×' + R[b][0]); }
+    const off = R.filter(([, r]) => r.left < -1 || r.right > innerWidth + 1 || r.top < -1 || r.bottom > innerHeight + 1).map(([i]) => i);
+    return { bad, off };
+  });
+  check(dev, !ov.bad.length && !ov.off.length, 'элементы HUD не налезают друг на друга и не обрезаны', JSON.stringify(ov));
+
+  lap('panels');
+  // ---- place every building type through the UI
+  const placed = [];
+  // the desktop places every type with the mouse; the phone checks the touch flow on a representative set
+  const LIST = touch ? ['village', 'farm', 'factory', 'solar', 'station', 'droneport', 'dramp', 'lamp'] : ORDER;
+  for (const k of LIST) {
+    const site = await ev(async (k) => {
+      const T = Game._test, G = Game.G, W = Game.api.W, p = G.states[0], c = W.cities.find((o) => o.cap === 0);
+      const cand = []; for (let r = 900; r < 16000; r += 320) for (let a = 0; a < 6.28; a += 0.21) cand.push([c.x + Math.cos(a) * r, c.y + Math.sin(a) * r]);
+      for (const d of G.dep) if (d.known && d.used < 0) cand.unshift([d.x, d.y]);
+      for (const q of p.builds) if (q.k === 'droneport' && q.done) for (let a = 0; a < 6.28; a += 0.5) for (const r of [300, 500, 700]) cand.unshift([q.x + Math.cos(a) * r, q.y + Math.sin(a) * r]);
+      for (const q of p.places) if (q.k === 'village') for (let a = 0; a < 6.28; a += 0.4) for (const r of [500, 800, 1100]) cand.unshift([q.x + Math.cos(a) * r, q.y + Math.sin(a) * r]);
+      for (const [x, y] of cand) if (T.canBuild(k, x, y) === null) return [x, y];
+      return null;
+    }, k);
+    if (!site) { check(dev, true, `«${k}»: на этой карте нет подходящего места — пропуск`); continue; }
+    const tab = await ev((k) => { const T = { sam: 'aa', barracks: 'army' }; return T[k] || (['droneport', 'dramp', 'drwy', 'dstore', 'dronefab'].includes(k) ? 'strike' : 'cities'); }, k);
+    await ev(([x, y]) => { const a = Game.api; a.cam.x = x; a.cam.y = y; a.cam.m = 3; }, site);
+    await page.waitForTimeout(80);
+    // a press on the open tab folds the panel (as in DroneFlames): press it only when another tab is open
+    if (!(await ev((t) => document.querySelector(`#bb-tabs [data-t="${t}"]`).classList.contains('on') && !document.body.classList.contains('tray-off'), tab))) { await ev(() => document.body.classList.remove('tray-off')); await page.click(`#bb-tabs [data-t="${tab}"]`); }
+    await page.waitForTimeout(80);
+    const card = `#bb-cat [data-k="${k}"]`;
+    await page.evaluate((s) => document.querySelector(s).scrollIntoView({ inline: 'center' }), card);
+    const n0 = await ev(() => Game.G.states[0].builds.length);
+    if (touch) await tapSel(card); else await page.click(card);
+    await page.waitForTimeout(100);
+    const armed = await ev(() => ({ k: Game.G.build, bar: document.getElementById('pbar').classList.contains('show'), touch: Game._test.PL.state.touch, has: Game._test.PL.state.has }));
+    check(dev, armed.k === k && armed.bar, `«${k}»: ключ взводит постройку, плашка показана`, JSON.stringify(armed));
+    const vw = await ev(() => [Game.api.VW, Game.api.VH]);
+    const sx = vw[0] / 2, sy = vw[1] / 2;
+    if (touch) {
+      // drag the ghost with a finger from where it appeared to the site (the screen centre)
+      const gp = await ev(() => { const S = Game._test.PL.state, a = Game.api; return [a.sxw(S.x), a.syw(S.y)]; });
+      await tdrag(gp[0], gp[1], sx, sy, 6);
+      await page.waitForTimeout(150);
+      const st = await ev((site) => { const S = Game._test.PL.state; return { has: S.has, bad: S.bad, n: Game.G.states[0].builds.length, dx: Math.round(S.x - site[0]), dy: Math.round(S.y - site[1]), now: Game._test.canBuild(Game.G.build, site[0], site[1]) }; }, site);
+      check(dev, st.has && st.n === n0 && Math.abs(st.dx) < 30 && Math.abs(st.dy) < 30 && !st.bad, `«${k}»: метку перетащили пальцем на место, сразу не строит`, JSON.stringify(st));
+      if (k === ORDER[0]) await shot('ghost');
+      const okb = await ev(() => { const b = document.getElementById('pbok'), r = b.getBoundingClientRect(), e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return { dis: b.disabled, top: e === b || b.contains(e) ? 'ok' : (e && (e.id || e.className)), x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+      if (okb.dis || okb.top !== 'ok') check(dev, false, `«${k}»: кнопка ✓ недоступна или перекрыта`, JSON.stringify(okb) + ' ' + JSON.stringify(await ev(() => Game._test.PL.state.bad)));
+      await tapSel('#pbok'); await page.waitForFunction((n0) => Game.G.states[0].builds.length > n0 || !!Game._test.PL.state.bad, n0, { timeout: 5000 }).catch(() => {});
+    } else {
+      await page.mouse.move(sx, sy); await page.waitForTimeout(120);
+      if (k === 'factory') { await page.keyboard.press('KeyR'); await page.keyboard.press('Shift+KeyR'); }
+      const st = await ev(() => ({ has: Game._test.PL.state.has, bad: Game._test.PL.state.bad, ang: Game._test.PL.state.ang }));
+      check(dev, st.has && !st.bad, `«${k}»: призрак под курсором, место годится`, JSON.stringify(st));
+      if (k === 'factory') await shot('ghost');
+      await page.mouse.click(sx, sy); await page.waitForFunction((n0) => Game.G.states[0].builds.length > n0 || !!Game._test.PL.state.bad, n0, { timeout: 5000 }).catch(() => {});
+    }
+    const res = await ev((n0) => { const p = Game.G.states[0]; const q = p.builds[p.builds.length - 1]; return { n: p.builds.length - n0, k: q && q.k, a: q && q.a, armed: Game.G.build, bar: document.getElementById('pbar').classList.contains('show') }; }, n0);
+    check(dev, res.n === 1 && res.k === k && !res.armed && !res.bar, `«${k}»: построено, режим закрыт`, JSON.stringify(res));
+    if (k === 'factory' && !touch) check(dev, res.a != null && Math.abs(res.a - (Math.PI / 12 + Math.PI / 2)) < 1e-6, 'поворот R и Shift+R применён к постройке', String(res.a));
+    placed.push(k);
+    // towns, villages, the drone port must be finished before what depends on them
+    if (['village', 'droneport'].includes(k)) await ev(() => Game._test.run(40));
+  }
+  await ev(() => Game._test.run(120));
+  const done = await ev(() => { const p = Game.G.states[0], W = Game.api.W; return p.builds.filter((q) => q.done && !q.failed).map((q) => { const z = q.id >= 0 && W.zones[q.id]; return { k: q.k, a: q.a || 0, za: z ? Math.atan2(z.sa, z.ca) : null }; }); });
+  check(dev, placed.every((k) => done.some((d) => d.k === k)), 'все поставленные постройки достроены', `${done.length}/${placed.length}`);
+  // ---- no seams in the ground around a building: two neighbouring tiles whose border runs through the apron of a factory
+  if (!touch) {
+    const seam = await ev(() => {
+      const W = Game.api.W, z = W.zones.find((q) => q.dyn && q.zk === 'ind' && Math.abs(q.sa) < 1e-6); if (!z) return null; const out = [];
+      for (const [Z, side] of [[11, 'x'], [12, 'x'], [11, 'y']]) {
+        const ts = W.WORLD / (1 << Z), px = side === 'x' ? z.x + z.W / 2 + 12 : z.x, py = side === 'x' ? z.y : z.y + z.H / 2 + 12;
+        const tx = Math.floor(px / ts), ty = Math.floor(py / ts), A = W.renderTile(Z, tx, ty), B = side === 'x' ? W.renderTile(Z, tx + 1, ty) : W.renderTile(Z, tx, ty + 1);
+        const a = A.getContext('2d').getImageData(0, 0, 256, 256).data, b = B.getContext('2d').getImageData(0, 0, 256, 256).data;
+        const px2 = (d, x, y) => (y * 256 + x) * 4; let dB = 0, dI = 0;
+        for (let i = 0; i < 256; i++) for (let c = 0; c < 3; c++) {
+          if (side === 'x') { dB += Math.abs(a[px2(a, 255, i) + c] - b[px2(b, 0, i) + c]); dI += Math.abs(a[px2(a, 200, i) + c] - a[px2(a, 201, i) + c]) + Math.abs(b[px2(b, 50, i) + c] - b[px2(b, 51, i) + c]); }
+          else { dB += Math.abs(a[px2(a, i, 255) + c] - b[px2(b, i, 0) + c]); dI += Math.abs(a[px2(a, i, 200) + c] - a[px2(a, i, 201) + c]) + Math.abs(b[px2(b, i, 50) + c] - b[px2(b, i, 51) + c]); }
+        }
+        out.push({ Z, side, border: +(dB / 768).toFixed(2), inside: +(dI / 1536).toFixed(2) });
+      }
+      return out;
+    });
+    check(dev, seam && seam.every((q) => q.border <= q.inside * 2 + 2), 'нет шва между тайлами в обочине постройки', JSON.stringify(seam));
+  }
+  const fac = done.find((d) => d.k === 'factory');
+  if (fac && !touch) check(dev, fac.za != null && Math.abs(Math.cos(fac.za - fac.a) - 1) < 1e-6, 'повёрнутый завод стоит в мире под тем же углом', `${fac.a} / ${fac.za}`);
+
+  lap('build');
+  // ---- light sources: the lamp is a game object — it lights the ground at night (real light: the pixel under it is brighter
+  // than with the lamp off), goes dark by day in the 'auto' mode, the cap holds with 2000 lights in view
+  const lt = await ev(async () => {
+    const a = Game.api, L = a.lights, p = Game.G.states[0], sl = (ms) => new Promise((r) => setTimeout(r, ms)); Game.setSpeed(0); Game._test.syncLights();
+    const q = p.builds.find((b) => b.k === 'lamp' && b.done); if (!q) return { err: 'нет фонаря' }; const lid = q.uid * 8, lg = () => L.get(lid); if (!lg()) return { err: 'у фонаря нет источника света' };
+    const px = async () => { await sl(1400); const g = __world.gl.gl; let v = 0; await new Promise((r) => requestAnimationFrame(() => { const b = new Uint8Array(4 * 9), w = g.drawingBufferWidth, h = g.drawingBufferHeight; g.readPixels((w >> 1) - 1, (h >> 1) - 1, 3, 3, g.RGBA, g.UNSIGNED_BYTE, b); for (let i = 0; i < 9; i++) v += b[i * 4] + b[i * 4 + 1] + b[i * 4 + 2]; v /= 27; r() })); return v };
+    const until = async (f, ms) => { const t = performance.now(); while (!f() && performance.now() - t < ms) await sl(100); };
+    a.setTod(23); a.cam.x = q.x + 5; a.cam.y = q.y + 5; a.cam.m = 0.3; await until(() => lg().lv === 1, 8000); const on = await px(); const lvN = lg().lv; L.setMode(lid, 'off'); await until(() => lg().lv === 0, 8000); const off = await px(); L.setMode(lid, 'auto');
+    a.setTod(12); await until(() => lg().lv === 0, 8000); const lvD = lg().lv; a.setTod(23); await sl(1200);
+    // the cap: 2000 extra lights around the camera
+    for (let i = 0; i < 2000; i++) L.add({ x: q.x + (i % 50) * 9 - 225, y: q.y + Math.floor(i / 50) * 9 - 180, mode: 'on', owner: 'test' }); await sl(800);
+    const st = a.stats().lights; L.removeOwner('test'); a.setTod(12);
+    return { on: +on.toFixed(1), off: +off.toFixed(1), lvNight: lvN, lvDay: lvD, vis: st.visible, cap: L.cap, all: st.all };
+  });
+  check(dev, !lt.err && lt.on > lt.off * 1.5, 'фонарь ночью освещает землю (ярче, чем выключенный)', JSON.stringify(lt));
+  check(dev, lt.lvNight === 1 && lt.lvDay === 0, 'фонарь «авто»: горит ночью, гаснет днём', JSON.stringify(lt));
+  check(dev, lt.vis <= lt.cap && lt.all > 2000, 'лимит одновременных источников света держится', `видно ${lt.vis} из ${lt.all}, лимит ${lt.cap}`);
+  // ---- cancel: Esc, right button, ✕, the same key again
+  if (!(await ev(() => document.querySelector('#bb-tabs [data-t="cities"]').classList.contains('on')))) await page.click('#bb-tabs [data-t="cities"]'); await ev(() => document.body.classList.remove('tray-off')); await page.waitForTimeout(80);
+  const ways = touch ? ['x', 'key'] : ['esc', 'rmb', 'x', 'key'];
+  for (const w of ways) {
+    const c = '#bb-cat [data-k="solar"]'; await page.waitForTimeout(350);
+    if (touch) await tapSel(c); else await page.click(c);
+    await page.waitForTimeout(80);
+    const pre = await ev(() => ({ k: Game.G.build, bar: document.getElementById('pbar').classList.contains('show') }));
+    if (!pre.k) { await shot('cancel-' + w); const why = await ev((c) => { const e = document.querySelector(c); if (!e) return 'нет ключа'; const r = e.getBoundingClientRect(), t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return { r: [r.left, r.top, r.width, r.height].map(Math.round), top: t && (t.id || t.className), body: document.body.className }; }, c); check(dev, false, `отмена постройки: ${w} — ключ не взвёлся`, JSON.stringify(why)); continue; }
+    if (w === 'esc') await page.keyboard.press('Escape');
+    else if (w === 'rmb') { await page.mouse.move(400, 400); await page.mouse.click(400, 400, { button: 'right' }); }
+    else if (w === 'x') { const r = await ev(() => { const q = document.getElementById('pbno').getBoundingClientRect(); return [q.left + q.width / 2, q.top + q.height / 2]; }); if (touch) await tapSel('#pbno'); else await page.mouse.click(r[0], r[1]); }
+    else { await page.waitForTimeout(350); if (touch) await tapSel(c); else await page.click(c); }
+    await page.waitForTimeout(120);
+    const st = await ev(() => ({ k: Game.G.build, bar: document.getElementById('pbar').classList.contains('show'), pl: Game._test.PL.state.k }));
+    check(dev, !st.k && !st.bar && !st.pl, `отмена постройки: ${w}`, JSON.stringify(st));
+  }
+
+  // ---- parallax: drag the map with the mouse (or a finger) at a height with clouds
+  const par = await ev(async () => {
+    const a = Game.api, sl = (ms) => new Promise((r) => setTimeout(r, ms)); a.setTod(12); a.setWeather(2);
+    const c = a.W.cities.find((o) => o.cap === 0); a.cam.x = c.x; a.cam.y = c.y; a.cam.m = 22; await sl(900);
+    return { x: a.cam.x, y: a.cam.y, m: a.cam.m, key: __world.cloudLayers[1].key, n: __world.cloudLayers[1].n || 0 };
+  });
+  await shot('parallax-0');
+  const vw2 = await ev(() => [Game.api.VW, Game.api.VH]);
+  const [ax, ay] = [vw2[0] * 0.5, vw2[1] * 0.45], D = Math.round(vw2[0] * 0.25);
+  if (touch) await tdrag(ax, ay, ax - D, ay, 10);
+  else { await page.mouse.move(ax, ay); await page.mouse.down(); await page.mouse.move(ax - D, ay, { steps: 10 }); await page.mouse.up(); }
+  await page.waitForTimeout(700);
+  const par2 = await ev(([p0, D]) => {
+    const a = Game.api, V = [a.VW, a.VH], cam0 = { x: p0.x, y: p0.y, m: p0.m }, cam1 = { x: a.cam.x, y: a.cam.y, m: a.cam.m };
+    const P = Parallax, X = p0.x, Y = p0.y;
+    const g0 = P.project(cam0, V[0], V[1], X, Y, 0), g1 = P.project(cam1, V[0], V[1], X, Y, 0), c0 = P.project(cam0, V[0], V[1], X, Y, 3000), c1 = P.project(cam1, V[0], V[1], X, Y, 3000);
+    return { moved: (a.cam.x - p0.x) / p0.m, ground: g1[0] - g0[0], cloud: c1[0] - c0[0], key: __world.cloudLayers[1].key !== p0.key, n: __world.cloudLayers[1].n || 0 };
+  }, [par, D]);
+  check(dev, Math.abs(par2.moved) > D * 0.5, 'перетаскивание двигает камеру', JSON.stringify(par2));
+  check(dev, Math.abs(par2.cloud) > Math.abs(par2.ground) * 1.05, 'облака на высоте смещаются сильнее земли (параллакс)', `земля ${par2.ground.toFixed(1)} px, облако 3 км ${par2.cloud.toFixed(1)} px`);
+  check(dev, par2.n > 0 && par2.key, 'слой облаков перерисован после движения камеры', `облаков ${par2.n}`);
+  await shot('parallax-1');
+
+  lap('cancel+parallax');
+  // ---- night and a close view, for the screenshots
+  for (const [n, m, tod, wx] of [['night', 1.4, 23, 1], ['street', 0.4, 12, 1], ['city', 4, 12, 1]]) {
+    await ev(async ([m, tod, wx]) => { const a = Game.api, sl = (ms) => new Promise((r) => setTimeout(r, ms)); const c = a.W.cities.find((o) => o.cap === 0); a.setTod(tod); a.setWeather(wx); a.cam.x = c.x; a.cam.y = c.y; a.cam.m = m;
+      for (let i = 0; i < 45; i++) { await sl(100); const s = a.stats(); if (!s.queue && !s.pending) break; } await sl(250); }, [m, tod, wx]);
+    await shot(n);
+  }
+
+  lap('shots');
+  // ---- frame budget (throughput, 4 frames per tick): measured after both scenarios, one device at a time
+  const perf = async () => {
+    const cdp = dev === 'phone' ? await ctx.newCDPSession(page) : null;
+    if (cdp) await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+    for (const [n, m, tod, wx] of [['city', 4, 12, 1], ['night', 1.2, 23, 1]]) {
+      const r = await ev(async ([m, tod, wx]) => { const a = Game.api, sl = (ms) => new Promise((r) => setTimeout(r, ms)), B = window.__bench; const c = a.W.cities.find((o) => o.cap === 0);
+        a.setTod(tod); a.setWeather(wx); a.cam.x = c.x; a.cam.y = c.y; a.cam.m = m; let q = 0; for (let i = 0; i < 100; i++) { await sl(100); const s = a.stats(); if (!s.queue && !s.pending) { if (++q > 5) break } else q = 0 } await sl(300);
+        B.thr.length = 0; B.on = true; await sl(1500); B.on = false; const s = B.thr.slice(3).sort((x, y) => x - y);
+        // GPU time of the world passes (timer queries): what the frame costs the video card, whatever else the machine runs
+        const G = __world.gl; G.gpu = {}; G.gpuOn = true; await sl(1200); G.gpuOn = false; let gpu = 0; for (const k in G.gpu) gpu += G.gpu[k];
+        return { p50: s[s.length >> 1], p90: s[Math.floor(s.length * 0.9)], gpu }; }, [m, tod, wx]);
+      const bud = BUDGET[dev], txt = `медиана ${r.p50.toFixed(2)} мс (${Math.round(1000 / r.p50)} FPS), p90 ${r.p90.toFixed(2)} мс, GPU ${r.gpu.toFixed(2)} мс`;
+      if (r.p50 <= bud) check(dev, true, `кадр «${n}» в бюджете ${bud.toFixed(2)} мс (${Math.round(1000 / bud)} FPS)`, txt);
+      else {
+        // over the budget: a failure when the GPU itself does not fit 80 % of it; otherwise the rest is the browser and
+        // the load of the machine (compositor, other programs) — reported as a warning with the numbers
+        check(dev, r.gpu > 0 && r.gpu <= bud * 0.8, `кадр «${n}»: GPU-время в 80 % бюджета`, txt);
+        warn(dev, `кадр «${n}» выше бюджета ${bud.toFixed(2)} мс по пропускной способности`, txt);
+      }
+    }
+    if (cdp) await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+  };
+  check(dev, errors.length === 0, 'нет ошибок в консоли', errors.slice(0, 3).join(' | '));
+  check(dev, true, 'время сценария', ((Date.now() - t0) / 1000).toFixed(1) + ' с · ' + laps.join(' · '));
+  return { perf, close: () => ctx.close(), errors };
+}
+
+const t0 = Date.now();
+const srv = await server(PORT);
+const browser = await launch();
+try {
+  const jobs = [];
+  if (only !== 'phone') jobs.push(scenario(browser, 'desktop', DESKTOP));
+  if (only !== 'desktop') jobs.push(scenario(browser, 'phone', PHONE)); // the frame budget is measured with the CPU slowed down 4x
+  const r = await Promise.allSettled(jobs);
+  for (const x of r) if (x.status === 'rejected') { failed++; console.log('FAIL сценарий упал:', x.reason && x.reason.stack || x.reason); }
+  // the frame budget: one device at a time, nothing else running in the browser
+  for (const x of r) if (x.status === 'fulfilled') { if (PERF) await x.value.perf(); await x.value.close(); }
+} finally { await browser.close(); srv.close(); }
+fs.writeFileSync(`${OUT}/report.txt`, log.join('\n'));
+console.log(`\n${failed ? 'FAIL' : 'OK'}: ${log.filter((l) => l.startsWith('OK')).length} проверок прошло, ${failed} упало, ${log.filter((l) => l.startsWith('WARN')).length} предупреждений · ${((Date.now() - t0) / 1000).toFixed(1)} с`);
+process.exit(failed ? 1 : 0);

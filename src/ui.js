@@ -2,7 +2,7 @@
 (function(){
 'use strict';
 const $=id=>document.getElementById(id);
-const VERSION='5.13';
+const VERSION='6.0';
 let bg=null,C=null,prevWorker=null,prevId=0,prevT=0,setFrom=null,paused=null;
 
 // ---------------------------------------------------------------- settings
@@ -11,7 +11,7 @@ const QV={high:{dpr:2},balance:{dpr:1.25},fast:{dpr:1,lite:true}};
 let S=Object.assign({},SDEF);try{Object.assign(S,JSON.parse(localStorage.getItem('ws.settings')||'{}'))}catch(e){}
 function saveS(){try{localStorage.setItem('ws.settings',JSON.stringify(S))}catch(e){}applyS()}
 // the game HUD scales with the window (as the UI of DroneFlames) and with «Масштаб интерфейса»
-function applyZ(){document.documentElement.style.setProperty('--z',(Math.min(1.6,Math.max(0.9,Math.min(innerHeight/780,innerWidth/1300)))*S.ui).toFixed(3))}
+function applyZ(){const lo=innerWidth<520?0.8:0.9; /* phones: a bit smaller, the keys still ≥ 44 px */document.documentElement.style.setProperty('--z',(Math.min(1.6,Math.max(lo,Math.min(innerHeight/780,innerWidth/1300)))*S.ui).toFixed(3))}
 addEventListener('resize',applyZ);
 function applyS(){document.documentElement.style.setProperty('--ui',S.ui);applyZ();const a=Game.api;if(a){a.opt.clouds=S.clouds;a.opt.traffic=S.traffic;a.opt.labels=S.labels}$('fps').classList.toggle('hid',!S.fps)}
 
@@ -88,6 +88,10 @@ function paintIcons(){const css=[];
   // stage 5.7
   css.push(icon('solar',x=>{x.save();x.translate(30,38);x.transform(1,0,-0.45,0.62,0,0);col(x,'#2b4f9a');x.fillRect(-23,-15,46,30);col(x,IC.b);for(let i=0;i<3;i++)for(let j=0;j<2;j++)x.fillRect(-22+i*15,-14+j*15,13,13);x.restore();col(x,IC.s2);x.fillRect(16,48,3,10);x.fillRect(40,48,3,10);
     col(x,IC.y);x.beginPath();x.arc(50,13,6,0,P2);x.fill();x.lineWidth=2.6;for(let i=0;i<8;i++){const a=i*P2/8;x.beginPath();x.moveTo(50+Math.cos(a)*9,13+Math.sin(a)*9);x.lineTo(50+Math.cos(a)*12.5,13+Math.sin(a)*12.5);x.stroke()}},1));
+  // stage 6: the street lamp — a pole with an arm and a lit head
+  css.push(icon('lamp',x=>{col(x,IC.s2);x.fillRect(18,14,5,42);x.fillRect(12,54,17,4);x.lineWidth=4;x.beginPath();x.moveTo(20,16);x.quadraticCurveTo(22,8,36,10);x.stroke();
+    col(x,IC.k);x.fillRect(32,9,14,6);col(x,IC.y);x.beginPath();x.moveTo(33,15);x.lineTo(45,15);x.lineTo(42,20);x.lineTo(36,20);x.closePath();x.fill();
+    x.globalAlpha=0.45;x.beginPath();x.moveTo(34,20);x.lineTo(44,20);x.lineTo(54,52);x.lineTo(24,52);x.closePath();x.fill();x.globalAlpha=1},1));
   css.push(icon('mine',x=>{col(x,IC.r);x.lineWidth=3.6;x.beginPath();x.moveTo(12,54);x.lineTo(24,10);x.lineTo(36,54);x.moveTo(17,36);x.lineTo(31,36);x.moveTo(20,24);x.lineTo(28,24);x.stroke();x.beginPath();x.arc(24,10,5,0,P2);x.stroke();
     col(x,IC.s2);x.beginPath();x.moveTo(36,40);x.lineTo(58,40);x.lineTo(54,52);x.lineTo(40,52);x.closePath();x.fill();col(x,IC.k);for(const cx of [43,51]){x.beginPath();x.arc(cx,56,3,0,P2);x.fill()}col(x,'#8d97a4');x.beginPath();x.moveTo(38,40);x.lineTo(44,31);x.lineTo(50,35);x.lineTo(56,30);x.lineTo(58,40);x.fill()},1));
   css.push(icon('gaswell',x=>{col(x,IC.b);x.beginPath();x.moveTo(32,4);x.bezierCurveTo(45,17,43,30,32,34);x.bezierCurveTo(21,30,19,17,32,4);x.fill();col(x,'#c8e6ff');x.beginPath();x.moveTo(32,15);x.bezierCurveTo(38,21,37,28,32,30);x.bezierCurveTo(27,28,26,21,32,15);x.fill();
@@ -185,7 +189,12 @@ function drawLogo(cv){const x=cv.getContext('2d'),W=cv.width,H=cv.height;x.clear
   for(const a of [0.8,-0.8,2.35,-2.35])arm(a);x.fillStyle='#160a04';x.fillRect(-14,-9,28,18);x.fillStyle='#f2a52a';x.fillRect(-11,-6,22,12);x.fillStyle='#ffe36a';x.fillRect(-11,-6,22,4);x.restore()}
 function logoReady(){const cv=$('mm-logo');if(!cv)return;drawLogo(cv);if(document.fonts&&document.fonts.load)document.fonts.load('900 100px Rubik').then(()=>drawLogo(cv)).catch(()=>{})}
 // «Что нового»: the changes of the latest stages (newest first)
-const NEWS=[['5.13',['Карта больше не мерцает при подгрузке: новые участки плавно проявляются поверх старых','Растущая столица перерисовывается шагами, а не каждый кадр: меньше просадок FPS после основания','Ночные огни не пропадают при перерисовке города','F3: панель замера FPS']],['5.12',['Полёт камеры к столице и зум без провалов: участки карты и ночные огни в точке прилёта загружаются первыми — нет размытых квадратов','Облака и их тени не перерисовываются каждый кадр, пока камера движется, — выше FPS без потери качества','Карта собирается в 7 потоков на компьютерах с 8 ГБ памяти и больше']],['5.11',['Города растут по-разному: кольца и лучи вокруг площади, веер от площади, прямая сетка с диагональными бульварами, изогнутые и «старые» сетки; суперкварталы, микрорайоны, площади и скверы','Аэропорт: самолёты летают по рейсам — пассажирские в свои аэропорты и в страны с безвизом, грузовые — свои и на экспорт','Безвизовый режим в «Дипломатии»; война его отменяет','Железная дорога сама огибает города, постройки, горы и воду','Детали на площадках всех построек: склады, техника, грузы, стада, кучи руды','Пашня плавно переходит в лес через опушку; свет фонарей без пятен на перекрёстках','Главное меню, настройки и новая игра — в стиле DroneFlames']],
+const NEWS=[['6.0',['Карта рисуется через WebGL2: в 4–7 раз больше кадров в секунду на ПК и телефоне, параллакс облаков и самолётов прежний',
+  'Постройки ставятся как в DroneFlames: призрак под курсором, R — повернуть, Shift+клик — ещё одну, Esc или правая кнопка — отмена',
+  'На телефоне: метка появляется в центре, её можно перетащить пальцем, ✓ — построить; кнопки нажимаются без задержки',
+  'Вокруг построек земля перестраивается: поля заканчиваются межой, обочина из травы, утоптанная земля у края',
+  'Новая постройка «Фонарь»: ночью по-настоящему освещает землю вокруг; режимы авто, вкл, выкл. У заводов и баз — прожекторы',
+  'Тени машин и кораблей падают по солнцу; «Штаб» и «Залежи» — справа, как в DroneFlames']],['5.13',['Карта больше не мерцает при подгрузке: новые участки плавно проявляются поверх старых','Растущая столица перерисовывается шагами, а не каждый кадр: меньше просадок FPS после основания','Ночные огни не пропадают при перерисовке города','F3: панель замера FPS']],['5.12',['Полёт камеры к столице и зум без провалов: участки карты и ночные огни в точке прилёта загружаются первыми — нет размытых квадратов','Облака и их тени не перерисовываются каждый кадр, пока камера движется, — выше FPS без потери качества','Карта собирается в 7 потоков на компьютерах с 8 ГБ памяти и больше']],['5.11',['Города растут по-разному: кольца и лучи вокруг площади, веер от площади, прямая сетка с диагональными бульварами, изогнутые и «старые» сетки; суперкварталы, микрорайоны, площади и скверы','Аэропорт: самолёты летают по рейсам — пассажирские в свои аэропорты и в страны с безвизом, грузовые — свои и на экспорт','Безвизовый режим в «Дипломатии»; война его отменяет','Железная дорога сама огибает города, постройки, горы и воду','Детали на площадках всех построек: склады, техника, грузы, стада, кучи руды','Пашня плавно переходит в лес через опушку; свет фонарей без пятен на перекрёстках','Главное меню, настройки и новая игра — в стиле DroneFlames']],
   ['5.10',['Облака снова в полном разрешении, FPS у облаков как у земли']],['5.9',['Сёла растут с закладки, разные планировки сёл','Слева «Штаб» и «Залежи»: список свободных залежей и постройка добычи в два клика','Значки залежей — булавки, свои постройки на миникарте']]];
 function showNews(v){const w=$('news');if(!v){w.classList.remove('show');return}$('newsb').innerHTML=NEWS.map(([ver,L])=>`<div class="nw-v">Версия ${ver}</div><ul>${L.map(t=>`<li>${t}</li>`).join('')}</ul>`).join('');w.classList.add('show')}
 function showMenu(){document.body.className='m-menu';logoReady();

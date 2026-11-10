@@ -3,7 +3,7 @@
 <meta http-equiv="Cache-Control" content="no-cache">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>World Starvation — стратегия</title>
-<link rel="stylesheet" href="src/style.css?v=5.13">
+<link rel="stylesheet" href="src/style.css?v=6.0">
 </head>
 <body class="m-menu">
 <canvas id="c"></canvas>
@@ -25,7 +25,7 @@
 <div id="menu" class="screen df">
  <div class="mm-c">
   <canvas id="mm-logo" width="800" height="300" aria-label="World Starvation"></canvas>
-  <div class="mm-tag">Этап 5 · стратегия наших дней</div>
+  <div class="mm-tag">Этап 6 · стратегия наших дней</div>
   <nav class="mm-nav">
    <button class="mm-b mm-play" data-go="new" title="Своя страна, свой мир, свои правила"><span class="ic ic-new"></span><b>Новая игра</b></button>
    <button class="mm-b mm-cont" data-go="continue" id="mm-cont"><span class="ic ic-cont"></span><b>Продолжить</b><small id="mm-cont-s">—</small></button>
@@ -161,6 +161,9 @@
   <span class="res st"><span class="ri ri-store"></span><b id="rstore">Склад</b></span>
  </button>
  <div id="hint"><span class="hint-i"><span class="ic ic-hint"></span></span><div class="hint-c"><small id="hintn">План развития</small><div class="hint-t" id="hintt"></div></div><button class="xb st" id="hintx" title="Скрыть — вернуть: «План развития» слева">✕</button></div>
+ <!-- stage 6: the armed building (as the hint box of DroneFlames): name, price, what to do or why not; ⟲ ✓ ✕ -->
+ <div id="pbar"><span class="hint-i"><span class="ic" id="pbi"></span></span><div class="hint-c"><small id="pbt">—</small><div class="hint-t" id="pbs"></div></div>
+  <div class="pb-b"><button class="pbb" id="pbrot" title="Повернуть (R, Shift+R — на 90°)">⟲</button><button class="pbb ok" id="pbok" title="Построить (Enter)">✓</button><button class="pbb no" id="pbno" title="Отмена (Esc, правая кнопка мыши)">✕</button></div></div>
  <div id="toasts"></div>
 </div>
 <button id="plan" class="gm ol" title="План развития: подсказки по шагам — показать или скрыть"><b>План развития</b><span id="plann"></span><i>▸</i></button>
@@ -186,9 +189,13 @@
  <button class="btn big" id="presume">Продолжить</button><button class="btn big" id="psave">Сохранить</button><button class="btn big" id="pset">Настройки</button><button class="btn big danger" id="pexit">Выйти в главное меню</button></div></div>
 <div id="over" class="screen dim"><div class="win over-win ol"><div id="overc"></div><button class="btn primary big" id="overm">В главное меню</button><button class="btn big" id="overk">Продолжить смотреть</button></div></div>
 
-<script src="src/flag.js?v=5.13"></script>
-<script src="src/gen.js?v=5.13"></script>
-<script src="src/main.js?v=5.13"></script>
-<script src="src/game.js?v=5.13"></script>
-<script src="src/ui.js?v=5.13"></script>
+<script src="src/flag.js?v=6.0"></script>
+<script src="src/gen.js?v=6.0"></script>
+<script src="src/parallax.js?v=6.0"></script>
+<script src="src/gl.js?v=6.0"></script>
+<script src="src/place.js?v=6.0"></script>
+<script src="src/lights.js?v=6.0"></script>
+<script src="src/main.js?v=6.0"></script>
+<script src="src/game.js?v=6.0"></script>
+<script src="src/ui.js?v=6.0"></script>
 </body></html>

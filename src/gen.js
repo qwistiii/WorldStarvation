@@ -1236,7 +1236,10 @@ function sprites(){if(SPR)return SPR;SPR={tree:[],treeS:[[],[],[]],car:[],truck:
   for(let v=0;v<CARC.length;v++)for(let t=0;t<3;t++)SPR.car.push(mkCar(CARC[v],(v+t)%3));
   // 10 px/m copies (box-filtered down) for parked cars in tiles and for traffic seen from afar: no sparkle when minified
   SPR.carLo=SPR.car.map(c=>{let src=c;for(const w of [100,50]){const d=mkCanvas(w,w/2),x=d.getContext('2d');x.imageSmoothingEnabled=true;x.imageSmoothingQuality='high';x.drawImage(src,0,0,w,w/2);src=d}return src});
-  for(let v=0;v<5;v++)SPR.truck.push(mkTruck(v));SPR.bus=mkBus();return SPR}
+  for(let v=0;v<5;v++)SPR.truck.push(mkTruck(v));SPR.bus=mkBus();
+  SPR.carSh=mkCarSh();SPR.truckSh=mkBoxSh(340,68,3,4,162,25,0.3);SPR.busSh=mkBoxSh(250,60,2,3,118,23,0.3);return SPR}
+// sun offset of a vehicle's footprint shadow, metres along the sun per kind (the old painted offsets: car 0.16 m, truck and bus 0.3 m)
+const VSH={car:0.27,truck:0.55,bus:0.55};
 // ---------------------------------------------------------------- military vehicles (stage 5), top view, facing +x
 // 0 main battle tank, 1 tracked IFV, 2 8x8 APC, 3 SAM launcher, 4 army truck, 5 attack helicopter; camo 0 woodland, 1 desert, 2 urban
 const CAMO=[[[94,104,64],[58,68,42],[130,130,90]],[[178,154,110],[138,114,78],[204,186,144]],[[122,126,122],[82,86,86],[160,164,160]]];
@@ -1428,8 +1431,7 @@ function cs(c,k){return 'rgb('+M.min(255,c[0]*k|0)+','+M.min(255,c[1]*k|0)+','+M
 function mkCar(c,v){ // 5 x 2.5 m; drawn at 40 px/m so it stays sharp at the closest zoom. v: 0 sedan, 1 hatchback, 2 SUV
   const K=4,cv=mkCanvas(50*K,25*K),x=cv.getContext('2d');x.scale(K,K);v=v||0;
   const L0=3,L1=47,T=3.6,B=21.4,W=B-T,cy=(T+B)/2,rear=v===1?11.5:v===2?9:11,fwd=v===2?35.5:33,roofA=rear+(v===1?1.5:3.2),roofB=fwd-(v===2?3:4.5);
-  // soft shadow
-  x.fillStyle='rgba(0,0,0,0.16)';rr(x,L0+1.6,T+1.4,L1-L0,W+0.6,6.5);x.fill();x.fillStyle='rgba(0,0,0,0.18)';rr(x,L0+0.8,T+0.7,L1-L0,W,6);x.fill();
+  // (stage 6: the soft shadow is the separate sprite carSh, laid along the sun where the car is drawn)
   // tyres peeking out at the corners
   x.fillStyle='#161616';for(const wx of [L0+6.5,L1-8.5])for(const wy of [T-0.35,B-1.65])rr(x,wx,wy,5,2,0.8),x.fill();
   // body: rounded box shaded across the width (sides darker, crown lit)
@@ -1452,19 +1454,22 @@ function mkCar(c,v){ // 5 x 2.5 m; drawn at 40 px/m so it stays sharp at the clo
   x.fillStyle='rgba(255,250,225,0.98)';rr(x,L1-2.4,T+0.9,1.9,3,0.8);x.fill();rr(x,L1-2.4,B-3.9,1.9,3,0.8);x.fill();
   x.fillStyle='rgba(200,24,20,0.96)';rr(x,L0+0.2,T+1,1.5,3.2,0.6);x.fill();rr(x,L0+0.2,B-4.2,1.5,3.2,0.6);x.fill();
   return cv}
+// footprint shadows of the vehicles, in the frame of their sprites (centred, no offset: it goes along the sun when drawn)
+function mkCarSh(){const K=4,cv=mkCanvas(50*K,25*K),x=cv.getContext('2d');x.scale(K,K);const L0=3,L1=47,T=3.6,B=21.4,W=B-T;
+  x.fillStyle='rgba(0,0,0,0.16)';rr(x,L0-0.4,T-0.3,L1-L0+0.8,W+0.6,7);x.fill();x.fillStyle='rgba(0,0,0,0.18)';rr(x,L0,T,L1-L0,W,6);x.fill();return cv}
+function mkBoxSh(w,h,bx,by,bw,bh,a){const cv=mkCanvas(w,h),x=cv.getContext('2d');x.scale(2,2);x.fillStyle=`rgba(0,0,0,${a})`;x.fillRect(bx,by,bw,bh);return cv}
 function mkTruck(v){const cv=mkCanvas(340,68),x=cv.getContext('2d');x.scale(2,2);const tc=[[235,235,235],[200,60,40],[40,90,160],[220,200,60],[90,100,90]][v];
-  x.fillStyle='rgba(0,0,0,0.3)';x.fillRect(6,7,162,25);
   x.fillStyle=cs(tc,1);x.fillRect(3,4,128,25);x.fillStyle='rgba(0,0,0,0.12)';for(let k=8;k<128;k+=10)x.fillRect(3+k,4,1,25);
   x.fillStyle='rgba(255,255,255,0.15)';x.fillRect(3,4,128,4);
   const cc=[[200,30,30],[240,240,240],[40,40,40],[30,80,150],[230,120,30]][(v+2)%5];x.fillStyle='#222';x.fillRect(131,9,6,15);
   x.fillStyle=cs(cc,1);rr(x,137,5,26,24,3);x.fill();x.fillStyle='rgba(25,35,45,0.9)';x.fillRect(158,7,4,20);x.fillStyle=cs(cc,1.2);x.fillRect(140,8,14,18);return cv}
-function mkBus(){const cv=mkCanvas(250,60),x=cv.getContext('2d');x.scale(2,2);x.fillStyle='rgba(0,0,0,0.3)';x.fillRect(5,6,118,23);
+function mkBus(){const cv=mkCanvas(250,60),x=cv.getContext('2d');x.scale(2,2);
   x.fillStyle='#e8e6dc';rr(x,2,3,120,24,4);x.fill();x.fillStyle='#d8a020';x.fillRect(2,3,120,4);x.fillRect(2,23,120,4);
   x.fillStyle='rgba(30,40,50,0.6)';x.fillRect(8,9,100,12);x.fillStyle='#ccc';x.fillRect(30,11,10,8);x.fillRect(70,11,10,8);x.fillStyle='rgba(25,35,45,0.95)';x.fillRect(114,6,6,18);return cv}
 
-function drawShip(x,len,st,ci){ // local frame metres, facing +x, centred
+function drawShip(x,len,st,ci,noSh){ // local frame metres, facing +x, centred; noSh: without the shadow (stage 6: drawn along the sun)
   const w=len*(st===2?0.16:0.14),h=len/2;
-  x.fillStyle='rgba(0,10,20,0.35)';x.beginPath();x.moveTo(-h+4,-w/2+4);x.lineTo(h*0.7+4,-w/2+4);x.quadraticCurveTo(h+4,4,h*0.7+4,w/2+4);x.lineTo(-h+4,w/2+4);x.closePath();x.fill();
+  if(!noSh){x.fillStyle='rgba(0,10,20,0.35)';x.beginPath();x.moveTo(-h+4,-w/2+4);x.lineTo(h*0.7+4,-w/2+4);x.quadraticCurveTo(h+4,4,h*0.7+4,w/2+4);x.lineTo(-h+4,w/2+4);x.closePath();x.fill()}
   const hull=[[160,40,40],[30,50,80],[40,40,44],[60,90,60],[160,60,30],[200,200,200]][ci];
   x.fillStyle=cs(hull,1);x.beginPath();x.moveTo(-h,-w/2);x.lineTo(h*0.7,-w/2);x.quadraticCurveTo(h,0,h*0.7,w/2);x.lineTo(-h,w/2);x.closePath();x.fill();
   x.fillStyle=st===1?'#6b5a4a':'#8a8a86';x.beginPath();x.moveTo(-h+2,-w/2+1.5);x.lineTo(h*0.68,-w/2+1.5);x.quadraticCurveTo(h-3,0,h*0.68,w/2-1.5);x.lineTo(-h+2,w/2-1.5);x.closePath();x.fill();
@@ -1486,8 +1491,19 @@ function drawPlane(x,s,ci){ // facing +x, ~ 60 m
 
 // ---------------------------------------------------------------- tile render: raster
 const TINTZ={ind:1,ref:1,pow:1,port:1,stn:1,gas:1,agro:1};
+// stage 6: the apron of a game building — [width m, wear 0..1]. Big pads get a wide worn ring; air defence, solar panels,
+// the launch ramp and the runway stand on grass and only push the fields back
+const PADK={sam:[14,0.25],sol2:[12,0.2],dramp:[14,0.35],drwy:[18,0.35],farm:[22,0.45],oil:[20,0.6],gasw:[20,0.6]},PADD=[32,0.75];
+// pad field of zone c at (x, y): 1 on the pad, falling to 0 across the apron; signed distance to the turned rectangle with
+// rounded corners (no corner spikes), the apron width breathes along the outline with world noise (tiles agree)
+function padAt(c,x,y){const pk=PADK[c.zk]||PADD,ap=pk[0];const dx=x-c.x,dy=y-c.y;const lx=dx*c.ca+dy*c.sa,ly=-dx*c.sa+dy*c.ca;
+  const hw=c.W/2,hh=c.H/2,ax=M.abs(lx)-hw,ay=M.abs(ly)-hh;if(ax>ap*1.6||ay>ap*1.6)return 0;
+  const r=M.min(16,hw*0.3,hh*0.3),qx=ax+r,qy=ay+r;const d=M.hypot(qx>0?qx:0,qy>0?qy:0)+M.min(M.max(qx,qy),0)-r;if(d<=0)return 1;
+  const w=ap*(0.7+0.6*(noise(x/41+c.id*1.7,y/41-c.id*0.9)*0.5+0.5));return smooth(w,0,d)}
+// the strongest pad of the zones near (x, y): [field 0..1, wear 0..1]; neighbouring pads merge into one apron
+function padField(zs,x,y){let f=0,w=0;for(const c of zs){if(c.kind!=='zone'||!c.dyn)continue;const v=padAt(c,x,y);if(v>f)f=v;const pw=v*(PADK[c.zk]||PADD)[1];if(pw>w)w=pw}return [f,w]}
 const GS=4,GN=TS/GS+4;
-const gQX=new Float32Array(GN*GN),gQY=new Float32Array(GN*GN),gH=new Float32Array(GN*GN),gR=new Float32Array(GN*GN),gW=new Float32Array(GN*GN),gM=new Float32Array(GN*GN),gF=new Float32Array(GN*GN),gA=new Float32Array(GN*GN),gU=new Float32Array(GN*GN),gS=new Float32Array(GN*GN),gGR=new Float32Array(GN*GN),gGH=new Float32Array(GN*GN),gHS=new Float32Array(GN*GN),gMS=new Float32Array(GN*GN),gCV=new Float32Array(GN*GN),MC1=new Float32Array(400),MC2=new Float32Array(400);
+const gZ=new Float32Array(GN*GN),gZW=new Float32Array(GN*GN),gQX=new Float32Array(GN*GN),gQY=new Float32Array(GN*GN),gH=new Float32Array(GN*GN),gR=new Float32Array(GN*GN),gW=new Float32Array(GN*GN),gM=new Float32Array(GN*GN),gF=new Float32Array(GN*GN),gA=new Float32Array(GN*GN),gU=new Float32Array(GN*GN),gS=new Float32Array(GN*GN),gGR=new Float32Array(GN*GN),gGH=new Float32Array(GN*GN),gHS=new Float32Array(GN*GN),gMS=new Float32Array(GN*GN),gCV=new Float32Array(GN*GN),MC1=new Float32Array(400),MC2=new Float32Array(400);
 const LX=-0.55,LY=-0.62,LZ=0.56;const LN_=M.hypot(LX,LY,LZ);
 let VCx=1e9,VCy=1e9;const VP=new Float64Array(27),VF=new Float32Array(9);
 // game worlds: is the field system with centre (x, y) ploughed? Each settlement farms the systems whose centres lie
@@ -1506,14 +1522,16 @@ function raster(ctx,x0,y0,mpp,near){const WIN=SEASON===2;if(EMPTY)VCx=1e9;
   for(let gj=0;gj<GN;gj++){const wy=y0+(gj-1.5)*st;for(let gi=0;gi<GN;gi++,k++){const wx=x0+(gi-1.5)*st;
     const e=baseH(wx,wy,oct);gH[k]=e;const rv=riverV(wx,wy);gR[k]=rv;const w=riverW(wx,wy,e);gW[k]=w;
     gM[k]=moist(wx,wy);gF[k]=noise(wx/1900+3.3,wy/1900-7.1)*0.6+noise(wx/520+1.7,wy/520+9.9)*0.4;
-    let fa=EMPTY?0:smooth(0.0,0.3,noise(wx/15000+61.1,wy/15000-12.3)),u=0;
-    for(let q=0;q<near.length;q++){const c=near[q];if(c.kind==='zone'){const dx=wx-c.x,dy=wy-c.y;const lx=dx*c.ca+dy*c.sa,ly=-dx*c.sa+dy*c.ca;
+    let fa=EMPTY?0:smooth(0.0,0.3,noise(wx/15000+61.1,wy/15000-12.3)),u=0,zf=0,zw=0;
+    for(let q=0;q<near.length;q++){const c=near[q];if(c.kind==='zone'){
+        if(c.dyn){const v=padAt(c,wx,wy);if(v>zf)zf=v;const pw=v*(PADK[c.zk]||PADD)[1];if(pw>zw)zw=pw;continue}
+        const dx=wx-c.x,dy=wy-c.y;const lx=dx*c.ca+dy*c.sa,ly=-dx*c.sa+dy*c.ca;
         const v=smooth(1.08,0.98,M.max(M.abs(lx)/(c.W/2),M.abs(ly)/(c.H/2)));if(TINTZ[c.zk]&&v>u)u=v*0.8;continue}
       const dx=wx-c.x,dy=wy-c.y,d2=dx*dx+dy*dy,R2=EMPTY?fieldR(c)*1.3+3400:c.R+4500;if(d2>R2*R2)continue;const d=M.sqrt(d2);
       // game worlds: only the reach of the farmland (which field systems are ploughed is decided per field system below)
       const fv=EMPTY?smooth(R2,R2-800,d):smooth(c.R+4500,c.R+600,d)*(c.type===0?0.85:1)*(GROW.size?growFields(c):1);if(fv>fa)fa=fv;
       if(d<c.R*1.6){const f=cityF(c,wx,wy)*(c.type===0?0.8:1)+(GROW.size?growShift(c):0);const v=smooth(1.1,0.92,f)*(c.type===0?0.12:1);if(v>u)u=v}}
-    gA[k]=fa;gU[k]=u;
+    gA[k]=fa;gU[k]=u;gZ[k]=zf;gZW[k]=zw;
     // game worlds: field systems are looked up through a smooth domain warp, so the edge between farmland and wood or
     // meadow (and the field tracks between systems) curves like a real clearing instead of following straight Voronoi edges
     if(EMPTY){gQX[k]=noise(wx/2100+5.3,wy/2100-2.7)*330+noise(wx/640+1.9,wy/640+7.7)*70;gQY[k]=noise(wx/2100-8.1,wy/2100+4.4)*330+noise(wx/640-3.3,wy/640-6.1)*70}
@@ -1554,15 +1572,16 @@ function raster(ctx,x0,y0,mpp,near){const WIN=SEASON===2;if(EMPTY)VCx=1e9;
         const fn=gF[k]*w00+gF[k+1]*w10+gF[k+GN]*w01+gF[k+GN+1]*w11;
         const ag=gA[k]*w00+gA[k+1]*w10+gA[k+GN]*w01+gA[k+GN+1]*w11;
         const u=gU[k]*w00+gU[k+1]*w10+gU[k+GN]*w01+gU[k+GN+1]*w11;
+        const zi=gZ[k]*w00+gZ[k+1]*w10+gZ[k+GN]*w01+gZ[k+GN+1]*w11,zw=gZW[k]*w00+gZW[k+1]*w10+gZW[k+GN]*w01+gZW[k+GN+1]*w11;
         const dry=smooth(0.3,-0.45,mo);
         R=88+44*dry+dt*8;Gc=122+14*dry+dt*9;Bc=58+24*dry+dt*5;{const hy=smooth(0.06,0.4,e)*0.32;R=lerp(R,136,hy);Gc=lerp(Gc,132,hy);Bc=lerp(Bc,86,hy)}
         if(SEASON===1){R+=30+dry*8;Gc-=2;Bc-=10}else if(WIN){R=230+dt*10;Gc=234+dt*10;Bc=240+dt*8}
         const slope=gh*ELEV;
         // forest
         const fv=mo*0.75+fn*0.6+dt*0.05;
-        let fo=smooth(0.06,0.13,fv)*(1-smooth(0.04,0.25,u))*smooth(0.55,0.44,e);
-        // fields
-        let agv=smooth(0.25,0.55,ag)*smooth(0.36,0.22,e)*(1-smooth(0.05,0.3,u))*(1-smooth(1.2,2.5,slope));
+        let fo=smooth(0.06,0.13,fv)*(1-smooth(0.04,0.25,u))*smooth(0.55,0.44,e)*(1-smooth(0.08,0.32,zi));
+        // fields (stage 6: they end with a headland before a building's apron)
+        let agv=smooth(0.25,0.55,ag)*smooth(0.36,0.22,e)*(1-smooth(0.05,0.3,u))*(1-smooth(1.2,2.5,slope))*(1-smooth(0.3,0.4,zi));
         let i1=0,i2=0,dB=0,pdx=0,pdy=0,EDP=-1,fe=0;
         if(agv>0.01&&(fieldsOn||EMPTY)){
           // field systems: jittered Voronoi regions (each with its own furrow direction and plot sizes),
@@ -1642,6 +1661,13 @@ function raster(ctx,x0,y0,mpp,near){const WIN=SEASON===2;if(EMPTY)VCx=1e9;
         const rk=M.max(smooth(0.42,0.6,e+dt*0.04),smooth(0.8,1.6,slope)*smooth(0.12,0.28,e));
         if(rk>0){const rc=112+dt*26;const rk2=WIN?rk*smooth(0.6,1.5,slope+dt*0.5):rk;R=lerp(R,rc+8,rk2);Gc=lerp(Gc,rc,rk2);Bc=lerp(Bc,rc-12,rk2)}
         const sn=smooth(0.8,0.88,e+dt*0.05)*(1-smooth(0.7,1.4,slope)*0.8);if(sn>0){R=lerp(R,238,sn);Gc=lerp(Gc,242,sn);Bc=lerp(Bc,248,sn)}
+        // stage 6: the worn ground of a building's apron (compacted soil, trampled snow), mottled by the detail noise
+        // a grass verge between the headland of the fields and the pad; the soil is trodden only near the pad edge.
+        // In autumn the verge is dry grass, close to the stubble around it (a green verge read as a dark outline)
+        if(zi>0.002&&SEASON===1){const dg=smooth(0.22,0.5,zi)*0.62;R=lerp(R,168+dt*12,dg);Gc=lerp(Gc,142+dt*10,dg);Bc=lerp(Bc,74+dt*6,dg)}
+        if(zw>0.002){const wv=smooth(0.42,0.92,zw/M.max(zi,0.01))*smooth(0.55,0.98,zi)*M.min(1,zw/M.max(zi,0.01)/0.75)*(0.78+dt*0.35),wc=0.95+dt*0.1;
+          if(WIN){R=lerp(R,204*wc,wv*0.6);Gc=lerp(Gc,204*wc,wv*0.6);Bc=lerp(Bc,200*wc,wv*0.6)}
+          else if(SEASON===1){R=lerp(R,164*wc,wv*0.8);Gc=lerp(Gc,146*wc,wv*0.8);Bc=lerp(Bc,106*wc,wv*0.8)}else{R=lerp(R,166*wc,wv*0.8);Gc=lerp(Gc,156*wc,wv*0.8);Bc=lerp(Bc,120*wc,wv*0.8)}}
         if(u>0){const uc=0.92+dt*0.18;if(WIN){R=lerp(R,178*uc,u*0.6);Gc=lerp(Gc,180*uc,u*0.6);Bc=lerp(Bc,184*uc,u*0.6)}else{R=lerp(R,138*uc,u*0.7);Gc=lerp(Gc,138*uc,u*0.7);Bc=lerp(Bc,118*uc,u*0.7)}}
         if(ww>0){const r2=rv<0?-rv:rv;const bk=smooth(ww*2.2+0.002,ww,r2)*(1-u*0.7);if(bk>0){const bc=WIN?[150,150,146]:SEASON===1?[120,96,46]:[62,88,48];R=lerp(R,bc[0]+dt*10,bk*0.75);Gc=lerp(Gc,bc[1]+dt*12,bk*0.75);Bc=lerp(Bc,bc[2],bk*0.75)}}
         let s2=clamp(sh>1?1+(sh-1)*0.65:1-(1-sh)*0.72,0.32,1.38);if(WIN){s2=M.min(s2,1.06);Bc+=(1-s2)*34;Gc+=(1-s2)*8}if(sn>0){const ss=0.62+0.38*s2;s2=lerp(s2,ss,sn);Bc+=sn*(1-s2)*40}R*=s2;Gc*=s2;Bc*=s2;
@@ -2134,7 +2160,7 @@ function gfCanopies(ctx,p,GU,ca,sa,s){
           // umbrella: 8 panels, alternating tone, at 2.3 m
           const cx=X+LNX*2.3,cy=Y+LNY*2.3;for(let k=0;k<8;k++){ctx.fillStyle=cs(k&1?uc:[236,232,222],k<4?1.02:0.86);ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,1.1,k*PI/4,(k+1)*PI/4);ctx.closePath();ctx.fill()}
           ctx.fillStyle='rgba(30,30,30,0.6)';ctx.beginPath();ctx.arc(cx,cy,0.08,0,TAU);ctx.fill()}}
-      if(u[0]===4&&(u[3]&1)){const S=sprites(),a=(u[1]+u[2])/2;ctx.save();ctx.translate(GA+GEX*a+GNX*0.35,GB+GEY*a+GNY*0.35);ctx.rotate(M.atan2(GNY,GNX));ctx.drawImage(S.truck[(u[3]>>>3)%5],0,-2.1,17,4.2);ctx.restore()}
+      if(u[0]===4&&(u[3]&1)){const S=sprites(),a=(u[1]+u[2])/2;for(const sh of [1,0]){ctx.save();ctx.translate(GA+GEX*a+GNX*0.35+(sh?SDX*VSH.truck:0),GB+GEY*a+GNY*0.35+(sh?SDY*VSH.truck:0));ctx.rotate(M.atan2(GNY,GNX));ctx.drawImage(sh?S.truckSh:S.truck[(u[3]>>>3)%5],0,-2.1,17,4.2);ctx.restore()}}
       if(!cp)continue;const [z0,z1,d,c]=cp;const top=SEASON===2?(u[0]===1?[c[0]*0.45+126,c[1]*0.45+129,c[2]*0.45+131]:[226,230,234]):c;
       ctx.fillStyle=cs(top,1);ctx.beginPath();gq(ctx,u[1],u[2],0,d,z0,z1,LNX,LNY,1);ctx.fill();
       if(u[0]===1&&((u[3]>>>9)&1)&&s>2.5){ // striped canvas
@@ -2417,13 +2443,14 @@ function drawPrims(ctx,P,pass,mpp){const s=1/mpp;
   if(pass===2&&DEF.length){if(DEF.length>1)DEF.sort((a,b)=>tallKey(b)-tallKey(a));for(let i=0;i<DEF.length;i++)drawTall(ctx,DEF[i],s);DEF.length=0}}
 function drawParked(ctx,p,s){const S=sprites();const r=rng(p.seed);const hor=p.w>=p.h;
   if(p.bus){const L=hor?p.h:p.w;const rows=M.max(1,M.floor(L/14));const n=hor?M.floor(p.w/4):M.floor(p.h/4);
-    for(let rw=0;rw<rows;rw++)for(let q=0;q<n;q++){if(r()>p.fill)continue;ctx.save();if(hor){ctx.translate(p.x+q*4+2,p.y+rw*14+7);ctx.rotate(PI/2)}else{ctx.translate(p.x+rw*14+7,p.y+q*4+2)}ctx.drawImage(S.bus,-6.25,-1.5,12.5,3);ctx.restore()}return}
-  if(p.truck){const n=hor?M.floor(p.w/4.2):M.floor(p.h/4.2);for(let q=0;q<n;q++){if(r()>p.fill)continue;const spr=S.truck[r()*5|0];ctx.save();if(hor){ctx.translate(p.x+q*4.2+2.1,p.y+p.h/2);ctx.rotate(PI/2)}else{ctx.translate(p.x+p.w/2,p.y+q*4.2+2.1)}
-      const L=M.min(17,hor?p.h:p.w);ctx.drawImage(spr,-L/2,-2.1,L,4.2);ctx.restore()}return}
+    for(let rw=0;rw<rows;rw++)for(let q=0;q<n;q++){if(r()>p.fill)continue;const cx=hor?p.x+q*4+2:p.x+rw*14+7,cy=hor?p.y+rw*14+7:p.y+q*4+2;
+      for(const sh of [1,0]){ctx.save();ctx.translate(cx+(sh?SDX*VSH.bus:0),cy+(sh?SDY*VSH.bus:0));if(hor)ctx.rotate(PI/2);ctx.drawImage(sh?S.busSh:S.bus,-6.25,-1.5,12.5,3);ctx.restore()}}return}
+  if(p.truck){const n=hor?M.floor(p.w/4.2):M.floor(p.h/4.2);for(let q=0;q<n;q++){if(r()>p.fill)continue;const spr=S.truck[r()*5|0];const cx=hor?p.x+q*4.2+2.1:p.x+p.w/2,cy=hor?p.y+p.h/2:p.y+q*4.2+2.1;
+      const L=M.min(17,hor?p.h:p.w);for(const sh of [1,0]){ctx.save();ctx.translate(cx+(sh?SDX*VSH.truck:0),cy+(sh?SDY*VSH.truck:0));if(hor)ctx.rotate(PI/2);ctx.drawImage(sh?S.truckSh:spr,-L/2,-2.1,L,4.2);ctx.restore()}}return}
   const rows=M.max(1,M.floor((hor?p.h:p.w)/5.4));
   for(let rw=0;rw<rows;rw++){const L=hor?p.w:p.h;for(let a=0;a+2.6<=L;a+=2.6){if(r()>p.fill)continue;const spr=S.carLo[r()*S.carLo.length|0];const fl=r()<0.5;
-    ctx.save();if(hor){ctx.translate(p.x+a+1.3,p.y+rw*5.4+2.5);ctx.rotate(fl?PI/2:-PI/2)}else{ctx.translate(p.x+rw*5.4+2.5,p.y+a+1.3);if(fl)ctx.rotate(PI)}
-    ctx.drawImage(spr,-2.5,-1.25,5,2.5);ctx.restore()}}}
+    const cx=hor?p.x+a+1.3:p.x+rw*5.4+2.5,cy=hor?p.y+rw*5.4+2.5:p.y+a+1.3;
+    for(const sh of [1,0]){ctx.save();ctx.translate(cx+(sh?SDX*VSH.car:0),cy+(sh?SDY*VSH.car:0));if(hor)ctx.rotate(fl?PI/2:-PI/2);else if(fl)ctx.rotate(PI);ctx.drawImage(sh?S.carSh:spr,-2.5,-1.25,5,2.5);ctx.restore()}}}}
 
 // ---------------------------------------------------------------- roads drawing
 let TX0=0,TY0=0;
@@ -2735,6 +2762,7 @@ function growRoads(rl,whole){const out=[];for(const r of rl){const id=r.city!==u
 let blockCache=new Map();const BCACHE=new Map();
 function bcGet(key){const v=BCACHE.get(key);return v}
 function bcSet(key,v){if(BCACHE.size>6000){let n=0;for(const k of BCACHE.keys()){BCACHE.delete(k);if(++n>2000)break}}BCACHE.set(key,v)}
+function padFieldAt(x,y){return padField(zones.filter(z=>z.dyn&&!z.dead&&!HID.has(z.id)).map(z=>Object.assign({kind:'zone'},z)),x,y)}
 function renderTile(z,tx,ty){
   const tsz=WORLD/(1<<z),mpp=tsz/TS,x0=tx*tsz,y0=ty*tsz,s=1/mpp;
   const cv=mkCanvas(TS,TS),ctx=cv.getContext('2d',{willReadFrequently:true});
@@ -2761,7 +2789,7 @@ function renderTile(z,tx,ty){
   if(mpp<7){T();drawPower(ctx,rl,mpp);ctx.setTransform(1,0,0,1,0,0)}
   blockCache=null;
   grain(ctx,x0,y0,mpp,feats.length>0||rl.length>0);
-  return cv;
+  cv.op=TOPAQ;return cv;
 }
 function drawCross(ctx,f,x0,y0,s,qx0,qy0,qx1,qy1){if(f.kind!=='city'||f.type===0||GROW.has(f.id))return;const N=f.N,D=f.D;
   const [i0,i1,j0,j1]=blkRange(f,qx0,qy0,qx1,qy1);
@@ -2773,12 +2801,14 @@ function drawCross(ctx,f,x0,y0,s,qx0,qy0,qx1,qy1){if(f.kind!=='city'||f.type===0
     if(up)zeb(1,0,hvI+1.6,hvJ-0.4);if(um)zeb(-1,0,hvI+1.6,hvJ-0.4);if(vp)zeb(0,1,hvJ+1.6,hvI-0.4);if(vm)zeb(0,-1,hvJ+1.6,hvI-0.4);
     if(up)ctx.rect(cx+hvI+5.4,cy,0.35,hvJ-0.6);if(um)ctx.rect(cx-hvI-5.75,cy-hvJ+0.6,0.35,hvJ-0.6);if(vp)ctx.rect(cx-hvI+0.6,cy+hvJ+5.4,hvI-0.6,0.35);if(vm)ctx.rect(cx,cy-hvJ-5.75,hvI-0.6,0.35)}
   ctx.fill()}
-function grain(ctx,x0,y0,mpp,vec){if(!vec&&!SPLIT)return;
-  const img=ctx.getImageData(0,0,TS,TS),d=img.data;const i1=1/(2.2*mpp),i2=1/(7*mpp);let o=0;const fine=mpp<3;
-  for(let py=0;py<TS;py++){const wy=y0+(py+0.5)*mpp;for(let px=0;px<TS;px++,o+=4){if(d[o+3]<250)continue;if(!vec){const v=SHD[o>>2];if(v!==1){d[o]*=v;d[o+1]*=v;d[o+2]*=v}continue}const wx=x0+(px+0.5)*mpp;
+// stage 6: TOPAQ — the last tile has no translucent pixel (the renderer then draws it without blending)
+let TOPAQ=false;
+function grain(ctx,x0,y0,mpp,vec){TOPAQ=false;if(!vec&&!SPLIT)return;
+  const img=ctx.getImageData(0,0,TS,TS),d=img.data;const i1=1/(2.2*mpp),i2=1/(7*mpp);let o=0;const fine=mpp<3;let tr=0;
+  for(let py=0;py<TS;py++){const wy=y0+(py+0.5)*mpp;for(let px=0;px<TS;px++,o+=4){if(d[o+3]<250){tr++;continue}if(!vec){const v=SHD[o>>2];if(v!==1){d[o]*=v;d[o+1]*=v;d[o+2]*=v}continue}const wx=x0+(px+0.5)*mpp;
     let g=noise(wx*i1+3.1,wy*i1+1.7)*0.05+noise(wx*i2+9.3,wy*i2+4.1)*0.04;if(fine){const h=mix32((px*73856093)^(py*19349663)^(x0*7|0));g+=((h&255)/255-0.5)*0.05}
     const m=(1+g)*SHD[o>>2];d[o]*=m;d[o+1]*=m;d[o+2]*=m}}
-  ctx.putImageData(img,0,0)}
+  ctx.putImageData(img,0,0);TOPAQ=tr===0}
 function drawFeat(ctx,f,pass,x0,y0,s,mpp,qx0,qy0,qx1,qy1){
   if(f.kind==='city'){if(f.type===0){if(mpp>9)return;for(let i=0;i<f.vst.length;i++){const st=f.vst[i];setFrame(ctx,st.x0,st.y0,st.ca,st.sa,x0,y0,s);const vk='v'+f.id+'_'+i+(LITE2?'b':LITE?'a':'')+(GROW.has(f.id)?'g'+GROW.get(f.id).toFixed(2):'');let P=bcGet(vk);if(!P){P=genVillage(f,i);bcSet(vk,P)}
         if(pass===1){ctx.beginPath();drawPrims(ctx,P,1,mpp);ctx.fillStyle=SHADOW;ctx.fill()}else drawPrims(ctx,P,pass,mpp)}return}
@@ -2811,7 +2841,7 @@ function plazaPrims(f){if(f._pz)return f._pz;const R=rng(f.seed^0x77aa),P=[],r=f
 // zone cylinder shadows need stroke not fill: patch drawPrims pass1 for cyl via stroke
 const _dp=drawPrims;
 
-return {air2Rw:z=>{const y=AIR2RY,p=(x)=>[z.x+x*z.ca-y*z.sa,z.y+x*z.sa+y*z.ca];return [p(-900),p(900)]},roadShown,addPlace,addZone,removeZone,addDeposits,removeDeposit,moveDeposit,addRail,removeRail,railPts,zoneUp,setHidden,drawUav:(ctx,v,c,s)=>drawUav(ctx,v,c,s,0),isHid:id=>HID.has(id),
+return {padFieldAt,padAt,padField,air2Rw:z=>{const y=AIR2RY,p=(x)=>[z.x+x*z.ca-y*z.sa,z.y+x*z.sa+y*z.ca];return [p(-900),p(900)]},roadShown,addPlace,addZone,removeZone,addDeposits,removeDeposit,moveDeposit,addRail,removeRail,railPts,zoneUp,setHidden,drawUav:(ctx,v,c,s)=>drawUav(ctx,v,c,s,0),isHid:id=>HID.has(id),
   fieldReach:c=>EMPTY?fieldR(c)*1.3+3500:c.R+4700,blkFrame,cU,cW,deps:DEPS,zoneDead:id=>!zones[id]||!!zones[id].dead,forestAt,portAt:(x,y)=>portAt(x,y,820,900),setGrow,growOf:id=>GROW.has(id)?GROW.get(id):1,opt:OPT,setSeason,season:()=>SEASON,renderLights,WORLD,TS,SUNX,SUNY,WDX,WDY,LEANX,LEANY,cities:live,roads,zones,farms,ships,flights,emitters,airports,queryRoads,queryF,posAt,renderTile,sprites,drawShip,drawPlane,baseH,landE,rng,hh,noise,genTime:Date.now()-T0,mkCanvas,_dbg:{genVillage,genBlock,RW,riverV,riverW,avoidZ,zoneOnPath,waterRunOK,zoneExit,projOn,fieldOn,fieldR}};
 }
 
