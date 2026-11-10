@@ -54,7 +54,8 @@ try {
   check(fog.id >= 0 && fog.hid, 'постройка бота за пределами видимости скрыта туманом', JSON.stringify(fog));
   const dark = await page.evaluate(() => { const A = Game.api; A.stop(); const c = Game.G.states[1].places[0]; A.cam.x = c.x; A.cam.y = c.y; A.cam.m = 30; return true; });
   await settle(page);
-  const lum = await page.evaluate(() => { const cv = document.getElementById('c'), x = cv.getContext('2d'); const d = x.getImageData(cv.width / 2 - 200, cv.height / 2 - 150, 400, 300).data; let s = 0; for (let i = 0; i < d.length; i += 4) s += d[i] + d[i + 1] + d[i + 2]; return s / (d.length / 4) / 3; });
+  // the map is WebGL since stage 6: read the pixels inside a frame (the drawing buffer is not kept between frames)
+  const lum = await page.evaluate(() => new Promise((res) => requestAnimationFrame(() => { const g = __world.gl.gl, w = 400, h = 300, d = new Uint8Array(w * h * 4); g.readPixels((g.drawingBufferWidth >> 1) - 200, (g.drawingBufferHeight >> 1) - 150, w, h, g.RGBA, g.UNSIGNED_BYTE, d); let s = 0; for (let i = 0; i < d.length; i += 4) s += d[i] + d[i + 1] + d[i + 2]; res(s / (d.length / 4) / 3); })));
   check(dark && lum > 45, 'земля соседа не затемнена (яркость ' + lum.toFixed(0) + ')');
   await shot(page, 'fog-neighbour');
 
