@@ -170,7 +170,7 @@ input,select{border-radius:var(--r);background:#0b0f14;border-color:var(--line2)
   --key:linear-gradient(var(--o2),var(--o2))}
 /* the HUD scales with the window (--z from ui.js: the window height and width × «Масштаб интерфейса»), as the UI of DroneFlames does */
 #hud,#topcol,#plan,#found,#lrail,#orep,#hqp,#bbar,#ktip,#mystate,#store,#dip,#confirm,.pause-win,.over-win,body.m-game #bl,body.m-game #insp{zoom:var(--z,1)}
-.gm{display:none}
+.gm{display:none}body:not(.m-game) .gm{display:none!important} /* game windows never show outside a game, whatever their state */
 body.m-game #hud,body.m-game #topcol,body.m-game #bbar,body.m-game #toasts{display:flex}
 body.m-game.ph-found #found,body.m-game.ph-play #plan,body.m-game.ph-play #lrail{display:flex}
 .ol{font-family:var(--df);color:var(--tx)}

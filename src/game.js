@@ -1059,7 +1059,10 @@ function initState(c){cfg=c;tutorial=!!c.tutorial;hintsOff=!ui.settings().hints;
   botList().forEach((b,i)=>G.states.push(mkState(i+1,b,false)));
   const p=player();$('hname').textContent=p.name;$('hgov').textContent=p.gov+' · столица '+p.capital;flagCanvas(p.flag,42,28,$('hflag'));flagCanvas(p.flag,54,36,$('msf'));$('msh').textContent=p.gov+' '+p.name;G._lastSp=1;setSpeed(1);updModes();tab='cities';tabSig='';
   document.body.classList.remove('tray-off','sel');$('bb-cat').innerHTML='';$('gpanel').innerHTML='';
-  for(const w of ['over','dip','mystate','store','orep','hqp'])$(w).classList.remove('show');$('toasts').innerHTML='';oreCss();oreSig='';hqSig=''}
+  closeWins();oreCss();oreSig='';hqSig=''}
+// every window of a game closes when a game starts AND when it ends: a panel left open (the free deposits, the HQ…) stayed
+// on top of the main menu after «Выйти в главное меню» (stage 6.1)
+function closeWins(){for(const w of ['over','dip','mystate','store','orep','hqp','ktip','pbar'])$(w).classList.remove('show');for(const b of ['b-ores','b-hq'])$(b).classList.remove('on');$('toasts').innerHTML=''}
 function depOp(){return {f:'addDeposits',q:G.dep.map(d=>[d.k,M.round(d.x),M.round(d.y),M.round(200+ORES[d.k].v*14)])}}
 function newGame(c){initState(c);const MT={normal:'обычная карта',cont:'материки',arch:'архипелаг',islands:'острова'};ui.loading('Создание мира',`Сид ${c.seed} · ${MT[c.map.type]} · рельеф, реки, леса, месторождения`);setTimeout(()=>{boot(null,()=>{ui.loaded();analyse();G.dep=genDeposits();const o=depOp();api.op(o.f,o.q);hint(0);updHUD()});document.body.className='m-game';updHUD()},60)}
 // founding: bots pick their sites, the world is rebuilt with the capitals; land is taken around them
@@ -1089,7 +1092,7 @@ function load(sv){const c=sv.cfg;initState(c);const g=sv.g;G.t=g.t;G.phase=g.pha
       for(let k=0;k<N*N;k++)if(own[k]){const s=G.states[own[k]-1],i=k%N,j=(k/N)|0;s.cells++;const b=s.bb||(s.bb=[i,j,i,j]);if(i<b[0])b[0]=i;if(j<b[1])b[1]=j;if(i>b[2])b[2]=i;if(j>b[3])b[3]=j}
       updPop();dirtyPol=true;dirtyFog=true;hint(g.hint>=2?g.hint:2)}else hint(0);
     if(G.over)setSpeed(0);updHUD()},60)}
-function exit(){if(G&&!G.over)save(true);if(api){api.destroy();api=null}G=null;W=null;own=null;placing=false;document.body.classList.remove('placing');closeConfirm();hideHint()}
+function exit(){if(G&&!G.over)save(true);if(api){api.destroy();api=null}G=null;W=null;own=null;placing=false;document.body.classList.remove('placing','placing-k','sel');closeConfirm();hideHint();closeWins()}
 
 // ---------- DOM wiring (once)
 function wire(u){ui=u;
