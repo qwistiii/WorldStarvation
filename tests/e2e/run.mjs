@@ -156,6 +156,25 @@ async function scenario(browser, dev, opts) {
   await ev(() => Game._test.run(120));
   const done = await ev(() => { const p = Game.G.states[0], W = Game.api.W; return p.builds.filter((q) => q.done && !q.failed).map((q) => { const z = q.id >= 0 && W.zones[q.id]; return { k: q.k, a: q.a || 0, za: z ? Math.atan2(z.sa, z.ca) : null }; }); });
   check(dev, placed.every((k) => done.some((d) => d.k === k)), 'все поставленные постройки достроены', `${done.length}/${placed.length}`);
+  // ---- no seams in the ground around a building: two neighbouring tiles whose border runs through the apron of a factory
+  if (!touch) {
+    const seam = await ev(() => {
+      const W = Game.api.W, z = W.zones.find((q) => q.dyn && q.zk === 'ind' && Math.abs(q.sa) < 1e-6); if (!z) return null; const out = [];
+      for (const [Z, side] of [[11, 'x'], [12, 'x'], [11, 'y']]) {
+        const ts = W.WORLD / (1 << Z), px = side === 'x' ? z.x + z.W / 2 + 12 : z.x, py = side === 'x' ? z.y : z.y + z.H / 2 + 12;
+        const tx = Math.floor(px / ts), ty = Math.floor(py / ts), A = W.renderTile(Z, tx, ty), B = side === 'x' ? W.renderTile(Z, tx + 1, ty) : W.renderTile(Z, tx, ty + 1);
+        const a = A.getContext('2d').getImageData(0, 0, 256, 256).data, b = B.getContext('2d').getImageData(0, 0, 256, 256).data;
+        const px2 = (d, x, y) => (y * 256 + x) * 4; let dB = 0, dI = 0;
+        for (let i = 0; i < 256; i++) for (let c = 0; c < 3; c++) {
+          if (side === 'x') { dB += Math.abs(a[px2(a, 255, i) + c] - b[px2(b, 0, i) + c]); dI += Math.abs(a[px2(a, 200, i) + c] - a[px2(a, 201, i) + c]) + Math.abs(b[px2(b, 50, i) + c] - b[px2(b, 51, i) + c]); }
+          else { dB += Math.abs(a[px2(a, i, 255) + c] - b[px2(b, i, 0) + c]); dI += Math.abs(a[px2(a, i, 200) + c] - a[px2(a, i, 201) + c]) + Math.abs(b[px2(b, i, 50) + c] - b[px2(b, i, 51) + c]); }
+        }
+        out.push({ Z, side, border: +(dB / 768).toFixed(2), inside: +(dI / 1536).toFixed(2) });
+      }
+      return out;
+    });
+    check(dev, seam && seam.every((q) => q.border <= q.inside * 2 + 2), 'нет шва между тайлами в обочине постройки', JSON.stringify(seam));
+  }
   const fac = done.find((d) => d.k === 'factory');
   if (fac && !touch) check(dev, fac.za != null && Math.abs(Math.cos(fac.za - fac.a) - 1) < 1e-6, 'повёрнутый завод стоит в мире под тем же углом', `${fac.a} / ${fac.za}`);
 
