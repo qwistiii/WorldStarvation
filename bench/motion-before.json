@@ -1,0 +1,1460 @@
+{
+ "label": "before",
+ "env": {
+  "VW": 1536,
+  "VH": 826,
+  "dpr": 1.25,
+  "city": {
+   "x": 65536,
+   "y": 65536,
+   "R": 2900,
+   "name": "Вольнополь"
+  },
+  "gpu": "ANGLE (Intel, Intel(R) UHD Graphics (0x0000A78B) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+ },
+ "at": "2026-11-10T20:59:25.582Z",
+ "rows": [
+  {
+   "H": 500,
+   "ph": "still",
+   "fps": 155,
+   "iv": {
+    "n": 309,
+    "p50": 6.1,
+    "p95": 12.1,
+    "p99": 12.2,
+    "max": 18.1
+   },
+   "js": {
+    "n": 310,
+    "p50": 1,
+    "p95": 1.4,
+    "p99": 2,
+    "max": 4.7
+   },
+   "over": 21,
+   "jsOver": 0,
+   "lt": 0,
+   "missing": 74,
+   "prof": {
+    "water": 0.08,
+    "tiles": 0.07,
+    "edge": 0.01,
+    "shadows": 0,
+    "traffic": 0.09,
+    "emit": 0.01,
+    "flights": 0,
+    "fog": 0,
+    "lights": 0,
+    "dispatch": 0.02,
+    "clouds": 0,
+    "labels": 0.45,
+    "hook": 0.05,
+    "js": 0.81
+   }
+  },
+  {
+   "H": 500,
+   "ph": "pan",
+   "fps": 153,
+   "iv": {
+    "n": 609,
+    "p50": 6.1,
+    "p95": 12.1,
+    "p99": 12.3,
+    "max": 18.3
+   },
+   "js": {
+    "n": 610,
+    "p50": 1.1,
+    "p95": 1.9,
+    "p99": 2.9,
+    "max": 13.2
+   },
+   "over": 47,
+   "jsOver": 1,
+   "lt": 0,
+   "missing": 59,
+   "prof": {
+    "water": 0.37,
+    "tiles": 0.08,
+    "edge": 0.01,
+    "shadows": 0,
+    "traffic": 0.12,
+    "emit": 0.01,
+    "flights": 0,
+    "fog": 0,
+    "lights": 0.01,
+    "dispatch": 0.01,
+    "clouds": 0,
+    "labels": 0.58,
+    "hook": 0.03,
+    "js": 1.36
+   }
+  },
+  {
+   "H": 500,
+   "ph": "jerk",
+   "fps": 135,
+   "iv": {
+    "n": 401,
+    "p50": 6.1,
+    "p95": 12.2,
+    "p99": 18.3,
+    "max": 24.2
+   },
+   "js": {
+    "n": 402,
+    "p50": 1.1,
+    "p95": 2,
+    "p99": 2.3,
+    "max": 3.3
+   },
+   "over": 80,
+   "jsOver": 0,
+   "lt": 0,
+   "missing": 126,
+   "prof": {
+    "water": 0.28,
+    "tiles": 0.07,
+    "edge": 0.01,
+    "shadows": 0.01,
+    "traffic": 0.07,
+    "emit": 0.01,
+    "flights": 0,
+    "fog": 0,
+    "lights": 0.04,
+    "dispatch": 0.02,
+    "clouds": 0,
+    "labels": 0.48,
+    "hook": 0.03,
+    "js": 1.2
+   }
+  },
+  {
+   "H": 500,
+   "ph": "zoom",
+   "fps": 134,
+   "iv": {
+    "n": 400,
+    "p50": 6.1,
+    "p95": 12.2,
+    "p99": 17.9,
+    "max": 18.4
+   },
+   "js": {
+    "n": 401,
+    "p50": 1.3,
+    "p95": 2.1,
+    "p99": 2.9,
+    "max": 13.7
+   },
+   "over": 88,
+   "jsOver": 1,
+   "lt": 0,
+   "missing": 161,
+   "prof": {
+    "water": 0.42,
+    "tiles": 0.08,
+    "edge": 0.01,
+    "shadows": 0,
+    "traffic": 0.12,
+    "emit": 0,
+    "flights": 0,
+    "fog": 0,
+    "lights": 0.04,
+    "dispatch": 0.03,
+    "clouds": 0,
+    "labels": 0.53,
+    "hook": 0.05,
+    "js": 1.51
+   }
+  },
+  {
+   "H": 1000,
+   "ph": "still",
+   "fps": 142,
+   "iv": {
+    "n": 281,
+    "p50": 6.1,
+    "p95": 12.2,
+    "p99": 18.3,
+    "max": 24.4
+   },
+   "js": {
+    "n": 282,
+    "p50": 1.2,
+    "p95": 2,
+    "p99": 3.2,
+    "max": 27.1
+   },
+   "over": 40,
+   "jsOver": 1,
+   "lt": 0,
+   "missing": 152,
+   "prof": {
+    "water": 0.05,
+    "tiles": 0.1,
+    "edge": 0,
+    "shadows": 0,
+    "traffic": 0.21,
+    "emit": 0.02,
+    "flights": 0,
+    "fog": 0,
+    "lights": 0.8,
+    "dispatch": 0.02,
+    "clouds": 0,
+    "labels": 0.43,
+    "hook": 0.05,
+    "js": 2.43
+   }
+  },
+  {
+   "H": 1000,
+   "ph": "pan",
+   "fps": 149,
+   "iv": {
+    "n": 592,
+    "p50": 6.1,
+    "p95": 12.1,
+    "p99": 12.2,
+    "max": 18.2
+   },
+   "js": {
+    "n": 593,
+    "p50": 1.1,
+    "p95": 2,
+    "p99": 2.9,
+    "max": 5
+   },
+   "over": 71,
+   "jsOver": 0,
+   "lt": 0,
+   "missing": 124,
+   "prof": {
+    "water": 0.21,
+    "tiles": 0.06,
+    "edge": 0,
+    "shadows": 0,
+    "traffic": 0.19,
+    "emit": 0.01,
+    "flights": 0,
+    "fog": 0,
+    "lights": 0.05,
+    "dispatch": 0.02,
+    "clouds": 0,
+    "labels": 0.46,
+    "hook": 0.03,
+    "js": 1.18
+   }
+  },
+  {
+   "H": 1000,
+   "ph": "jerk",
+   "fps": 140,
+   "iv": {
+    "n": 417,
+    "p50": 6.1,
+    "p95": 12.2,
+    "p99": 12.3,
+    "max": 90.7
+   },
+   "js": {
+    "n": 418,
+    "p50": 1,
+    "p95": 1.7,
+    "p99": 2.2,
+    "max": 94.9
+   },
+   "over": 60,
+   "jsOver": 2,
+   "lt": 96,
+   "missing": 137,
+   "prof": {
+    "water": 0.28,
+    "tiles": 0.05,
+    "edge": 0,
+    "shadows": 0,
+    "traffic": 0.04,
+    "emit": 0.01,
+    "flights": 0,
+    "fog": 0,
+    "lights": 0.02,
+    "dispatch": 0.02,
+    "clouds": 0,
+    "labels": 0.41,
+    "hook": 0.1,
+    "js": 1.08
+   }
+  },
+  {
+   "H": 1000,
+   "ph": "zoom",
+   "fps": 147,
+   "iv": {
+    "n": 436,
+    "p50": 6.1,
+    "p95": 12.1,
+    "p99": 12.2,
+    "max": 18.1
+   },
+   "js": {
+    "n": 437,
+    "p50": 1.1,
+    "p95": 1.7,
+    "p99": 2.1,
+    "max": 16.2
+   },
+   "over": 52,
+   "jsOver": 2,
+   "lt": 0,
+   "missing": 323,
+   "prof": {
+    "water": 0.33,
+    "tiles": 0.06,
+    "edge": 0,
+    "shadows": 0,
+    "traffic": 0.01,
+    "emit": 0.01,
+    "flights": 0,
+    "fog": 0,
+    "lights": 0.1,
+    "dispatch": 0.04,
+    "clouds": 0,
+    "labels": 0.36,
+    "hook": 0.04,
+    "js": 1.14
+   }
+  },
+  {
+   "H": 5000,
+   "ph": "still",
+   "fps": 121,
+   "iv": {
+    "n": 240,
+    "p50": 6.1,
+    "p95": 18.1,
+    "p99": 18.2,
+    "max": 24.2
+   },
+   "js": {
+    "n": 241,
+    "p50": 0.9,
+    "p95": 1.5,
+    "p99": 5.8,
+    "max": 10.7
+   },
+   "over": 73,
+   "jsOver": 2,
+   "lt": 0,
+   "missing": 8,
+   "prof": {
+    "water": 0.05,
+    "tiles": 0.08,
+    "edge": 0.01,
+    "shadows": 0,
+    "traffic": 0,
+    "emit": 0.03,
+    "flights": 0,
+    "fog": 0,
+    "lights": 0,
+    "dispatch": 0,
+    "clouds": 0.01,
+    "labels": 0.36,
+    "hook": 0.14,
+    "js": 0.71
+   }
+  },
+  {
+   "H": 5000,
+   "ph": "pan",
+   "fps": 125,
+   "iv": {
+    "n": 499,
+    "p50": 6.1,
+    "p95": 12.2,
+    "p99": 18.2,
+    "max": 24.3
+   },
+   "js": {
+    "n": 500,
+    "p50": 0.9,
+    "p95": 2.3,
+    "p99": 3.9,
+    "max": 6.9
+   },
+   "over": 150,
+   "jsOver": 1,
+   "lt": 0,
+   "missing": 11,
+   "prof": {
+    "water": 0.15,
+    "tiles": 0.08,
+    "edge": 0.01,
+    "shadows": 0,
+    "traffic": 0,
+    "emit": 0,
+    "flights": 0,
+    "fog": 0,
+    "lights": 0,
+    "dispatch": 0,
+    "clouds": 0.01,
+    "labels": 0.46,
+    "hook": 0.23,
+    "js": 1.05
+   }
+  },
+  {
+   "H": 5000,
+   "ph": "jerk",
+   "fps": 125,
+   "iv": {
+    "n": 372,
+    "p50": 6.1,
+    "p95": 12.2,
+    "p99": 12.3,
+    "max": 18.2
+   },
+   "js": {
+    "n": 373,
+    "p50": 0.7,
+    "p95": 1.5,
+    "p99": 2.2,
+    "max": 4.2
+   },
+   "over": 117,
+   "jsOver": 0,
+   "lt": 0,
+   "missing": 48,
+   "prof": {
+    "water": 0.1,
+    "tiles": 0.06,
+    "edge": 0,
+    "shadows": 0,
+    "traffic": 0,
+    "emit": 0,
+    "flights": 0,
+    "fog": 0,
+    "lights": 0,
+    "dispatch": 0.01,
+    "clouds": 0,
+    "labels": 0.26,
+    "hook": 0.1,
+    "js": 0.65
+   }
+  },
+  {
+   "H": 5000,
+   "ph": "zoom",
+   "fps": 138,
+   "iv": {
+    "n": 409,
+    "p50": 6.1,
+    "p95": 12.2,
+    "p99": 12.2,
+    "max": 18.6
+   },
+   "js": {
+    "n": 410,
+    "p50": 0.9,
+    "p95": 1.4,
+    "p99": 1.7,
+    "max": 4
+   },
+   "over": 79,
+   "jsOver": 0,
+   "lt": 0,
+   "missing": 56,
+   "prof": {
+    "water": 0.34,
+    "tiles": 0.06,
+    "edge": 0.01,
+    "shadows": 0,
+    "traffic": 0.06,
+    "emit": 0,
+    "flights": 0,
+    "fog": 0,
+    "lights": 0,
+    "dispatch": 0.01,
+    "clouds": 0,
+    "labels": 0.4,
+    "hook": 0.09,
+    "js": 1.2
+   }
+  },
+  {
+   "H": 20000,
+   "ph": "still",
+   "fps": 131,
+   "iv": {
+    "n": 261,
+    "p50": 6.1,
+    "p95": 12.3,
+    "p99": 30.1,
+    "max": 30.4
+   },
+   "js": {
+    "n": 262,
+    "p50": 0.9,
+    "p95": 1.6,
+    "p99": 24.7,
+    "max": 30.7
+   },
+   "over": 53,
+   "jsOver": 7,
+   "lt": 0,
+   "missing": 0,
+   "prof": {
+    "water": 0.11,
+    "tiles": 0.08,
+    "edge": 0,
+    "shadows": 0,
+    "traffic": 0,
+    "emit": 0.02,
+    "flights": 0,
+    "fog": 0,
+    "lights": 0.02,
+    "dispatch": 0,
+    "clouds": 0.01,
+    "labels": 0.42,
+    "hook": 0.15,
+    "js": 0.94
+   }
+  },
+  {
+   "H": 20000,
+   "ph": "pan",
+   "fps": 139,
+   "iv": {
+    "n": 555,
+    "p50": 6.1,
+    "p95": 12.3,
+    "p99": 24.3,
+    "max": 36.3
+   },
+   "js": {
+    "n": 556,
+    "p50": 0.6,
+    "p95": 2.1,
+    "p99": 23.9,
+    "max": 35.9
+   },
+   "over": 64,
+   "jsOver": 17,
+   "lt": 0,
+   "missing": 35,
+   "prof": {
+    "water": 0.16,
+    "tiles": 0.2,
+    "edge": 0.01,
+    "shadows": 0,
+    "traffic": 0,
+    "emit": 0,
+    "flights": 0,
+    "fog": 0,
+    "lights": 2.01,
+    "dispatch": 0.03,
+    "clouds": 0.01,
+    "labels": 0.05,
+    "hook": 0.12,
+    "js": 4.31
+   }
+  },
+  {
+   "H": 20000,
+   "ph": "jerk",
+   "fps": 97,
+   "iv": {
+    "n": 289,
+    "p50": 6.1,
+    "p95": 30.3,
+    "p99": 72.7,
+    "max": 96.9
+   },
+   "js": {
+    "n": 290,
+    "p50": 0.8,
+    "p95": 28.6,
+    "p99": 69.8,
+    "max": 98.4
+   },
+   "over": 74,
+   "jsOver": 31,
+   "lt": 478,
+   "missing": 0,
+   "prof": {
+    "water": 0.12,
+    "tiles": 0.24,
+    "edge": 0,
+    "shadows": 0,
+    "traffic": 0,
+    "emit": 0,
+    "flights": 0,
+    "fog": 0,
+    "lights": 0.14,
+    "dispatch": 0.05,
+    "clouds": 0.01,
+    "labels": 0.16,
+    "hook": 0.17,
+    "js": 1.36
+   }
+  },
+  {
+   "H": 20000,
+   "ph": "zoom",
+   "fps": 66,
+   "iv": {
+    "n": 195,
+    "p50": 12,
+    "p95": 48.4,
+    "p99": 66.7,
+    "max": 66.8
+   },
+   "js": {
+    "n": 196,
+    "p50": 1.1,
+    "p95": 44.8,
+    "p99": 63.6,
+    "max": 70.8
+   },
+   "over": 112,
+   "jsOver": 63,
+   "lt": 376,
+   "missing": 18,
+   "prof": {
+    "water": 0.13,
+    "tiles": 0.08,
+    "edge": 0.01,
+    "shadows": 0,
+    "traffic": 0,
+    "emit": 0,
+    "flights": 0.01,
+    "fog": 0,
+    "lights": 2.37,
+    "dispatch": 0.02,
+    "clouds": 0,
+    "labels": 0.37,
+    "hook": 0.92,
+    "js": 6.65
+   }
+  }
+ ],
+ "profile": {
+  "500-pan": [
+   {
+    "fn": "drawLabels main.js:537",
+    "ms": 138.2
+   },
+   {
+    "fn": "GL2D.api.polyline gl.js:378",
+    "ms": 85
+   },
+   {
+    "fn": "drawTraffic main.js:338",
+    "ms": 36.4
+   },
+   {
+    "fn": "baseH gen.js:52",
+    "ms": 35.6
+   },
+   {
+    "fn": "drawClouds main.js:487",
+    "ms": 26
+   },
+   {
+    "fn": "bufferData :0",
+    "ms": 25.7
+   },
+   {
+    "fn": "(garbage collector) :0",
+    "ms": 23
+   },
+   {
+    "fn": "noise gen.js:37",
+    "ms": 22.5
+   },
+   {
+    "fn": "frameBody main.js:598",
+    "ms": 19.8
+   },
+   {
+    "fn": "requestAnimationFrame :0",
+    "ms": 17.9
+   },
+   {
+    "fn": "(анон) :7",
+    "ms": 12.9
+   },
+   {
+    "fn": "drawTiles main.js:285",
+    "ms": 11.9
+   },
+   {
+    "fn": "getBoundingClientRect :0",
+    "ms": 11.3
+   },
+   {
+    "fn": "roadShown gen.js:2758",
+    "ms": 10
+   },
+   {
+    "fn": "econ game.js:275",
+    "ms": 8.6
+   },
+   {
+    "fn": "queryRoads gen.js:137",
+    "ms": 7.6
+   },
+   {
+    "fn": "sim game.js:422",
+    "ms": 7.5
+   },
+   {
+    "fn": "now :0",
+    "ms": 7.4
+   },
+   {
+    "fn": "GL2D.api.drawImage gl.js:291",
+    "ms": 7.3
+   },
+   {
+    "fn": "frame main.js:597",
+    "ms": 7.1
+   },
+   {
+    "fn": "clear :0",
+    "ms": 6.9
+   },
+   {
+    "fn": "lpush gl.js:377",
+    "ms": 6.5
+   },
+   {
+    "fn": "frame game.js:1021",
+    "ms": 6.1
+   },
+   {
+    "fn": "posAt gen.js:148",
+    "ms": 5.6
+   },
+   {
+    "fn": "clearColor :0",
+    "ms": 5.4
+   }
+  ],
+  "500-jerk": [
+   {
+    "fn": "drawLabels main.js:537",
+    "ms": 107
+   },
+   {
+    "fn": "GL2D.api.polyline gl.js:378",
+    "ms": 41.4
+   },
+   {
+    "fn": "baseH gen.js:52",
+    "ms": 39.4
+   },
+   {
+    "fn": "drawTraffic main.js:338",
+    "ms": 29.4
+   },
+   {
+    "fn": "bufferData :0",
+    "ms": 23.2
+   },
+   {
+    "fn": "drawClouds main.js:487",
+    "ms": 20.2
+   },
+   {
+    "fn": "noise gen.js:37",
+    "ms": 18.7
+   },
+   {
+    "fn": "frameBody main.js:598",
+    "ms": 18
+   },
+   {
+    "fn": "(garbage collector) :0",
+    "ms": 15.6
+   },
+   {
+    "fn": "roadShown gen.js:2758",
+    "ms": 9.3
+   },
+   {
+    "fn": "getBoundingClientRect :0",
+    "ms": 8.6
+   },
+   {
+    "fn": "requestAnimationFrame :0",
+    "ms": 8.3
+   },
+   {
+    "fn": "set fillStyle gl.js:126",
+    "ms": 7.9
+   },
+   {
+    "fn": "(анон) :7",
+    "ms": 7.1
+   },
+   {
+    "fn": "sim game.js:422",
+    "ms": 7
+   },
+   {
+    "fn": "waterClip main.js:259",
+    "ms": 7
+   },
+   {
+    "fn": "drawTiles main.js:285",
+    "ms": 6.6
+   },
+   {
+    "fn": "frame main.js:597",
+    "ms": 5.9
+   },
+   {
+    "fn": "pf main.js:593",
+    "ms": 4.5
+   },
+   {
+    "fn": "anc2 main.js:283",
+    "ms": 4.3
+   },
+   {
+    "fn": "drawArraysInstanced :0",
+    "ms": 4.2
+   },
+   {
+    "fn": "clear :0",
+    "ms": 3.9
+   },
+   {
+    "fn": "flush gl.js:150",
+    "ms": 3.9
+   },
+   {
+    "fn": "queryRoads gen.js:137",
+    "ms": 3.8
+   },
+   {
+    "fn": "GL2D.api.drawImage gl.js:291",
+    "ms": 3.7
+   }
+  ],
+  "1000-pan": [
+   {
+    "fn": "drawLabels main.js:537",
+    "ms": 134.8
+   },
+   {
+    "fn": "GL2D.api.polyline gl.js:378",
+    "ms": 72
+   },
+   {
+    "fn": "drawTraffic main.js:338",
+    "ms": 60.5
+   },
+   {
+    "fn": "baseH gen.js:52",
+    "ms": 32.3
+   },
+   {
+    "fn": "noise gen.js:37",
+    "ms": 27.4
+   },
+   {
+    "fn": "GL2D.api.drawImage gl.js:291",
+    "ms": 23.5
+   },
+   {
+    "fn": "frameBody main.js:598",
+    "ms": 23.3
+   },
+   {
+    "fn": "bufferData :0",
+    "ms": 21.8
+   },
+   {
+    "fn": "(garbage collector) :0",
+    "ms": 16.4
+   },
+   {
+    "fn": "drawClouds main.js:487",
+    "ms": 13.4
+   },
+   {
+    "fn": "waterClip main.js:259",
+    "ms": 11.5
+   },
+   {
+    "fn": "uniform1f :0",
+    "ms": 11.2
+   },
+   {
+    "fn": "queryRoads gen.js:137",
+    "ms": 10.3
+   },
+   {
+    "fn": "landE gen.js:99",
+    "ms": 10.2
+   },
+   {
+    "fn": "requestAnimationFrame :0",
+    "ms": 9.7
+   },
+   {
+    "fn": "bindFramebuffer :0",
+    "ms": 8
+   },
+   {
+    "fn": "sim game.js:422",
+    "ms": 7.9
+   },
+   {
+    "fn": "clearRect :0",
+    "ms": 7.9
+   },
+   {
+    "fn": "clear :0",
+    "ms": 7.6
+   },
+   {
+    "fn": "updCatalog game.js:717",
+    "ms": 7.5
+   },
+   {
+    "fn": "anc2 main.js:283",
+    "ms": 7.5
+   },
+   {
+    "fn": "dispatch main.js:77",
+    "ms": 7.4
+   },
+   {
+    "fn": "setTransform :0",
+    "ms": 7.1
+   },
+   {
+    "fn": "(анон) :7",
+    "ms": 6.6
+   },
+   {
+    "fn": "now :0",
+    "ms": 6.5
+   }
+  ],
+  "1000-jerk": [
+   {
+    "fn": "drawLabels main.js:537",
+    "ms": 97.7
+   },
+   {
+    "fn": "GL2D.api.polyline gl.js:378",
+    "ms": 43.6
+   },
+   {
+    "fn": "baseH gen.js:52",
+    "ms": 42.5
+   },
+   {
+    "fn": "addPlace gen.js:1064",
+    "ms": 37.5
+   },
+   {
+    "fn": "dynCross gen.js:1126",
+    "ms": 27.8
+   },
+   {
+    "fn": "frameBody main.js:598",
+    "ms": 27.6
+   },
+   {
+    "fn": "noise gen.js:37",
+    "ms": 24.1
+   },
+   {
+    "fn": "texSubImage3D :0",
+    "ms": 23.8
+   },
+   {
+    "fn": "drawTraffic main.js:338",
+    "ms": 19.2
+   },
+   {
+    "fn": "frame main.js:597",
+    "ms": 13.7
+   },
+   {
+    "fn": "(garbage collector) :0",
+    "ms": 12.6
+   },
+   {
+    "fn": "queryRoads gen.js:137",
+    "ms": 10.2
+   },
+   {
+    "fn": "bufferData :0",
+    "ms": 9.7
+   },
+   {
+    "fn": "dispatch main.js:77",
+    "ms": 6.8
+   },
+   {
+    "fn": "drawClouds main.js:487",
+    "ms": 6.2
+   },
+   {
+    "fn": "requestAnimationFrame :0",
+    "ms": 5.9
+   },
+   {
+    "fn": "lpush gl.js:377",
+    "ms": 5.2
+   },
+   {
+    "fn": "getBoundingClientRect :0",
+    "ms": 5.2
+   },
+   {
+    "fn": "landE gen.js:99",
+    "ms": 5.2
+   },
+   {
+    "fn": "econ game.js:275",
+    "ms": 5.1
+   },
+   {
+    "fn": "drawImage :0",
+    "ms": 5.1
+   },
+   {
+    "fn": "roadShown gen.js:2758",
+    "ms": 4.6
+   },
+   {
+    "fn": "bindFramebuffer :0",
+    "ms": 4.6
+   },
+   {
+    "fn": "sim game.js:422",
+    "ms": 4.5
+   },
+   {
+    "fn": "drawObjects game.js:835",
+    "ms": 4.5
+   }
+  ],
+  "5000-pan": [
+   {
+    "fn": "drawLabels main.js:537",
+    "ms": 110.5
+   },
+   {
+    "fn": "drawImage :0",
+    "ms": 64.3
+   },
+   {
+    "fn": "GL2D.api.polyline gl.js:378",
+    "ms": 38.3
+   },
+   {
+    "fn": "frameBody main.js:598",
+    "ms": 23.6
+   },
+   {
+    "fn": "drawClouds main.js:487",
+    "ms": 21.4
+   },
+   {
+    "fn": "(garbage collector) :0",
+    "ms": 13.9
+   },
+   {
+    "fn": "baseH gen.js:52",
+    "ms": 13.7
+   },
+   {
+    "fn": "econ game.js:275",
+    "ms": 13.5
+   },
+   {
+    "fn": "texSubImage3D :0",
+    "ms": 12.3
+   },
+   {
+    "fn": "bufferData :0",
+    "ms": 11.6
+   },
+   {
+    "fn": "bindFramebuffer :0",
+    "ms": 9.2
+   },
+   {
+    "fn": "getBoundingClientRect :0",
+    "ms": 8.2
+   },
+   {
+    "fn": "sim game.js:422",
+    "ms": 7.7
+   },
+   {
+    "fn": "postMessage :0",
+    "ms": 7.1
+   },
+   {
+    "fn": "clear :0",
+    "ms": 6.9
+   },
+   {
+    "fn": "drawPennants game.js:1006",
+    "ms": 6.6
+   },
+   {
+    "fn": "strokeText :0",
+    "ms": 6.4
+   },
+   {
+    "fn": "anc2 main.js:283",
+    "ms": 6.2
+   },
+   {
+    "fn": "drawObjects game.js:835",
+    "ms": 5.9
+   },
+   {
+    "fn": "drawTiles main.js:285",
+    "ms": 5.8
+   },
+   {
+    "fn": "requestAnimationFrame :0",
+    "ms": 5.4
+   },
+   {
+    "fn": "noise gen.js:37",
+    "ms": 4.8
+   },
+   {
+    "fn": "(анон) :7",
+    "ms": 4.7
+   },
+   {
+    "fn": "measureText :0",
+    "ms": 4.6
+   },
+   {
+    "fn": "uniform1f :0",
+    "ms": 3.9
+   }
+  ],
+  "5000-jerk": [
+   {
+    "fn": "drawLabels main.js:537",
+    "ms": 50.8
+   },
+   {
+    "fn": "drawImage :0",
+    "ms": 28.8
+   },
+   {
+    "fn": "frameBody main.js:598",
+    "ms": 20.9
+   },
+   {
+    "fn": "drawClouds main.js:487",
+    "ms": 16
+   },
+   {
+    "fn": "GL2D.api.polyline gl.js:378",
+    "ms": 14.3
+   },
+   {
+    "fn": "(garbage collector) :0",
+    "ms": 14
+   },
+   {
+    "fn": "bufferData :0",
+    "ms": 7
+   },
+   {
+    "fn": "(анон) :7",
+    "ms": 6.9
+   },
+   {
+    "fn": "clear :0",
+    "ms": 6
+   },
+   {
+    "fn": "baseH gen.js:52",
+    "ms": 5.9
+   },
+   {
+    "fn": "econ game.js:275",
+    "ms": 5.9
+   },
+   {
+    "fn": "getBoundingClientRect :0",
+    "ms": 5.4
+   },
+   {
+    "fn": "bindFramebuffer :0",
+    "ms": 5
+   },
+   {
+    "fn": "drawTiles main.js:285",
+    "ms": 4.9
+   },
+   {
+    "fn": "requestAnimationFrame :0",
+    "ms": 4.8
+   },
+   {
+    "fn": "drawArraysInstanced :0",
+    "ms": 4.5
+   },
+   {
+    "fn": "sim game.js:422",
+    "ms": 4.5
+   },
+   {
+    "fn": "strokeText :0",
+    "ms": 4.2
+   },
+   {
+    "fn": "update lights.js:41",
+    "ms": 4.2
+   },
+   {
+    "fn": "rebuildPol game.js:450",
+    "ms": 2.9
+   },
+   {
+    "fn": "flush gl.js:150",
+    "ms": 2.8
+   },
+   {
+    "fn": "dispatch main.js:77",
+    "ms": 2.8
+   },
+   {
+    "fn": "noise gen.js:37",
+    "ms": 2.7
+   },
+   {
+    "fn": "clearRect :0",
+    "ms": 2.6
+   },
+   {
+    "fn": "quad gl.js:185",
+    "ms": 2.4
+   }
+  ],
+  "20000-pan": [
+   {
+    "fn": "texSubImage3D :0",
+    "ms": 408.7
+   },
+   {
+    "fn": "(garbage collector) :0",
+    "ms": 28.1
+   },
+   {
+    "fn": "drawImage :0",
+    "ms": 26.4
+   },
+   {
+    "fn": "drawClouds main.js:487",
+    "ms": 24
+   },
+   {
+    "fn": "drawLabels main.js:537",
+    "ms": 18.7
+   },
+   {
+    "fn": "frameBody main.js:598",
+    "ms": 18.5
+   },
+   {
+    "fn": "bufferData :0",
+    "ms": 15
+   },
+   {
+    "fn": "drawTiles main.js:285",
+    "ms": 13.1
+   },
+   {
+    "fn": "lightLevel main.js:305",
+    "ms": 12.5
+   },
+   {
+    "fn": "frame main.js:597",
+    "ms": 11.6
+   },
+   {
+    "fn": "mkBins gen.js:1717",
+    "ms": 11
+   },
+   {
+    "fn": "clear :0",
+    "ms": 9.5
+   },
+   {
+    "fn": "nameCanvas game.js:527",
+    "ms": 7.9
+   },
+   {
+    "fn": "GL2D.api.polyline gl.js:378",
+    "ms": 7.8
+   },
+   {
+    "fn": "getBoundingClientRect :0",
+    "ms": 7.8
+   },
+   {
+    "fn": "glBorders game.js:517",
+    "ms": 6.8
+   },
+   {
+    "fn": "bindFramebuffer :0",
+    "ms": 6.7
+   },
+   {
+    "fn": "drawDeposits game.js:561",
+    "ms": 6.2
+   },
+   {
+    "fn": "uniform1i :0",
+    "ms": 5.6
+   },
+   {
+    "fn": "activeTexture :0",
+    "ms": 5.6
+   },
+   {
+    "fn": "sim game.js:422",
+    "ms": 5.4
+   },
+   {
+    "fn": "w.onmessage main.js:66",
+    "ms": 5.3
+   },
+   {
+    "fn": "pf main.js:593",
+    "ms": 5.3
+   },
+   {
+    "fn": "update lights.js:41",
+    "ms": 5.2
+   },
+   {
+    "fn": "requestAnimationFrame :0",
+    "ms": 4.8
+   }
+  ],
+  "20000-jerk": [
+   {
+    "fn": "texSubImage3D :0",
+    "ms": 1047.3
+   },
+   {
+    "fn": "drawLabels main.js:537",
+    "ms": 17.6
+   },
+   {
+    "fn": "drawImage :0",
+    "ms": 13
+   },
+   {
+    "fn": "bufferData :0",
+    "ms": 11.7
+   },
+   {
+    "fn": "GL2D.api.polyline gl.js:378",
+    "ms": 10.7
+   },
+   {
+    "fn": "w.onmessage main.js:66",
+    "ms": 8.8
+   },
+   {
+    "fn": "econ game.js:275",
+    "ms": 7.9
+   },
+   {
+    "fn": "frameBody main.js:598",
+    "ms": 7.8
+   },
+   {
+    "fn": "lightLevel main.js:305",
+    "ms": 7.7
+   },
+   {
+    "fn": "drawTiles main.js:285",
+    "ms": 7.6
+   },
+   {
+    "fn": "drawDeposits game.js:561",
+    "ms": 6.8
+   },
+   {
+    "fn": "drawClouds main.js:487",
+    "ms": 6.6
+   },
+   {
+    "fn": "getBoundingClientRect :0",
+    "ms": 6.4
+   },
+   {
+    "fn": "visible lights.js:44",
+    "ms": 6
+   },
+   {
+    "fn": "frame main.js:597",
+    "ms": 5.7
+   },
+   {
+    "fn": "dispatch main.js:77",
+    "ms": 5.1
+   },
+   {
+    "fn": "postMessage :0",
+    "ms": 5.1
+   },
+   {
+    "fn": "drawObjects game.js:835",
+    "ms": 4.8
+   },
+   {
+    "fn": "(анон) :7",
+    "ms": 4.7
+   },
+   {
+    "fn": "bindFramebuffer :0",
+    "ms": 4.3
+   },
+   {
+    "fn": "glBorders game.js:517",
+    "ms": 4.3
+   },
+   {
+    "fn": "rebuildPol game.js:450",
+    "ms": 3.9
+   },
+   {
+    "fn": "GL2D.api.tile gl.js:302",
+    "ms": 3.8
+   },
+   {
+    "fn": "flush gl.js:150",
+    "ms": 3.7
+   },
+   {
+    "fn": "bindTexture :0",
+    "ms": 3.4
+   }
+  ]
+ }
+}
