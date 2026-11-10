@@ -8,7 +8,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 
 export function build() {
-  let html = read('index.html');
+  let html = read('index.html').split('\r\n').join('\n'); // Windows checkouts have CRLF
   const swap = (tag, inline) => {
     if (!html.includes(tag)) throw new Error(`В index.html не найден тег: ${tag}`);
     html = html.replace(tag, () => inline);

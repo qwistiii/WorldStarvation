@@ -1,19 +1,19 @@
 {
   "name": "world-starvation",
-  "version": "5.13.0",
-  "description": "World Starvation — браузерная стратегия на процедурном мире (вид сверху, Canvas 2D + Web Workers)",
+  "version": "6.0.0",
+  "description": "World Starvation — браузерная стратегия наших дней на огромном процедурном мире (вид сверху, WebGL2 + Web Workers)",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node tools/serve.mjs",
     "build": "node tools/build.mjs",
     "test": "node tests/run.mjs",
-    "test:browser": "node tools/build.mjs && node tests/smoke.mjs && node tests/visual.mjs && node tests/game.mjs && node tests/game57.mjs && node tests/game58.mjs && node tests/game59.mjs && node tests/game511.mjs",
     "test:unit": "node --test tests/unit/parallax.test.mjs tests/unit/place.test.mjs tests/unit/pads.test.mjs tests/unit/lights.test.mjs",
     "test:e2e": "node tests/e2e/run.mjs",
     "test:legacy": "node --test tests/gen.test.mjs tests/geometry.test.mjs tests/game.test.mjs tests/stage57.test.mjs",
     "bench": "node tests/perf/bench.mjs",
-    "parity": "node tests/visual/parity.mjs"
+    "parity": "node tests/visual/parity.mjs",
+    "test:mechanics": "node tools/build.mjs && node tests/smoke.mjs && node tests/visual.mjs && node tests/game.mjs && node tests/game57.mjs && node tests/game58.mjs && node tests/game59.mjs && node tests/game511.mjs"
   },
   "engines": {
     "node": ">=18"

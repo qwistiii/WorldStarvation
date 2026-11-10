@@ -1,70 +1,39 @@
 name: tests
+# Every pull request and every push to main: unit tests, the world generator tests and the browser scenario
+# (desktop 1920x1080 and phone 390x844). The frame budget is not checked here — the CI machine has no GPU.
 on:
   pull_request:
-    paths-ignore: ['patches/**']
+  push:
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
-  pull-requests: write
-  issues: write
 concurrency:
   group: tests-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm ci || npm install
+      - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: unit
-        id: unit
-        continue-on-error: true
-        run: set -o pipefail; npm test 2>&1 | tee unit.log
-      - name: browser
-        id: browser
-        continue-on-error: true
-        run: set -o pipefail; npm run test:browser 2>&1 | tee browser.log
-      - name: perf-branch
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          timeout 600 node tools/perf.mjs 2>&1 | tee perf-branch.log
-          if [ -f tests/perf-fly.mjs ]; then timeout 600 node tests/perf-fly.mjs 2>&1 | tee fly-branch.log; fi
-      - name: perf-main
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          git worktree add ../base origin/main
-          if [ -f tests/perf-fly.mjs ]; then cp tests/perf-fly.mjs ../base/tests/; fi
-          cd ../base
-          (npm ci || npm install)
-          timeout 600 node tools/perf.mjs 2>&1 | tee "$GITHUB_WORKSPACE/perf-main.log"
-          if [ -f tests/perf-fly.mjs ]; then timeout 600 node tests/perf-fly.mjs 2>&1 | tee "$GITHUB_WORKSPACE/fly-main.log"; fi
-      - name: report
+      - name: unit tests
+        run: npm run test:unit
+      - name: world generator tests
+        run: npm run test:legacy
+      - name: browser scenario
+        run: node tests/e2e/run.mjs --no-perf
+      - name: build the single-file version
+        run: npm run build
+      - name: screenshots
         if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          PR="${{ github.event.pull_request.number }}"
-          if [ -z "$PR" ]; then PR=$(gh pr list --head "$GITHUB_REF_NAME" --state open --json number -q '.[0].number'); fi
-          if [ -z "$PR" ]; then echo "no PR"; exit 0; fi
-          {
-            echo "sha: $(git rev-parse --short HEAD) · $GITHUB_EVENT_NAME · unit: ${{ steps.unit.outcome }} · browser: ${{ steps.browser.outcome }}"
-            for f in unit browser perf-branch perf-main fly-branch fly-main; do
-              [ -f "$f.log" ] || continue
-              n=5000; [ "$f" = unit ] && n=2500; [ "$f" = browser ] && n=9000
-              echo "### $f"; echo '~~~'
-              tail -c $n "$f.log"
-              echo '~~~'
-            done
-          } > report.md
-          gh pr comment "$PR" --body-file report.md
-      - if: steps.unit.outcome == 'failure' || steps.browser.outcome == 'failure'
-        run: exit 1
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: .work/e2e/
+          if-no-files-found: ignore
