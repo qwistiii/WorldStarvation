@@ -329,7 +329,21 @@ async function menuJob(browser) {
   const dev = 'menu', ctx = await browser.newContext({ viewport: { width: 1600, height: 900 } }), page = await ctx.newPage(), errors = watchErrors(page);
   const vis = () => page.evaluate(() => [...document.querySelectorAll('.gm')].filter((e) => getComputedStyle(e).display !== 'none' && e.offsetWidth > 0).map((e) => e.id));
   try {
-    await openMenu(page, PORT, '?workers=2'); await newGame(page); await settle(page, 15000);
+    await openMenu(page, PORT, '?workers=2');
+    // the capital (stage 6.1): one crosshair — the system cursor is hidden over the map, the game draws its own; the prompt
+    // is in the bar on top; over the sea the reason is red
+    await page.evaluate(() => localStorage.clear()); await page.click('[data-go="new"]');
+    await page.evaluate(() => { const C = __ui.C; C.seed = 1337; C.rules.botCount = 2; C.slot = 6; }); await page.click('#screate');
+    await page.waitForFunction(() => typeof Game !== 'undefined' && Game.api && Game.api.ready, null, { timeout: 90000 }); await settle(page, 10000);
+    await page.click('#a-found'); await page.mouse.move(800, 450); await page.waitForTimeout(400);
+    const cap = await page.evaluate(() => ({ cursor: getComputedStyle(document.getElementById('c')).cursor, bar: document.getElementById('pbar').classList.contains('show'), t: document.getElementById('pbt').textContent, hint: getComputedStyle(document.getElementById('hint')).display }));
+    const sea = await page.evaluate(() => { const a = Game.api; for (let y = 300; y < 700; y += 25) for (let x = 200; x < 1400; x += 25) { const [wx, wy] = a.toWorld(x, y); if (Game._test.validSite(wx, wy)) return [x, y]; } return null; });
+    let bad = null; if (sea) { await page.mouse.move(sea[0], sea[1]); await page.waitForTimeout(300); bad = await page.evaluate(() => ({ cls: document.getElementById('pbar').className, s: document.getElementById('pbs').textContent })); }
+    check(dev, cap.cursor === 'none' && cap.bar && /Столица/.test(cap.t) && cap.hint === 'none', 'столица: один крестик (системный курсор скрыт), подсказка в плашке сверху', JSON.stringify(cap));
+    check(dev, !sea || (bad && /bad/.test(bad.cls) && bad.s.length > 3), 'столица: над неподходящим местом — причина отказа в плашке', JSON.stringify(bad));
+    await page.evaluate(() => { for (let r = 0; r < 60000; r += 1500) for (let a = 0; a < 6.28; a += 0.3) { const x = 65536 + Math.cos(a) * r, y = 65536 + Math.sin(a) * r; if (Game._test.validSite(x, y) === null) { Game._test.found(x, y); return; } } });
+    await page.waitForFunction(() => Game.G.phase === 'play' && Game.G.states[0].places.length, null, { timeout: 90000 }); await settle(page, 15000);
+    check(dev, await page.evaluate(() => getComputedStyle(document.getElementById('c')).cursor !== 'none'), 'после основания столицы курсор над картой обычный');
     await page.click('#b-ores'); await page.waitForTimeout(200);
     check(dev, (await vis()).includes('orep'), 'в игре панель «Свободные залежи» открывается');
     await page.click('#bmenu'); await page.waitForTimeout(250); await page.click('#pexit'); await page.waitForTimeout(800);
