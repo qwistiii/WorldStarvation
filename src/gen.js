@@ -1236,7 +1236,10 @@ function sprites(){if(SPR)return SPR;SPR={tree:[],treeS:[[],[],[]],car:[],truck:
   for(let v=0;v<CARC.length;v++)for(let t=0;t<3;t++)SPR.car.push(mkCar(CARC[v],(v+t)%3));
   // 10 px/m copies (box-filtered down) for parked cars in tiles and for traffic seen from afar: no sparkle when minified
   SPR.carLo=SPR.car.map(c=>{let src=c;for(const w of [100,50]){const d=mkCanvas(w,w/2),x=d.getContext('2d');x.imageSmoothingEnabled=true;x.imageSmoothingQuality='high';x.drawImage(src,0,0,w,w/2);src=d}return src});
-  for(let v=0;v<5;v++)SPR.truck.push(mkTruck(v));SPR.bus=mkBus();return SPR}
+  for(let v=0;v<5;v++)SPR.truck.push(mkTruck(v));SPR.bus=mkBus();
+  SPR.carSh=mkCarSh();SPR.truckSh=mkBoxSh(340,68,3,4,162,25,0.3);SPR.busSh=mkBoxSh(250,60,2,3,118,23,0.3);return SPR}
+// sun offset of a vehicle's footprint shadow, metres along the sun per kind (the old painted offsets: car 0.16 m, truck and bus 0.3 m)
+const VSH={car:0.27,truck:0.55,bus:0.55};
 // ---------------------------------------------------------------- military vehicles (stage 5), top view, facing +x
 // 0 main battle tank, 1 tracked IFV, 2 8x8 APC, 3 SAM launcher, 4 army truck, 5 attack helicopter; camo 0 woodland, 1 desert, 2 urban
 const CAMO=[[[94,104,64],[58,68,42],[130,130,90]],[[178,154,110],[138,114,78],[204,186,144]],[[122,126,122],[82,86,86],[160,164,160]]];
@@ -1428,8 +1431,7 @@ function cs(c,k){return 'rgb('+M.min(255,c[0]*k|0)+','+M.min(255,c[1]*k|0)+','+M
 function mkCar(c,v){ // 5 x 2.5 m; drawn at 40 px/m so it stays sharp at the closest zoom. v: 0 sedan, 1 hatchback, 2 SUV
   const K=4,cv=mkCanvas(50*K,25*K),x=cv.getContext('2d');x.scale(K,K);v=v||0;
   const L0=3,L1=47,T=3.6,B=21.4,W=B-T,cy=(T+B)/2,rear=v===1?11.5:v===2?9:11,fwd=v===2?35.5:33,roofA=rear+(v===1?1.5:3.2),roofB=fwd-(v===2?3:4.5);
-  // soft shadow
-  x.fillStyle='rgba(0,0,0,0.16)';rr(x,L0+1.6,T+1.4,L1-L0,W+0.6,6.5);x.fill();x.fillStyle='rgba(0,0,0,0.18)';rr(x,L0+0.8,T+0.7,L1-L0,W,6);x.fill();
+  // (stage 6: the soft shadow is the separate sprite carSh, laid along the sun where the car is drawn)
   // tyres peeking out at the corners
   x.fillStyle='#161616';for(const wx of [L0+6.5,L1-8.5])for(const wy of [T-0.35,B-1.65])rr(x,wx,wy,5,2,0.8),x.fill();
   // body: rounded box shaded across the width (sides darker, crown lit)
@@ -1452,19 +1454,22 @@ function mkCar(c,v){ // 5 x 2.5 m; drawn at 40 px/m so it stays sharp at the clo
   x.fillStyle='rgba(255,250,225,0.98)';rr(x,L1-2.4,T+0.9,1.9,3,0.8);x.fill();rr(x,L1-2.4,B-3.9,1.9,3,0.8);x.fill();
   x.fillStyle='rgba(200,24,20,0.96)';rr(x,L0+0.2,T+1,1.5,3.2,0.6);x.fill();rr(x,L0+0.2,B-4.2,1.5,3.2,0.6);x.fill();
   return cv}
+// footprint shadows of the vehicles, in the frame of their sprites (centred, no offset: it goes along the sun when drawn)
+function mkCarSh(){const K=4,cv=mkCanvas(50*K,25*K),x=cv.getContext('2d');x.scale(K,K);const L0=3,L1=47,T=3.6,B=21.4,W=B-T;
+  x.fillStyle='rgba(0,0,0,0.16)';rr(x,L0-0.4,T-0.3,L1-L0+0.8,W+0.6,7);x.fill();x.fillStyle='rgba(0,0,0,0.18)';rr(x,L0,T,L1-L0,W,6);x.fill();return cv}
+function mkBoxSh(w,h,bx,by,bw,bh,a){const cv=mkCanvas(w,h),x=cv.getContext('2d');x.scale(2,2);x.fillStyle=`rgba(0,0,0,${a})`;x.fillRect(bx,by,bw,bh);return cv}
 function mkTruck(v){const cv=mkCanvas(340,68),x=cv.getContext('2d');x.scale(2,2);const tc=[[235,235,235],[200,60,40],[40,90,160],[220,200,60],[90,100,90]][v];
-  x.fillStyle='rgba(0,0,0,0.3)';x.fillRect(6,7,162,25);
   x.fillStyle=cs(tc,1);x.fillRect(3,4,128,25);x.fillStyle='rgba(0,0,0,0.12)';for(let k=8;k<128;k+=10)x.fillRect(3+k,4,1,25);
   x.fillStyle='rgba(255,255,255,0.15)';x.fillRect(3,4,128,4);
   const cc=[[200,30,30],[240,240,240],[40,40,40],[30,80,150],[230,120,30]][(v+2)%5];x.fillStyle='#222';x.fillRect(131,9,6,15);
   x.fillStyle=cs(cc,1);rr(x,137,5,26,24,3);x.fill();x.fillStyle='rgba(25,35,45,0.9)';x.fillRect(158,7,4,20);x.fillStyle=cs(cc,1.2);x.fillRect(140,8,14,18);return cv}
-function mkBus(){const cv=mkCanvas(250,60),x=cv.getContext('2d');x.scale(2,2);x.fillStyle='rgba(0,0,0,0.3)';x.fillRect(5,6,118,23);
+function mkBus(){const cv=mkCanvas(250,60),x=cv.getContext('2d');x.scale(2,2);
   x.fillStyle='#e8e6dc';rr(x,2,3,120,24,4);x.fill();x.fillStyle='#d8a020';x.fillRect(2,3,120,4);x.fillRect(2,23,120,4);
   x.fillStyle='rgba(30,40,50,0.6)';x.fillRect(8,9,100,12);x.fillStyle='#ccc';x.fillRect(30,11,10,8);x.fillRect(70,11,10,8);x.fillStyle='rgba(25,35,45,0.95)';x.fillRect(114,6,6,18);return cv}
 
-function drawShip(x,len,st,ci){ // local frame metres, facing +x, centred
+function drawShip(x,len,st,ci,noSh){ // local frame metres, facing +x, centred; noSh: without the shadow (stage 6: drawn along the sun)
   const w=len*(st===2?0.16:0.14),h=len/2;
-  x.fillStyle='rgba(0,10,20,0.35)';x.beginPath();x.moveTo(-h+4,-w/2+4);x.lineTo(h*0.7+4,-w/2+4);x.quadraticCurveTo(h+4,4,h*0.7+4,w/2+4);x.lineTo(-h+4,w/2+4);x.closePath();x.fill();
+  if(!noSh){x.fillStyle='rgba(0,10,20,0.35)';x.beginPath();x.moveTo(-h+4,-w/2+4);x.lineTo(h*0.7+4,-w/2+4);x.quadraticCurveTo(h+4,4,h*0.7+4,w/2+4);x.lineTo(-h+4,w/2+4);x.closePath();x.fill()}
   const hull=[[160,40,40],[30,50,80],[40,40,44],[60,90,60],[160,60,30],[200,200,200]][ci];
   x.fillStyle=cs(hull,1);x.beginPath();x.moveTo(-h,-w/2);x.lineTo(h*0.7,-w/2);x.quadraticCurveTo(h,0,h*0.7,w/2);x.lineTo(-h,w/2);x.closePath();x.fill();
   x.fillStyle=st===1?'#6b5a4a':'#8a8a86';x.beginPath();x.moveTo(-h+2,-w/2+1.5);x.lineTo(h*0.68,-w/2+1.5);x.quadraticCurveTo(h-3,0,h*0.68,w/2-1.5);x.lineTo(-h+2,w/2-1.5);x.closePath();x.fill();
@@ -1657,7 +1662,9 @@ function raster(ctx,x0,y0,mpp,near){const WIN=SEASON===2;if(EMPTY)VCx=1e9;
         if(rk>0){const rc=112+dt*26;const rk2=WIN?rk*smooth(0.6,1.5,slope+dt*0.5):rk;R=lerp(R,rc+8,rk2);Gc=lerp(Gc,rc,rk2);Bc=lerp(Bc,rc-12,rk2)}
         const sn=smooth(0.8,0.88,e+dt*0.05)*(1-smooth(0.7,1.4,slope)*0.8);if(sn>0){R=lerp(R,238,sn);Gc=lerp(Gc,242,sn);Bc=lerp(Bc,248,sn)}
         // stage 6: the worn ground of a building's apron (compacted soil, trampled snow), mottled by the detail noise
-        // a grass verge between the headland of the fields and the pad; the soil is trodden only near the pad edge
+        // a grass verge between the headland of the fields and the pad; the soil is trodden only near the pad edge.
+        // In autumn the verge is dry grass, close to the stubble around it (a green verge read as a dark outline)
+        if(zi>0.002&&SEASON===1){const dg=smooth(0.22,0.5,zi)*0.62;R=lerp(R,168+dt*12,dg);Gc=lerp(Gc,142+dt*10,dg);Bc=lerp(Bc,74+dt*6,dg)}
         if(zw>0.002){const wv=smooth(0.42,0.92,zw/M.max(zi,0.01))*smooth(0.55,0.98,zi)*M.min(1,zw/M.max(zi,0.01)/0.75)*(0.78+dt*0.35),wc=0.95+dt*0.1;
           if(WIN){R=lerp(R,204*wc,wv*0.6);Gc=lerp(Gc,204*wc,wv*0.6);Bc=lerp(Bc,200*wc,wv*0.6)}
           else if(SEASON===1){R=lerp(R,164*wc,wv*0.8);Gc=lerp(Gc,146*wc,wv*0.8);Bc=lerp(Bc,106*wc,wv*0.8)}else{R=lerp(R,166*wc,wv*0.8);Gc=lerp(Gc,156*wc,wv*0.8);Bc=lerp(Bc,120*wc,wv*0.8)}}
@@ -2153,7 +2160,7 @@ function gfCanopies(ctx,p,GU,ca,sa,s){
           // umbrella: 8 panels, alternating tone, at 2.3 m
           const cx=X+LNX*2.3,cy=Y+LNY*2.3;for(let k=0;k<8;k++){ctx.fillStyle=cs(k&1?uc:[236,232,222],k<4?1.02:0.86);ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,1.1,k*PI/4,(k+1)*PI/4);ctx.closePath();ctx.fill()}
           ctx.fillStyle='rgba(30,30,30,0.6)';ctx.beginPath();ctx.arc(cx,cy,0.08,0,TAU);ctx.fill()}}
-      if(u[0]===4&&(u[3]&1)){const S=sprites(),a=(u[1]+u[2])/2;ctx.save();ctx.translate(GA+GEX*a+GNX*0.35,GB+GEY*a+GNY*0.35);ctx.rotate(M.atan2(GNY,GNX));ctx.drawImage(S.truck[(u[3]>>>3)%5],0,-2.1,17,4.2);ctx.restore()}
+      if(u[0]===4&&(u[3]&1)){const S=sprites(),a=(u[1]+u[2])/2;for(const sh of [1,0]){ctx.save();ctx.translate(GA+GEX*a+GNX*0.35+(sh?SDX*VSH.truck:0),GB+GEY*a+GNY*0.35+(sh?SDY*VSH.truck:0));ctx.rotate(M.atan2(GNY,GNX));ctx.drawImage(sh?S.truckSh:S.truck[(u[3]>>>3)%5],0,-2.1,17,4.2);ctx.restore()}}
       if(!cp)continue;const [z0,z1,d,c]=cp;const top=SEASON===2?(u[0]===1?[c[0]*0.45+126,c[1]*0.45+129,c[2]*0.45+131]:[226,230,234]):c;
       ctx.fillStyle=cs(top,1);ctx.beginPath();gq(ctx,u[1],u[2],0,d,z0,z1,LNX,LNY,1);ctx.fill();
       if(u[0]===1&&((u[3]>>>9)&1)&&s>2.5){ // striped canvas
@@ -2436,13 +2443,14 @@ function drawPrims(ctx,P,pass,mpp){const s=1/mpp;
   if(pass===2&&DEF.length){if(DEF.length>1)DEF.sort((a,b)=>tallKey(b)-tallKey(a));for(let i=0;i<DEF.length;i++)drawTall(ctx,DEF[i],s);DEF.length=0}}
 function drawParked(ctx,p,s){const S=sprites();const r=rng(p.seed);const hor=p.w>=p.h;
   if(p.bus){const L=hor?p.h:p.w;const rows=M.max(1,M.floor(L/14));const n=hor?M.floor(p.w/4):M.floor(p.h/4);
-    for(let rw=0;rw<rows;rw++)for(let q=0;q<n;q++){if(r()>p.fill)continue;ctx.save();if(hor){ctx.translate(p.x+q*4+2,p.y+rw*14+7);ctx.rotate(PI/2)}else{ctx.translate(p.x+rw*14+7,p.y+q*4+2)}ctx.drawImage(S.bus,-6.25,-1.5,12.5,3);ctx.restore()}return}
-  if(p.truck){const n=hor?M.floor(p.w/4.2):M.floor(p.h/4.2);for(let q=0;q<n;q++){if(r()>p.fill)continue;const spr=S.truck[r()*5|0];ctx.save();if(hor){ctx.translate(p.x+q*4.2+2.1,p.y+p.h/2);ctx.rotate(PI/2)}else{ctx.translate(p.x+p.w/2,p.y+q*4.2+2.1)}
-      const L=M.min(17,hor?p.h:p.w);ctx.drawImage(spr,-L/2,-2.1,L,4.2);ctx.restore()}return}
+    for(let rw=0;rw<rows;rw++)for(let q=0;q<n;q++){if(r()>p.fill)continue;const cx=hor?p.x+q*4+2:p.x+rw*14+7,cy=hor?p.y+rw*14+7:p.y+q*4+2;
+      for(const sh of [1,0]){ctx.save();ctx.translate(cx+(sh?SDX*VSH.bus:0),cy+(sh?SDY*VSH.bus:0));if(hor)ctx.rotate(PI/2);ctx.drawImage(sh?S.busSh:S.bus,-6.25,-1.5,12.5,3);ctx.restore()}}return}
+  if(p.truck){const n=hor?M.floor(p.w/4.2):M.floor(p.h/4.2);for(let q=0;q<n;q++){if(r()>p.fill)continue;const spr=S.truck[r()*5|0];const cx=hor?p.x+q*4.2+2.1:p.x+p.w/2,cy=hor?p.y+p.h/2:p.y+q*4.2+2.1;
+      const L=M.min(17,hor?p.h:p.w);for(const sh of [1,0]){ctx.save();ctx.translate(cx+(sh?SDX*VSH.truck:0),cy+(sh?SDY*VSH.truck:0));if(hor)ctx.rotate(PI/2);ctx.drawImage(sh?S.truckSh:spr,-L/2,-2.1,L,4.2);ctx.restore()}}return}
   const rows=M.max(1,M.floor((hor?p.h:p.w)/5.4));
   for(let rw=0;rw<rows;rw++){const L=hor?p.w:p.h;for(let a=0;a+2.6<=L;a+=2.6){if(r()>p.fill)continue;const spr=S.carLo[r()*S.carLo.length|0];const fl=r()<0.5;
-    ctx.save();if(hor){ctx.translate(p.x+a+1.3,p.y+rw*5.4+2.5);ctx.rotate(fl?PI/2:-PI/2)}else{ctx.translate(p.x+rw*5.4+2.5,p.y+a+1.3);if(fl)ctx.rotate(PI)}
-    ctx.drawImage(spr,-2.5,-1.25,5,2.5);ctx.restore()}}}
+    const cx=hor?p.x+a+1.3:p.x+rw*5.4+2.5,cy=hor?p.y+rw*5.4+2.5:p.y+a+1.3;
+    for(const sh of [1,0]){ctx.save();ctx.translate(cx+(sh?SDX*VSH.car:0),cy+(sh?SDY*VSH.car:0));if(hor)ctx.rotate(fl?PI/2:-PI/2);else if(fl)ctx.rotate(PI);ctx.drawImage(sh?S.carSh:spr,-2.5,-1.25,5,2.5);ctx.restore()}}}}
 
 // ---------------------------------------------------------------- roads drawing
 let TX0=0,TY0=0;

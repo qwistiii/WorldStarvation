@@ -35,6 +35,8 @@ const VIEWS = [
   ['dusk', 'city', 0, 2.5, 18.7, 1, 0],
   ['night', 'city', 0, 1.6, 23, 1, 0],
   ['coast', 'port', 0, 1.5, 12, 0, 0],
+  ['cars', 'road', 0, 0.06, 12, 0, 0],
+  ['ships', 'port', 0, 0.3, 12, 0, -200],
 ];
 
 async function shoot(tag, files) {
@@ -56,7 +58,8 @@ async function shoot(tag, files) {
       window.__dt = null; window.__T = null;
       const c = W.cities.slice().sort((a, b) => b.R - a.R)[0];
       let x = W.WORLD / 2, y = W.WORLD / 2;
-      if (wx === 'city') { x = c.x; y = c.y } else if (wx === 'port') { const z = W.zones.find((q) => q.zk === 'port') || c; x = z.x; y = z.y }
+      if (wx === 'road') { const r = W.queryRoads(c.x - 800, c.y - 800, c.x + 800, c.y + 800).filter((q) => q.k === 2 && q.L > 400)[0]; const p = W.posAt(r, r.L / 2); x = p[0]; y = p[1] }
+      else if (wx === 'city') { x = c.x; y = c.y } else if (wx === 'port') { const z = W.zones.find((q) => q.zk === 'port') || c; x = z.x; y = z.y }
       A.setTod(tod); A.setWeather(w); A.setSpeed(0); A.closeInsp && A.closeInsp();
       A.cam.x = x + dx; A.cam.y = y; A.cam.m = m === 'max' ? A.maxM() : m;
       let q = 0, sig = ''; for (let i = 0; i < 1200; i++) { await sl(100); const s = A.stats(), g = s.tiles + '/' + s.lights; if (!s.queue && !s.pending && g === sig) { if (++q > 10) break } else q = 0; sig = g }

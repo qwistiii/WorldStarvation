@@ -30,7 +30,7 @@ const GROWS=new Map(cfg.grow||[]);for(const [id,g] of GROWS)W.setGrow(id,g);
 let HIDL=[];
 // main-thread copies of sprites as regular canvases (faster to draw than OffscreenCanvas sources in some browsers)
 const SP=c=>ctx.sprite(c); // sprites go into the GL atlas
-const S={car:S0.car.map(SP),carLo:S0.carLo.map(SP),truck:S0.truck.map(SP),bus:SP(S0.bus)};
+const S={car:S0.car.map(SP),carLo:S0.carLo.map(SP),truck:S0.truck.map(SP),bus:SP(S0.bus),carSh:SP(S0.carSh),truckSh:SP(S0.truckSh),busSh:SP(S0.busSh)};
 const opt=Object.assign({clouds:true,labels:true,traffic:true},cfg.view||{});
 
 // ------------------------------------------------------------ workers / tile caches
@@ -222,7 +222,7 @@ const BOW=(()=>{const c=mk(20,24),x=c.getContext('2d');x.fillStyle='rgba(255,255
 // ship hulls: W.drawShip is vector art; each (length, style, colour, resolution) is drawn once into its own texture and
 // kept while ships of that kind are on screen (resolution follows the zoom, up to the 8 px/m of the closest tiles)
 const SHIPS=new Map();function shipSprite(L,st,c,m){const ps=m<0.15?8:m<0.4?4:2,key=L+'|'+st+'|'+c+'|'+ps;let e=SHIPS.get(key);
-  if(!e){const w=L*(st===2?0.16:0.14),h=L/2;const cw=M.ceil((L+10)*ps),ch=M.ceil((w+10)*ps);const cv2=mk(cw,ch),x=cv2.getContext('2d');x.scale(ps,ps);x.translate(h+3,w/2+3);W.drawShip(x,L,st,c);
+  if(!e){const w=L*(st===2?0.16:0.14),h=L/2;const cw=M.ceil((L+10)*ps),ch=M.ceil((w+10)*ps);const cv2=mk(cw,ch),x=cv2.getContext('2d');x.scale(ps,ps);x.translate(h+3,w/2+3);W.drawShip(x,L,st,c,true);
     e={r:{tex:ctx.texture(0,0,cv2),x:0,y:0,w:cw,h:ch},ox:-(h+3),oy:-(w/2+3),w:cw/ps,h:ch/ps,f:0};SHIPS.set(key,e)}e.f=frameNo;return e}
 // tileable fog texture
 const FOG=(()=>{const c=cached('fog'+SEED,()=>{const N=256,c=mk(N,N),x=c.getContext('2d'),id=x.createImageData(N,N),d=id.data;const f=(i,j)=>{let n=0,a=0.55,q=4/N;for(let o=0;o<5;o++){n+=a*W.noise(i*q+o*7.1,j*q-o*3.3);a*=0.5;q*=2}return n};
@@ -268,8 +268,10 @@ const sxw=x=>(x-cam.x)/cam.m+VW/2,syw=y=>(y-cam.y)/cam.m+VH/2;
 let vx0,vy0,vx1,vy1;
 function inView(x,y,r){return x>vx0-r&&x<vx1+r&&y>vy0-r&&y<vy1+r}
 function setRot(x,y,hx,hy,k){ctx.setTransform(DPR*k*hx,DPR*k*hy,-DPR*k*hy,DPR*k*hx,DPR*x,DPR*y)}
-function tileZ(){const md=cam.m/M.min(DPR,1.5);let z=M.ceil(M.log2(WORLD/(256*md))-0.25);return clamp(z,0,12)}
-function tileZAt(m){const md=m/M.min(DPR,1.5);return clamp(M.ceil(M.log2(WORLD/(256*md))-0.25),0,12)}
+// tiles at most at 1.5 device px per tile px; the 'high' quality (DPR 2) gets tiles at 2 — sharp, not stretched
+const TDPR=M.min(DPR,VQ.dpr>=2?2:1.5);
+function tileZ(){const md=cam.m/TDPR;let z=M.ceil(M.log2(WORLD/(256*md))-0.25);return clamp(z,0,12)}
+function tileZAt(m){const md=m/TDPR;return clamp(M.ceil(M.log2(WORLD/(256*md))-0.25),0,12)}
 // stage 5.12: the goal of a flight (flyTo) or of a wheel zoom — its tiles are rendered first, so the view is sharp on arrival
 function camGoal(){if(fly)return [fly.x1,fly.y1,M.exp(fly.l1),-5e5];if(zoomT){const wx=cam.x+(zoomT.sx-VW/2)*cam.m,wy=cam.y+(zoomT.sy-VH/2)*cam.m;return [wx-(zoomT.sx-VW/2)*zoomT.m,wy-(zoomT.sy-VH/2)*zoomT.m,zoomT.m,-50]}return null}
 function preRect(zt,cx,cy,m,p,L){const nt=1<<zt,tt=WORLD/nt,hw=VW/2*m,hh=VH/2*m;for(let y=M.max(0,M.floor((cy-hh)/tt));y<=M.min(nt-1,M.floor((cy+hh)/tt));y++)for(let x=M.max(0,M.floor((cx-hw)/tt));x<=M.min(nt-1,M.floor((cx+hw)/tt));x++){const d=M.hypot((x+0.5)*tt-cx,(y+0.5)*tt-cy)/tt;if(L)requestL(zt,x,y,p+d,L);else request(zt,x,y,p+d)}}
@@ -347,6 +349,8 @@ function drawTraffic(roads){const m=cam.m,k=1/m,dots=m>1.5;carCount=0;cbn=0;
           const ty=(hq>>>12)&31;const truck=(r.k===0&&(li%3===2?ty<18:ty<3))||(r.k===1&&ty<5);const bus=!truck&&r.k===2&&ty<2;
           if(cbn<40000){const o=cbn*5;CB[o]=X;CB[o+1]=Y;CB[o+2]=hx;CB[o+3]=hy;CB[o+4]=truck?8.5:bus?6.25:2.5;cbn++}
           if(dots){const ci=truck?8:bus?9:(hq>>>17)&7;DOTS[ci].push(X,Y,M.max(1.2,(truck?9:4.5)*k));continue}
+          // the footprint shadow along the sun (one light direction for everything), then the vehicle
+          {const so=truck||bus?0.55:0.27;setRot(X+W.SUNX*so*k,Y+W.SUNY*so*k,hx,hy,k);if(truck)ctx.drawImage(S.truckSh,-8.5,-2.1,17,4.25);else if(bus)ctx.drawImage(S.busSh,-6.25,-1.5,12.5,3);else ctx.drawImage(S.carSh,-2.5,-1.25,5,2.5)}
           setRot(X,Y,hx,hy,k);
           if(truck){ctx.drawImage(S.truck[(hq>>>17)%5],-8.5,-2.1,17,4.25)}else if(bus){ctx.drawImage(S.bus,-6.25,-1.5,12.5,3)}else ctx.drawImage((k>7?S.car:S.carLo)[(hq>>>17)%S.car.length],-2.5,-1.25,5,2.5)}}}
     if(r.tram&&!dots){const nT=M.max(1,M.round(r.L/450));for(const dir of [1,-1]){for(let q=0;q<nT;q++){const v=9;const s=((T*v+hsh(r.id,q,dir>0?31:32)*r.L+q*r.L/nT)%r.L);const sd=dir>0?s:r.L-s;const p=W.posAt(r,sd);
@@ -382,7 +386,10 @@ function drawShips(lp){const m=cam.m,k=1/m;if(m>(lp?120:30))return;if(lp)ctx.glo
       ctx.drawImage(GL_W,L*0.42-d/2,-d/2,d,d);ctx.drawImage(GL_W,-L*0.45-d/2,-d/2,d,d);ctx.drawImage(GL_R,L*0.1-d/2,-L*0.08-d/2,d,d);ctx.drawImage(GL_G,L*0.1-d/2,L*0.08-d/2,d,d);continue}
     setRot(X,Y,hx,hy,k);
     ctx.drawImage(WAKE,-L*3.2,-L*0.5,L*2.76,L);ctx.drawImage(BOW,L*0.3,-L*0.12,L*0.2,L*0.24);
-    const sp=shipSprite(L,sh.st,sh.c,m);ctx.drawImage(sp.r,sp.ox,sp.oy,sp.w,sp.h)}
+    const sp=shipSprite(L,sh.st,sh.c,m);
+    // the hull's shadow along the sun (it was painted 4 m to the hull's own starboard-aft and turned with the ship)
+    setRot(sxw(x+W.SUNX*6.4),syw(y+W.SUNY*6.4),hx,hy,k);ctx.tint=SHIPSH;ctx.globalAlpha=0.35;ctx.drawImage(sp.r,sp.ox,sp.oy,sp.w,sp.h);ctx.tint=null;ctx.globalAlpha=1;
+    setRot(X,Y,hx,hy,k);ctx.drawImage(sp.r,sp.ox,sp.oy,sp.w,sp.h)}
   ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}
 function drawEmitters(){const m=cam.m;if(m>28)return;ctx.setTransform(DPR,0,0,DPR,0,0);const k=1/m;const px=-W.WDY,py=W.WDX;
   for(const e of W.emitters){if(!inView(e.x,e.y,e.k==='steam'?1500:700)||(e.city>=0&&W.growOf(e.city)<0.95)||W.isHid(e.zid))continue;
@@ -430,7 +437,7 @@ function drawFlights(){const H=camH();ctx.setTransform(DPR,0,0,DPR,0,0);FLB.leng
     if(sz<2){if(sz>0.4){ctx.fillStyle='#fff';ctx.fillRect(X-1,Y-1,2,2)}continue}
     ctx.save();ctx.translate(X,Y);ctx.rotate(M.atan2(hy,hx));ctx.drawImage(PLANES[f.c],-sz/2,-sz/2,sz,sz);
     if(sz>10&&LG.night<0.3){const bl=(T*1.3+f.ph)%1<0.08;if(bl){const r=M.max(1.5,sz*0.02);disc(-sz*0.07,-sz*0.42,r,NAVR);disc(-sz*0.07,sz*0.42,r,NAVG)}}ctx.restore()}}
-const CTR=[1,1,1,1],NAVR=[1,60/255,60/255,0.95],NAVG=[80/255,1,120/255,0.95];
+const SHIPSH=[0,10/255,20/255,1],CTR=[1,1,1,1],NAVR=[1,60/255,60/255,0.95],NAVG=[80/255,1,120/255,0.95];
 // a filled circle (Canvas arc + fill) of colour c = [r, g, b, a]
 function disc(x,y,r,c){const t=ctx.tint,a=ctx.globalAlpha;ctx.tint=c;ctx.globalAlpha=a*c[3];ctx.drawImage(DISC,x-r*16/15,y-r*16/15,r*32/15,r*32/15);ctx.tint=t;ctx.globalAlpha=a}
 function drawFlightLights(a){if(a<0.02||!FLB.length)return;ctx.globalCompositeOperation='lighter';
@@ -505,10 +512,10 @@ const ZLIM={mil:12,gas:2.5,farm:5,cem:5,dacha:6,stn:5,sol2:2.5,dramp:2,gasw:4,ds
 function drawLabels(){const ctx=octx;ctx.setTransform(DPR,0,0,DPR,0,0);const m=cam.m;const boxes=[];ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineJoin='round';
   const lim=[9,32,95,380],fs=[11,12.5,15,19];const nl=LG.night;
   for(const c of W.cities){if(m>lim[c.type])continue;const X=sxw(c.x),Y=syw(c.y);if(X<-100||Y<-30||X>VW+100||Y>VH+30||(HK.seen&&!HK.seen(c.x,c.y)))continue;
-    const a=M.min(1,(lim[c.type]-m)/(lim[c.type]*0.3))*(m<0.6?0.55:1);ctx.font=`${c.type>=2?600:500} ${fs[c.type]}px system-ui,Segoe UI,Roboto,sans-serif`;const w=c._lw||(c._lw=ctx.measureText(c.name).width+8),h=fs[c.type]+4;
+    const a=M.min(1,(lim[c.type]-m)/(lim[c.type]*0.3))*(m<0.6?0.55:1);ctx.font=`${c.type>=2?600:500} ${fs[c.type]}px Rubik,system-ui,Segoe UI,Roboto,sans-serif`;const w=c._lw||(c._lw=ctx.measureText(c.name).width+8),h=fs[c.type]+4;
     let hit=false;for(const b of boxes){if(M.abs(b[0]-X)<(b[2]+w)/2&&M.abs(b[1]-Y)<(b[3]+h)/2){hit=true;break}}if(hit)continue;boxes.push([X,Y,w,h]);
     ctx.globalAlpha=a*(1-nl*0.15);ctx.strokeStyle='rgba(10,20,30,0.75)';ctx.lineWidth=3.5;ctx.strokeText(c.name,X,Y);ctx.fillStyle=c.type===3?'#fff6dc':'#ffffff';ctx.fillText(c.name,X,Y)}
-  if(m<12){ctx.font='500 11px system-ui,sans-serif';for(const z of W.zones){const lim=ZLIM[z.zk]||9;if(m>lim||!zoneOn(z))continue;const X=sxw(z.x),Y=syw(z.y);if(X<-80||Y<-20||X>VW+80||Y>VH+20)continue;const t=(z.dyn&&ZDYN[z.zk])||ZNAME[z.zk];ctx.globalAlpha=M.min(1,(lim-m)/(lim/3))*0.9;
+  if(m<12){ctx.font='500 11px Rubik,system-ui,sans-serif';for(const z of W.zones){const lim=ZLIM[z.zk]||9;if(m>lim||!zoneOn(z))continue;const X=sxw(z.x),Y=syw(z.y);if(X<-80||Y<-20||X>VW+80||Y>VH+20)continue;const t=(z.dyn&&ZDYN[z.zk])||ZNAME[z.zk];ctx.globalAlpha=M.min(1,(lim-m)/(lim/3))*0.9;
     ctx.strokeStyle='rgba(10,20,30,0.7)';ctx.lineWidth=3;ctx.strokeText(t,X,Y);ctx.fillStyle='#ffe9a8';ctx.fillText(t,X,Y)}}
   ctx.globalAlpha=1}
 

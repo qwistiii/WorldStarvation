@@ -517,7 +517,7 @@ function smoothst(a,b,x){let t=(x-a)/(b-a);t=t<0?0:t>1?1:t;return t*t*(3-2*t)}
 // state names: each label is rendered once into its own canvas (per size step) and then just blitted
 const NAMEC=new Map();
 function nameCanvas(s,sz){const key=s.id+'|'+s.name+'|'+sz;let c=NAMEC.get(key);if(c)return c;if(NAMEC.size>80)NAMEC.clear();
-  const t=s.name.toUpperCase(),d=M_DPR(),x0=document.createElement('canvas').getContext('2d');x0.font=`700 ${sz}px system-ui,Segoe UI,sans-serif`;const sp=sz*0.18;const ws=[...t].map(ch=>x0.measureText(ch).width);
+  const t=s.name.toUpperCase(),d=M_DPR(),x0=document.createElement('canvas').getContext('2d');x0.font=`700 ${sz}px Rubik,system-ui,Segoe UI,sans-serif`;const sp=sz*0.18;const ws=[...t].map(ch=>x0.measureText(ch).width);
   const w=ws.reduce((a,b)=>a+b,0)+sp*(t.length-1),pad=M.ceil(sz*0.2)+2;c=document.createElement('canvas');c.width=M.ceil((w+pad*2)*d);c.height=M.ceil((sz*1.4+pad*2)*d);c.lw=w+pad*2;c.lh=sz*1.4+pad*2;
   const x=c.getContext('2d');x.scale(d,d);x.font=x0.font;x.textBaseline='middle';x.textAlign='center';x.lineJoin='round';x.lineWidth=M.max(2,sz*0.12);x.strokeStyle='rgba(6,10,16,0.6)';
   x.fillStyle=`rgb(${s.rgb.map(v=>M.min(255,v*0.5+128)|0).join(',')})`;let px=pad;for(let i=0;i<t.length;i++){x.strokeText(t[i],px+ws[i]/2,c.lh/2);x.fillText(t[i],px+ws[i]/2,c.lh/2);px+=ws[i]+sp}
@@ -560,7 +560,7 @@ function drawPlacement(ctx,A){if(pend){const X=A.sxw(pend.x),Y=A.syw(pend.y),r=M
   if(!placing||!A.hover.on)return;const [x,y]=A.toWorld(A.hover.x,A.hover.y);const bad=validSite(x,y);const r=2900/A.cam.m;const X=A.hover.x,Y=A.hover.y;
   ctx.save();ctx.textAlign='left';ctx.strokeStyle=bad?'rgba(255,107,90,0.95)':'rgba(255,210,90,0.95)';ctx.fillStyle=bad?'rgba(255,107,90,0.12)':'rgba(255,210,90,0.12)';ctx.lineWidth=2;ctx.setLineDash([10,7]);ctx.lineDashOffset=-A.T*24;
   ctx.beginPath();ctx.arc(X,Y,M.max(10,r),0,M.PI*2);ctx.fill();ctx.stroke();ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(X-8,Y);ctx.lineTo(X+8,Y);ctx.moveTo(X,Y-8);ctx.lineTo(X,Y+8);ctx.stroke();
-  const t=bad||'Основать столицу здесь';ctx.font='600 12px system-ui,sans-serif';const w=ctx.measureText(t).width+16;ctx.fillStyle='rgba(10,15,23,0.85)';ctx.fillRect(X+14,Y+12,w,22);ctx.fillStyle=bad?'#ff9c8e':'#ffd25a';ctx.textBaseline='middle';ctx.fillText(t,X+22,Y+23);ctx.restore()}
+  const t=bad||'Основать столицу здесь';ctx.font='600 12px Rubik,system-ui,sans-serif';const w=ctx.measureText(t).width+16;ctx.fillStyle='rgba(10,15,23,0.85)';ctx.fillRect(X+14,Y+12,w,22);ctx.fillStyle=bad?'#ff9c8e':'#ffd25a';ctx.textBaseline='middle';ctx.fillText(t,X+22,Y+23);ctx.restore()}
 function drawMini(mx,s){if(!G||G.phase!=='play'||!own)return;const S=W.WORLD*s;if(polC){mx.globalAlpha=0.55;mx.imageSmoothingEnabled=true;mx.drawImage(polC,0,0,S,S);mx.globalAlpha=1}
   drawMiniBuilds(mx,s);for(const st of G.states){if(!st.cap||!seenAt(st.cap.x,st.cap.y))continue;mx.fillStyle=st.isP?'#ffd25a':'#fff';mx.fillRect(st.cap.x*s-2,st.cap.y*s-2,4,4)}}
 
@@ -816,7 +816,7 @@ function drawObjects(ctx,A){const m=A.cam.m,T=A.T;drawPennants(ctx,A);ctx.textAl
   // railways under construction: a dashed line between the stations with the progress
   for(const s of G.states){if(!mine(s))continue;for(const q of s.builds){if(q.k!=='rail'||q.done)continue;const a=byUid(s,q.a),b=byUid(s,q.b);if(!a||!b)continue;
     ctx.save();ctx.strokeStyle='rgba(255,210,90,0.85)';ctx.lineWidth=2;ctx.setLineDash([9,6]);ctx.lineDashOffset=-T*20;ctx.beginPath();ctx.moveTo(A.sxw(a.x),A.syw(a.y));ctx.lineTo(A.sxw(b.x),A.syw(b.y));ctx.stroke();ctx.setLineDash([]);
-    const mx=(A.sxw(a.x)+A.sxw(b.x))/2,my=(A.syw(a.y)+A.syw(b.y))/2;ctx.font='600 11px system-ui,sans-serif';const t=(a.done&&b.done?M.round(q.t/q.time*100)+' %':'ждёт вокзалы');const w=ctx.measureText(t).width+12;ctx.fillStyle='rgba(10,15,23,0.85)';ctx.fillRect(mx-w/2,my-10,w,20);ctx.fillStyle='#ffd25a';ctx.fillText(t,mx,my);ctx.restore()}}
+    const mx=(A.sxw(a.x)+A.sxw(b.x))/2,my=(A.syw(a.y)+A.syw(b.y))/2;ctx.font='600 11px Rubik,system-ui,sans-serif';const t=(a.done&&b.done?M.round(q.t/q.time*100)+' %':'ждёт вокзалы');const w=ctx.measureText(t).width+12;ctx.fillStyle='rgba(10,15,23,0.85)';ctx.fillRect(mx-w/2,my-10,w,20);ctx.fillStyle='#ffd25a';ctx.fillText(t,mx,my);ctx.restore()}}
   for(const s of G.states)for(const a of s.armies){if(!a.units.length||(!mine(s)&&!seenNow(a.x,a.y)))continue;const X=A.sxw(a.x),Y=A.syw(a.y);if(X<-40||Y<-40||X>A.VW+40||Y>A.VH+40)continue;const sel=G.sel&&G.sel.army===a;
     if(a.tx!==null&&(s.isP||sel)){ctx.strokeStyle=s.isP?'rgba(255,210,90,0.8)':'rgba(255,107,90,0.8)';ctx.lineWidth=2;ctx.setLineDash([7,6]);ctx.lineDashOffset=-T*25;ctx.beginPath();ctx.moveTo(X,Y);ctx.lineTo(A.sxw(a.tx),A.syw(a.ty));ctx.stroke();ctx.setLineDash([])}
     if(a.fight){for(let k=0;k<3;k++){const f=(T*3+k*0.33)%1;ctx.fillStyle=`rgba(255,${160+k*30},60,${1-f})`;ctx.beginPath();ctx.arc(X+M.sin(T*9+k)*12,Y+M.cos(T*7+k)*9,3+f*6,0,7);ctx.fill()}}
@@ -844,7 +844,7 @@ function drawObjects(ctx,A){const m=A.cam.m,T=A.T;drawPennants(ctx,A);ctx.textAl
     // touch: a round handle to drag the ghost (the name and the reason are in the placement bar)
     if(S.touch){ctx.lineWidth=2;ctx.strokeStyle=bad?'rgba(255,140,120,0.95)':'rgba(255,255,255,0.95)';ctx.fillStyle='rgba(10,15,23,0.6)';ctx.beginPath();ctx.arc(X,Y,22,0,7);ctx.fill();ctx.stroke()}
     ctx.drawImage(bIcon(k),X-12,Y-12,24,24);
-    if(!S.touch){const t=bad||b.n+' · '+fmt(b.cost);ctx.font='600 12px system-ui,sans-serif';ctx.textAlign='left';const w=ctx.measureText(t).width+16;
+    if(!S.touch){const t=bad||b.n+' · '+fmt(b.cost);ctx.font='600 12px Rubik,system-ui,sans-serif';ctx.textAlign='left';const w=ctx.measureText(t).width+16;
       ctx.fillStyle='rgba(10,15,23,0.88)';ctx.fillRect(X+16,Y+14,w,22);ctx.fillStyle=bad?'#ff9c8e':'#9fe3aa';ctx.fillText(t,X+24,Y+25)}ctx.restore()}
   if(G.mode==='rail'||G.railAsk)drawRailTool(ctx,A);
   if(G.mode&&G.mode.startsWith('uav:')&&A.hover.on&&DRN[G.mode.slice(4)].recon){ctx.save();ctx.strokeStyle='rgba(120,200,255,0.8)';ctx.setLineDash([6,6]);ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(A.hover.x,A.hover.y,REVR/m,0,7);ctx.stroke();ctx.restore()}
@@ -859,7 +859,7 @@ function drawRailTool(ctx,A){const m=A.cam.m,T=A.T,p=player();ctx.save();
   if(ev&&ev.P){const P=ev.P,ok=!ev.bad,amb=!!G.railAsk&&!railDrag;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='rgba(8,12,18,0.7)';ctx.lineWidth=6;ctx.beginPath();for(let i=0;i<P.length;i+=2){const X=A.sxw(P[i]),Y=A.syw(P[i+1]);if(i)ctx.lineTo(X,Y);else ctx.moveTo(X,Y)}ctx.stroke();
     ctx.strokeStyle=amb?'#ffd25a':ok?'#7fd18b':'#ff6b5a';ctx.lineWidth=3;ctx.setLineDash([10,7]);ctx.lineDashOffset=-T*24;ctx.stroke();ctx.setLineDash([])}
   if(ev&&ev.nb){const w=M.max(8,BLD.station.W/m),h=M.max(5,BLD.station.H/m);ctx.save();ctx.translate(A.sxw(ev.nb.x),A.syw(ev.nb.y));ctx.rotate(ev.nb.ang);ctx.fillStyle=ev.bad?'rgba(255,107,90,0.2)':'rgba(127,209,139,0.2)';ctx.strokeStyle=ev.bad?'#ff6b5a':G.railAsk&&!railDrag?'#ffd25a':'#7fd18b';ctx.lineWidth=2;ctx.beginPath();ctx.rect(-w/2,-h/2,w,h);ctx.fill();ctx.stroke();ctx.restore()}
-  if(railDrag&&ev){const t=ev.bad||`${fmtKm(ev.L)} · ${fmt(ev.cost)}${ev.nb?' · новый вокзал':''}`;ctx.font='600 12px system-ui,sans-serif';ctx.textAlign='left';ctx.textBaseline='middle';const w=ctx.measureText(t).width+16;
+  if(railDrag&&ev){const t=ev.bad||`${fmtKm(ev.L)} · ${fmt(ev.cost)}${ev.nb?' · новый вокзал':''}`;ctx.font='600 12px Rubik,system-ui,sans-serif';ctx.textAlign='left';ctx.textBaseline='middle';const w=ctx.measureText(t).width+16;
     ctx.fillStyle='rgba(10,15,23,0.9)';ctx.fillRect(railDrag.sx+16,railDrag.sy+14,w,22);ctx.fillStyle=ev.bad?'#ff9c8e':'#9fe3aa';ctx.fillText(t,railDrag.sx+24,railDrag.sy+25)}
   ctx.restore()}
 // army token: a framed counter in the state colour with the type symbol and the number of fighters
@@ -867,7 +867,7 @@ function armyToken(ctx,s,a,X,Y,sel){const comp={};for(const u of a.units)comp[u]
   ctx.save();ctx.translate(X,Y);ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillRect(-15,-9,32,22);ctx.fillStyle=s.color;ctx.fillRect(-16,-11,32,22);ctx.strokeStyle=sel?'#fff':'rgba(10,15,23,0.9)';ctx.lineWidth=sel?2.5:1.5;ctx.strokeRect(-16,-11,32,22);
   ctx.strokeStyle='rgba(10,15,23,0.85)';ctx.lineWidth=1.4;ctx.beginPath();
   if(main==='tank'){ctx.ellipse(0,0,10,5,0,0,7)}else if(main==='art'){ctx.arc(0,0,3,0,7)}else if(main==='at'){ctx.moveTo(-10,6);ctx.lineTo(0,-6);ctx.lineTo(10,6)}else{ctx.moveTo(-16,-11);ctx.lineTo(16,11);ctx.moveTo(16,-11);ctx.lineTo(-16,11);if(main==='mot'){ctx.moveTo(-3,-11);ctx.lineTo(-3,11);ctx.moveTo(3,-11);ctx.lineTo(3,11)}}
-  ctx.stroke();ctx.font='700 11px system-ui,sans-serif';ctx.lineWidth=3;ctx.strokeStyle='rgba(10,15,23,0.9)';ctx.strokeText(a.units.length,0,19);ctx.fillStyle='#fff';ctx.fillText(a.units.length,0,19);ctx.restore()}
+  ctx.stroke();ctx.font='700 11px Rubik,system-ui,sans-serif';ctx.lineWidth=3;ctx.strokeStyle='rgba(10,15,23,0.9)';ctx.strokeText(a.units.length,0,19);ctx.fillStyle='#fff';ctx.fillText(a.units.length,0,19);ctx.restore()}
 const BIC={};function bIcon(k){if(BIC[k])return BIC[k];const S=48,c=document.createElement('canvas');c.width=c.height=S;const x=c.getContext('2d');const src=getComputedStyle(document.documentElement).getPropertyValue('--ic-b-'+k);
   if(ICONIMG[k]){x.drawImage(ICONIMG[k],0,0,S,S)}return BIC[k]=c}
 const ICONIMG={};

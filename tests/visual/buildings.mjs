@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import { launch, server, DESKTOP, openMenu, newGame, settle } from '../lib/game.mjs';
 const OUT = process.argv[2] || '.work/bld';
 const SHOOT = (process.argv[3] || '').split(',').filter(Boolean); // only these close-ups (all are placed)
+const SEASONS = (process.argv[4] || '0').split(',').map(Number); // 0 summer, 1 autumn, 2 winter
 fs.mkdirSync(OUT, { recursive: true });
 const PORT = 8230;
 const srv = await server(PORT);
@@ -32,11 +33,11 @@ const placed = await page.evaluate(async (ORDER) => {
   T.run(200);
   return out;
 }, ORDER);
-for (const [k, x, y] of placed.filter((p) => !SHOOT.length || SHOOT.includes(p[0]))) {
+for (const se of SEASONS) for (const [k, x, y] of placed.filter((p) => !SHOOT.length || SHOOT.includes(p[0]))) {
   for (const [tag, m] of [['near', 0.55], ['far', 1.8]]) {
-    await page.evaluate(async ([x, y, m]) => { const a = Game.api, sl = (ms) => new Promise((r) => setTimeout(r, ms)); a.setTod(12); a.setWeather(0); a.cam.x = x; a.cam.y = y; a.cam.m = m;
-      let q = 0; for (let i = 0; i < 200; i++) { await sl(100); const s = a.stats(); if (!s.queue && !s.pending) { if (++q > 6) break } else q = 0 } await sl(300); }, [x, y, m]);
-    await page.screenshot({ path: `${OUT}/${k}-${tag}.png` });
+    await page.evaluate(async ([x, y, m, se]) => { const a = Game.api, sl = (ms) => new Promise((r) => setTimeout(r, ms)); a.setSeason(se); a.setTod(12); a.setWeather(0); a.cam.x = x; a.cam.y = y; a.cam.m = m;
+      let q = 0; for (let i = 0; i < 200; i++) { await sl(100); const s = a.stats(); if (!s.queue && !s.pending) { if (++q > 6) break } else q = 0 } await sl(300); }, [x, y, m, se]);
+    await page.screenshot({ path: `${OUT}/${k}-${tag}${se ? '-s' + se : ''}.png` });
   }
 }
 console.log('placed', placed.map((p) => p[0]).join(' '), 'errors', errs.slice(0, 3));
