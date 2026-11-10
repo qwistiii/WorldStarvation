@@ -204,6 +204,21 @@ async function scenario(browser, dev, opts) {
   const fac = done.find((d) => d.k === 'factory');
   if (fac && !touch) check(dev, fac.za != null && Math.abs(Math.cos(fac.za - fac.a) - 1) < 1e-6, 'повёрнутый завод стоит в мире под тем же углом', `${fac.a} / ${fac.za}`);
 
+  // nothing of a placed building stands on water without a base (stage 6.1: the port's cranes, ships and container stacks
+  // stood on the beach and in the sea): every object of a zone over water is on the zone's own ground (pier, quay)
+  if (!touch) {
+    await ev(() => { const T = Game._test, W = Game.api.W, p = Game.G.states[0], c = W.cities.find((o) => o.cap === 0); if (p.builds.some((b) => b.k === 'port')) return; p.res.money = 1e9; p.res.energy = 999;
+      for (let r = 1500; r < 20000; r += 400) for (let a = 0; a < 6.28; a += 0.15) { const x = c.x + Math.cos(a) * r, y = c.y + Math.sin(a) * r; if (T.canBuild('port', x, y) === 'Только на своей территории') T.claim(0, x, y, 1500); }
+      for (let r = 1500; r < 20000; r += 150) for (let a = 0; a < 6.28; a += 0.07) { const x = c.x + Math.cos(a) * r, y = c.y + Math.sin(a) * r; if (T.canBuild('port', x, y) === null) { T.startBuild('port', x, y); T.run(40); return; } } });
+    const wb = await ev(() => { const W = Game.api.W, p = Game.G.states[0], out = []; let n = 0, port = 0;
+      for (const q of p.builds) { if (!q.done || q.id < 0 || q.k === 'rail') continue; const z = W.zones[q.id]; if (!z || z.kind !== 'zone' || !z.prims) continue; if (q.k === 'port') port++;
+        const Gr = z.prims.filter((g) => g.k === 'g');
+        for (const o of z.prims) { if (o.k === 'g' || o.k === 'ship' || o.k === 'gl' || o.k === 'rail' || o.k === 'lflood' || o.k === 't') continue; let x = o.x, y = o.y; if (o.pts) { x = o.pts[0]; y = o.pts[1]; } if (x == null || y == null) continue;
+          const cx = o.w ? x + o.w / 2 : x, cy = o.h ? y + o.h / 2 : y, wx = z.x + cx * z.ca - cy * z.sa, wy = z.y + cx * z.sa + cy * z.ca; n++;
+          if (W.landE(wx, wy, 0) >= 0) continue; if (!Gr.some((g) => cx >= g.x - 1 && cx <= g.x + g.w + 1 && cy >= g.y - 1 && cy <= g.y + g.h + 1)) out.push(q.k + ':' + o.k); } }
+      return { n, port, bad: out.length, ex: [...new Set(out)].slice(0, 6) }; });
+    check(dev, wb.port > 0 && wb.bad === 0, 'порт и прибрежные постройки: на воде ничего не стоит без основы (пирс, причал)', JSON.stringify(wb));
+  }
   lap('build');
   // ---- street lights (stage 6.1): objects of the world along the streets — at night the head glows at its height (the
   // pixel where Parallax puts a head 8–12 m up is brighter with the heads than without), the ground around is lit, by day

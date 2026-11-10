@@ -777,6 +777,24 @@ function genZone(z){
     for(let q=0;q<3;q++){const cx=-W*0.25+q*W*0.28,cy=H*0.33;CY(P,cx,cy,48,120,[196,194,188],'cool');zemit(z,cx,cy,'steam',1,120)}
     G(P,W*0.25,-H/2+12,W*0.23,H*0.42,[128,126,118]);P.push({k:'switch',x:W*0.25,y:-H/2+12,w:W*0.23,h:H*0.42});P.push({k:'lflood',x:W*0.25,y:-H/2+12,w:W*0.23,h:H*0.42,sp:55,r:18,c:'led'});
     P.push({k:'rail',pts:[-W/2,-H/2+H*0.55,W*0.1,-H/2+H*0.55]});
+  }else if(z.zk==='port'&&EMPTY){
+    // stage 6.1 (the game's port): the waterline is measured along the quay in 30 m strips — the land up to it is paved as
+    // the quay, the piers start at the waterline and go out over the water, ships berth only on water. (The port used to
+    // assume the shore at x = 0: piers, ships and cranes stood on the beach, the filler of the yard spilled into the sea.)
+    const wet=(lx,ly)=>landE(z.x+lx*z.ca-ly*z.sa,z.y+lx*z.sa+ly*z.ca,0.002)<0;
+    const shore=ly=>{for(let lx=0;lx<=W/2-140;lx+=8)if(wet(lx,ly)&&wet(lx+16,ly))return lx;return W/2-140};
+    const LW=W*0.62,QC=[176,174,168],PC=[170,168,160];G(P,-LW,-H/2,LW+12,H,[150,148,142]);
+    for(let y=-H/2;y<H/2;y+=15){const s=M.max(shore(y+2),shore(y+13));G(P,0,y,s+22,15,QC)}
+    P.push({k:'lflood',x:0,y:-H/2,w:40,h:H,sp:55,r:30,c:'led'});
+    const np=2+(R()*2|0);for(let q=0;q<np;q++){const py=-H/2+(q+0.5)*H/np,ps=M.max(shore(py-28),shore(py),shore(py+28)),len=M.min(300,W/2-ps-6);if(len<80)continue;
+      G(P,ps,py-28,len,56,PC);P.push({k:'lflood',x:ps,y:py-28,w:len,h:56,sp:60,r:26,c:'led'});
+      for(let sd=0;sd<2;sd++){const sy=py+(sd?44:-44),sl=M.min(150+R()*90,len-10),sx=ps+len/2;if(wet(sx-sl/2,sy)&&wet(sx+sl/2,sy)&&wet(sx,sy))P.push({k:'ship',x:sx,y:sy,a:0,len:sl,st:R()<0.6?0:R()<0.5?1:2,c:R()*6|0});else R()}
+      for(let c=0;c<3;c++)if(ps+20+c*80<ps+len-40)P.push({k:'crane',x:ps+20+c*80,y:py-20,len:60,c:[[200,60,50],[60,110,180],[230,150,40]][R()*3|0]})}
+    for(let c=0;c<H/90-1;c++){const y=-H/2+50+c*90;P.push({k:'crane',x:M.max(10,shore(y)-30),y,len:70,c:[[200,60,50],[60,110,180],[230,150,40]][R()*3|0]})}
+    P.push({k:'cont',x:-LW*0.62,y:-H/2+20,w:LW*0.55,h:H-40,seed:R()*1e9|0});
+    LN(P,[-LW*0.66,-H/2,-LW*0.66,H/2],12,ASP);
+    for(let q=0;q<3;q++)B(P,-LW+14,-H/2+20+q*(H/3),LW*0.3,H/3-40,14,ROOF_IND[R()*7|0],'co');
+    P.push({k:'rail',pts:[-LW+6,-H/2,-LW+6,H/2]});
   }else if(z.zk==='port'){
     // x>0 is seaward. land part x in [-W/2,0]
     const LW=W*0.62;G(P,-LW,-H/2,LW+40,H,[150,148,142]);
@@ -1029,6 +1047,10 @@ function zoneFill(z){const L=ZFILL[z.zk];if(!L)return;const P=z.prims,W=z.W,H=z.
     else if(k==='cat')mark(p.x-3,p.y-4,p.x+p.len+3,p.y+4,3);
     else if(k==='gl'||k==='pipe'||k==='conv'||k==='rail')lmark(p.pts,(p.w||3)+(k==='rail'?3:0));
     else if(k==='g'&&pi>0){const c=p.c,dark=c[0]+c[1]+c[2]<330;if(apron&&!dark){for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const cx=x0+(i+0.5)*cs,cy=y0+(j+0.5)*cs;if(cx>p.x+3&&cx<p.x+p.w-3&&cy>p.y+3&&cy<p.y+p.h-3&&!occ[j*nx+i])occ[j*nx+i]=2}}else if(dark)mark(p.x,p.y,p.x+p.w,p.y+p.h,2)}}
+  // stage 6.1: the filler stands on the zone's own ground only (inside its ground rectangles): not on the water between the
+  // piers of a port, not on the land around a zone that is not its own
+  {const Gr=P.filter(p=>p.k==='g');for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){if(occ[j*nx+i]===1)continue;const cx=x0+(i+0.5)*cs,cy=y0+(j+0.5)*cs;let on=false;
+    for(const g of Gr)if(cx>g.x+1.5&&cx<g.x+g.w-1.5&&cy>g.y+1.5&&cy<g.y+g.h-1.5){on=true;break}if(!on)occ[j*nx+i]=1}}
   let cls=0;const free=(i,j,w,h)=>{for(let b=j;b<j+h;b++)for(let a=i;a<i+w;a++)if(a>=nx||b>=ny||occ[b*nx+a]!==cls)return false;return true};
   const AL=['vehM','crateM','apron','apron'];
   let budget=nx*ny*0.62,miss=0;
