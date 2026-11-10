@@ -455,6 +455,31 @@ function drawFlightLights(a){if(a<0.02||!FLB.length)return;ctx.globalCompositeOp
 // or the tint changed. A still camera blits one image per pass.
 const CLL=[{c:ctx.layer(4,4),key:'',cx:0,cy:0},{c:ctx.layer(4,4),key:'',cx:0,cy:0}];
 const BLB=ctx.layer(4,4); // half-resolution bloom buffer of the night lights
+// ------------------------------------------------------------ light sources (src/lights.js)
+const LIGHTS=LightSystem({cap:SMALL?128:256}),LMB=ctx.layer(4,4),LV=[],LN=[];
+// the pool of a light on the ground: (1 - d²)² falloff; the glow of its head: a bright core in a soft halo
+const POOL=(()=>{const N=128,c=mk(N,N),x=c.getContext('2d'),id=x.createImageData(N,N),d=id.data;for(let j=0;j<N;j++)for(let i=0;i<N;i++){const u=(i+0.5)/N*2-1,v=(j+0.5)/N*2-1,r=u*u+v*v;const a=r>=1?0:(1-r)*(1-r);const o=(j*N+i)*4;d[o]=d[o+1]=d[o+2]=255;d[o+3]=a*255}x.putImageData(id,0,0);return SP(c)})();
+const lightHid=l=>typeof l.owner==='number'&&W.isHid(l.owner);
+// the light map: ambient + the pools of the visible lights, at half resolution; the draws before the ambient point take
+// their light from it (src/gl.js ambAt) — the ground, the roads, the cars and the smoke under a lamp are lit, not overlaid
+function lightMap(A){if(DBG.glights||!LV.length)return false;const lw=M.ceil(cv.width/2),lh=M.ceil(cv.height/2);LMB.resize(lw,lh);
+  const AM0=ctx.getAmbient(),T0=ctx.getTransform();ctx.ambient(1,1,1);ctx.target(LMB);ctx.clear(A[0],A[1],A[2],1);ctx.setTransform(DPR*lw/cv.width,0,0,DPR*lh/cv.height,0,0);ctx.globalCompositeOperation='lighter';
+  for(const l of LV){if(!l.r)continue;const X=sxw(l.x),Y=syw(l.y),Rr=l.r/cam.m;if(Rr<0.6)continue;LTC[0]=l.c[0];LTC[1]=l.c[1];LTC[2]=l.c[2];ctx.tint=LTC;ctx.globalAlpha=M.min(1,l.i*l.lv*0.8);ctx.drawImage(POOL,X-Rr,Y-Rr,Rr*2,Rr*2)}
+  ctx.tint=null;ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';ctx.target(null);ctx.setTransform(T0[0],T0[1],T0[2],T0[3],T0[4],T0[5]);ctx.ambient(AM0[0],AM0[1],AM0[2]);ctx.lightmap(LMB);return true}
+const LTC=[1,1,1,1],POLEC=[0.16,0.17,0.18,1],LHC=[1,1,1,1];
+// poles: from the foot on the ground to the head at its height (the parallax camera), their shadow along the sun by day
+function drawPoles(){if(cam.m>2.6||!LN.length)return;ctx.setTransform(DPR,0,0,DPR,0,0);const k=1/cam.m;
+  for(const l of LN){if(l.kind==='beacon')continue;const X=sxw(l.x),Y=syw(l.y);Parallax.project(cam,VW,VH,l.x,l.y,l.h,PJ);const w=M.max(1,(l.kind==='flood'?0.5:0.25)*k*PJ[2]);
+    if(LG.day>0.05){const [sx,sy]=Parallax.shadow(l.x,l.y,l.h);ctx.fillStyle=`rgba(10,20,30,${0.3*LG.day})`;ctx.line(X,Y,sxw(sx),syw(sy),w)}
+    // the head: a dark housing with its lens (lit by the light map at night, the glow is added after the ambient point)
+    ctx.fillStyle=POLEC;ctx.line(X,Y,PJ[0],PJ[1],w);const hs=M.max(1.6,(l.kind==='flood'?1.8:0.7)*k*PJ[2]);ctx.fillStyle='#34383e';ctx.fillRect(PJ[0]-hs/2,PJ[1]-hs/2,hs,hs);
+    const ls=hs*0.5;ctx.fillStyle='#e6e0c8';ctx.fillRect(PJ[0]-ls/2,PJ[1]-ls/2,ls,ls)}}
+// the glow of the burning heads (after the ambient point: emissive), at their height through the parallax camera
+function drawLightHeads(){if(!LV.length)return;ctx.setTransform(DPR,0,0,DPR,0,0);ctx.globalCompositeOperation='lighter';const k=1/cam.m,nb=0.35+0.65*LG.night;
+  for(const l of LV){Parallax.project(cam,VW,VH,l.x,l.y,l.h,PJ);const a=l.lv*l.i*nb;if(a<0.01)continue;LHC[0]=l.c[0];LHC[1]=l.c[1];LHC[2]=l.c[2];ctx.tint=LHC;
+    const g=M.max(3,(l.kind==='flood'?7:l.kind==='beacon'?3:4.5)*k*PJ[2]);ctx.globalAlpha=a*0.55;ctx.drawImage(GL_W,PJ[0]-g,PJ[1]-g,g*2,g*2);
+    const c=M.max(1.5,(l.kind==='flood'?1.4:0.8)*k*PJ[2]);ctx.globalAlpha=a;ctx.drawImage(GL_W,PJ[0]-c,PJ[1]-c,c*2,c*2)}
+  ctx.tint=null;ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}
 let bloomDone=false;const inWorldNow=()=>sxw(0)<=0&&syw(0)<=0&&sxw(WORLD)>=VW&&syw(WORLD)>=VH;
 // a permanently empty slot of the light pool: cells without lights still carry the bloom (lightLevel cover)
 const EMPTY=LPOOL.upload(mk(256,256));
@@ -581,6 +606,8 @@ function frameBody(now){const dt=M.min(0.06,(now-last)/1000);last=now;T+=dt;fram
   ctx.begin();ctx.gpuMark('layers');if(AMBON)ctx.ambient(A[0],A[1],A[2]);ctx.clear(14/255*(AMBON?A[0]:1),46/255*(AMBON?A[1]:1),82/255*(AMBON?A[2]:1),1);ctx.setTransform(DPR,0,0,DPR,0,0);
   // the vignette (stage 6): 'cloud' — in the pass of the cloud layer, 'spatial' — a factor of every draw (no pass of its
   // own: night, close views), 'pass' — a separate pass (the edge of the world is in view, haze or lightning)
+  LIGHTS.update(dt,LG.night);LIGHTS.visible([vx0,vy0,vx1,vy1],lightHid,LV);LIGHTS.near([vx0,vy0,vx1,vy1],lightHid,LN);
+  if(AMBON)lightMap(A);
   let CLB=null;if(opt.clouds&&!DBG.clouds){const c=LG.cloud;tintClouds(c[0],c[1],c[2],flash>0.05?0:0.92);CLB=drawClouds(false,true)}
   const hz=smooth(40,600,cam.m)*0.16;const wX0=sxw(0),wY0=syw(0),wX1=sxw(WORLD),wY1=syw(WORLD),inWorld=wX0<=0&&wY0<=0&&wX1>=VW&&wY1>=VH;
   const VM=DBG.vign?'off':flash>0.01?'pass':covers(CLB)&&!DBG.vigPass?'cloud':hz>0||CLB||!inWorld||DBG.vigPass?'pass':'spatial';
@@ -606,14 +633,14 @@ function frameBody(now){const dt=M.min(0.06,(now-last)/1000);last=now;T+=dt;fram
   ctx.gpuMark('sprites');pf('edge');pf('shadows');
   let rs=[];const trafficOn=opt.traffic&&cam.m<30;
   if(trafficOn){rs=cam.m<8?W.queryRoads(vx0,vy0,vx1,vy1).filter(W.roadShown):[];if(cam.m<3.2)drawTraffic(rs);else cbn=0;if(cam.m<8)drawTrains(rs,0);drawShips(0)}else cbn=0;
-  pf('traffic');drawEmitters();drawTurbines(0);pf('emit');
+  pf('traffic');drawEmitters();drawTurbines(0);drawPoles();pf('emit');
   if(opt.traffic)drawFlights();else FLB.length=0;
   pf('flights');drawFog();pf('fog');
   // ambient light (dusk / night / overcast)
-  ctx.gpuMark('lights');ctx.ambient(1,1,1); // the ambient point: from here on (lights, precipitation, clouds) nothing is darkened
+  ctx.gpuMark('lights');ctx.ambient(1,1,1);ctx.lightmap(null); // the ambient point: from here on (lights, precipitation, clouds) nothing is darkened
   // emissive layers
   if(NL>0.01&&!DBG.lights){drawLights(zNow,NL);if(trafficOn&&!DBG.carl){drawCarLights(NL);if(cam.m<8)drawTrains(rs,NL)}if(opt.traffic||cam.m<120)drawShips(NL);drawTurbines(NL);}
-  drawFlares(NL);if(opt.traffic)drawFlightLights(LG.night);pf('lights');
+  drawFlares(NL);if(opt.traffic)drawFlightLights(LG.night);drawLightHeads();pf('lights');
   dispatch();pf('dispatch');
   pf('lights');drawPrecip(dt);
   ctx.gpuMark('clouds+vign');const merge=VM==='cloud';if(CLB){ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;
@@ -662,15 +689,15 @@ function bgCam(dt){bgA+=dt*0.02;const r=bgC.R*0.5;cam.x=bgC.x+M.cos(bgA)*r;cam.y
 if(MODE==='bg')bgCam(0);
 function destroy(){if(!alive)return;alive=false;AC.abort();clearInterval(lowT);clearTimeout(introT);clearTimeout(clickT);for(const w of workers)w.terminate();if(wurl)URL.revokeObjectURL(wurl);
   for(const mp of [cache,stale,LCS[1],LCS[2],LCS[3],LST[1],LST[2],LST[3]])for(const v of mp.values())if(v.b&&v.b.close)v.b.close();ctx.dispose();octx.setTransform(1,0,0,1,0,0);octx.clearRect(0,0,ov.width,ov.height);closeInsp();if(window.__world&&window.__world.W===W)window.__world=null}
-const API={gl:ctx,gflights:GFL,get ops(){return OPS},op,W,cam,setHidden,flyTo,zoomAt,maxM,opt,LG,wcur,hover,setGrow,invalidate,setTod,setSpeed,setSeason,destroy,closeInsp,pick,
+const API={gl:ctx,lights:LIGHTS,gflights:GFL,get ops(){return OPS},op,W,cam,setHidden,flyTo,zoomAt,maxM,opt,LG,wcur,hover,setGrow,invalidate,setTod,setSpeed,setSeason,destroy,closeInsp,pick,
   get VW(){return VW},get VH(){return VH},get DPR(){return DPR},get T(){return T},get tod(){return tod},get fps(){return fpsA},get ready(){return readyFired},
   sxw,syw,toWorld:(sx,sy)=>[cam.x+(sx-VW/2)*cam.m,cam.y+(sy-VH/2)*cam.m],setTodRate:r=>{todRate=r},isNight,
   showCity:c=>{sel={k:'city',o:c};showInsp()},
   setWeather:i=>{wxi=i;const w=WX[i];for(const k in wcur)wcur[k]=w[k]!==undefined?w[k]:(k==='dim'||k==='cd'?1:0)},
   stats:()=>({fps:fpsA,cars:carCount,tiles:cache.size,lights:LCS[1].size+'/'+LCS[2].size+'/'+LCS[3].size,queue:queue.length,pending:pending.size+LPS[1].size+LPS[2].size+LPS[3].size,main:mainRender,lowQ,
-    gl:{draws:ctx.stats.draws,inst:ctx.stats.inst,slots:DPOOL.used+LPOOL.used,cap:DPOOL.slots+LPOOL.slots,texMB:(DPOOL.slots+LPOOL.slots)*0.25+CLL.reduce((q,l)=>q+l.c.w*l.c.h*4/1048576,0)}}),
+    lights:{all:LIGHTS.size,visible:LV.length,near:LN.length},gl:{draws:ctx.stats.draws,inst:ctx.stats.inst,slots:DPOOL.used+LPOOL.used,cap:DPOOL.slots+LPOOL.slots,texMB:(DPOOL.slots+LPOOL.slots)*0.25+CLL.reduce((q,l)=>q+l.c.w*l.c.h*4/1048576,0)}}),
   stop:()=>{introOff=true;fly=null;zoomT=null}};
-window.__world=Object.assign({PROF,cache,lcache,cloudLayers:CLL,gl:ctx,overlay:ov,dbg:DBG},API);
+window.__world=Object.assign({PROF,cache,lcache,cloudLayers:CLL,gl:ctx,overlay:ov,dbg:DBG,LMB,POOLref:POOL},API);
 requestAnimationFrame(frame);
 // cinematic intro (viewer): dive from orbit to the largest city
 if(MODE==='view'){const big=W.cities.find(c=>c.type===3)||W.cities[0];introT=setTimeout(()=>{if(!drag&&!zoomT&&!introOff)flyTo(big.x+big.R*0.12,big.y+big.R*0.08,2.4,7)},1600)}

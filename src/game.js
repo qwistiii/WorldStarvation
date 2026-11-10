@@ -111,7 +111,7 @@ function demolish(s,q){if(!q.done||q.k==='city'||q.k==='village')return false;co
   // a station takes its lines with it, a drone port its modules
   if(q.k==='station')for(const r of s.builds.slice())if(r.k==='rail'&&(r.a===q.uid||r.b===q.uid)){if(r.done)demolish(s,r);else s.builds.splice(s.builds.indexOf(r),1)}
   if(q.k==='droneport')for(const r of s.builds.slice())if(r.port===q.uid&&BLD[r.k]&&BLD[r.k].mod){if(r.done)demolish(s,r);else s.builds.splice(s.builds.indexOf(r),1)}
-  const a=s.armies.find(x=>x.home===q);if(a)s.armies.splice(s.armies.indexOf(a),1);if(s.res.money!==Infinity)s.res.money+=cost*0.3;if(s.isP)toast(`Снесено: <b>${bName(q)}</b> · возвращено ${fmt(cost*0.3)}`,'ic-b-demolish');updPop();capUav(s);return true}
+  lightsDirty=true;const a=s.armies.find(x=>x.home===q);if(a)s.armies.splice(s.armies.indexOf(a),1);if(s.res.money!==Infinity)s.res.money+=cost*0.3;if(s.isP)toast(`Снесено: <b>${bName(q)}</b> · возвращено ${fmt(cost*0.3)}`,'ic-b-demolish');updPop();capUav(s);return true}
 const bName=q=>q.k==='rail'?'ЖД путь':BLD[q.k].n;
 // territory as merging drops: a cell is taken where the sum of (r/d)^2 over the state's places and buildings reaches 1,
 // so neighbouring places join into one land; a new place's reach grows in over ~40 s
@@ -156,6 +156,8 @@ const BLD={
   dramp:{n:'Пусковая рампа',cost:800,time:8,d:'Модуль дронопорта: запуск Ланцетов и Орланов',zk:'dramp',W:84,H:40,area:'dport',mod:1},
   drwy:{n:'ВПП',cost:1500,time:12,d:'Модуль дронопорта: взлёт реактивных Гераней-3',zk:'drwy',W:460,H:56,area:'dport',mod:1},
   dstore:{n:'Склад БПЛА',cost:900,time:8,d:'Модуль дронопорта: +6 мест для дронов',zk:'dstore',W:120,H:76,area:'dport',mod:1},
+  // stage 6: a street lamp — a point object (no grounds): lights the ground around it at night
+  lamp:{n:'Фонарь',cost:60,time:3,d:'Уличный фонарь (8 м): ночью освещает землю и всё вокруг в радиусе 34 м. Режимы: авто (по времени суток), вкл, выкл',area:'own',point:1,r:34},
   dronefab:{n:'Цех БПЛА',cost:4000,time:20,d:'Производство дронов: Ланцет, Герань-3, Орлан-10. Улучшения: солнечные панели, противодронная сетка, бетон',zk:'dfab',W:400,H:280,area:'town',need:{energy:6}}};
 const BORDER=['village','farm','factory','power','sawmill','oil','refinery','port','airport','city','barracks','sam','solar','mine','gaswell','station','droneport','dronefab'];
 const RES=['food','goods','wood','oil','fuel','metal'];const RESN={money:'Деньги',food:'Еда',goods:'Товары',energy:'Энергия',wood:'Древесина',oil:'Нефть',fuel:'Топливо',metal:'Металл'};
@@ -169,6 +171,11 @@ const DRN={lancet:{n:'Ланцет',cost:260,metal:6,fuel:0,time:14,from:'dramp'
 const UPG={sol:{n:'Солнечные панели',cost:900,d:'Цеху нужно на 4 энергии меньше'},net:{n:'Противодронная сетка',cost:700,d:'Половина попавших дронов застревает в сетке'},con:{n:'Бетонная защита',cost:1200,d:'После попадания цех стоит вдвое меньше'}};
 // can state s build kind k at (x,y)?  → null or the reason
 function canBuild(s,k,x,y,ang){const b=BLD[k];if(!b)return 'Неизвестная постройка';if(x<5000||y<5000||x>W.WORLD-5000||y>W.WORLD-5000)return 'Слишком близко к краю мира';
+  if(b.point){if(W.landE(x,y,0.002)<0)return 'Здесь вода';if(ownerAt(x,y)!==s.id+1)return 'Только на своей территории';
+    // in a town a lamp stands at a street (its kerb), never inside a block; outside the towns anywhere on the land
+    {const town=W.cities.find(c=>c.type>=1&&cityF(c,x,y)<1.05);if(town){const RW=W._dbg.RW;let ok=false,on=false;for(const r of W.queryRoads(x-30,y-30,x+30,y+30)){if(r.dead||r.k===8||r.k===5)continue;const q=W._dbg.projOn(r,x,y),d=M.hypot(q[0]-x,q[1]-y),hw=RW[r.k]/2;if(d<hw-0.5)on=true;else if(d<hw+6)ok=true}
+      if(on)return 'Не на проезжей части — у края улицы';if(!ok)return 'В городе фонарь ставят у улицы'}}
+    for(const z of W.zones)if(!z.dead&&rectHit(z,x,y,2,2))return 'Здесь постройка';for(const q of s.builds)if(q.k==='lamp'&&M.hypot(q.x-x,q.y-y)<10)return 'Рядом уже стоит фонарь';return null}
   const a=ang!=null?ang:k==='station'?stationAng(s,x,y):0;
   // a well or a mine stands on the centre of its deposit: check the footprint there
   {const dk=b.area==='oil'?(d=>ORES[d.k].k==='oil'):b.area==='gas'?(d=>ORES[d.k].k==='gas'):b.area==='ore'?(d=>!!MINE[d.k]):null;if(dk){const d=G.dep.find(d=>dk(d)&&d.known&&d.used<0&&M.hypot(d.x-x,d.y-y)<800);if(d){x=d.x;y=d.y}}}
@@ -234,7 +241,8 @@ function finishBuild(s,q){q.done=true;
   if(q.k==='rail'){const A=byUid(s,q.a),B=byUid(s,q.b);let P=null;if(A&&B&&A.id>=0&&B.id>=0){P=W.railPts(W.zones[A.id],W.zones[B.id],railBlk(s));if(typeof P==='string')P=null}
     q.id=P?api.op('addRail',{a:A.id,b:B.id,st:s.id,P:P.map(v=>M.round(v*10)/10)}):-1;if(q.id<0){q.failed=true;if(s.isP)toast('ЖД путь не удалось проложить','ic-b-rail');return}
     if(s.isP){toast(`Построено: <b>ЖД путь</b> ${fmtKm(q.L)}`,'ic-b-rail');onBuilt('rail',true)}return}
-  const b=BLD[q.k];
+  const b=BLD[q.k];lightsDirty=true;
+  if(b.point){q.id=-1;q.on=q.on||'auto';if(s.isP){toast(`Построено: <b>${b.n}</b>`,'ic-b-'+q.k);onBuilt(q.k,true)}return}
   if(q.k==='city'||q.k==='village'){let p=s.places.find(o=>o.bq===q.uid);if(!p){placeNow(s,q);p=s.places.find(o=>o.bq===q.uid)}
     if(p){p.grow=q.k==='city'?M.max(p.grow,0.12):1;syncPlace(p)}}
   else{const h=homeOf(s,q.x,q.y);const o={zk:b.zk,x:q.x,y:q.y,city:h.id,st:s.id,W:b.W,H:b.H};if(q.a!=null)o.a=q.a;if(q.dep!=null)o.ore=G.dep[q.dep].k;
@@ -653,12 +661,15 @@ function buildPanel(el,q){const p=player(),b=q.k==='rail'?{n:'ЖД путь',d:'
   if(q.k==='station'){g+=stat('Линий',p.builds.filter(r=>r.k==='rail'&&(r.a===q.uid||r.b===q.uid)).length);keys+=card({id:'a-rail',n:'Ж/Д путь',sub:fmt(RAILK*1000)+' / км',ic:'ic-b-rail',cls:G.mode==='rail'?'on':'',tip:'Нажмите на вокзал и, не отпуская, ведите путь к другому вокзалу или в поле'})}
   if(q.k==='airport'){const F=(G.flights||[]).filter(f=>f.a===q),dest=[...new Set(F.map(f=>G.states[f.to].isP?'свой аэропорт':G.states[f.to].name))];
     g+=stat('В воздухе',F.length?F.map(f=>(f.kind==='pax'?'пассажирский':'грузовой')).join(', '):'нет')+stat('Куда летят',dest.length?dest.join(', '):'—')+stat('Безвиз',G.states.filter(t=>t!==p&&visa(p,t)).map(t=>t.name).join(', ')||'нет — договоритесь в «Дипломатии»')+stat('Рейсов выполнено',fmt(p.landed||0))}
+  if(q.k==='lamp'){const md=q.on||'auto';g+=stat('Режим',{auto:'авто — по времени суток',on:'включён',off:'выключен'}[md])+stat('Высота · радиус света','8 м · '+BLD.lamp.r+' м');
+    for(const [m,n] of [['auto','Авто'],['on','Вкл'],['off','Выкл']])keys+=card({n,sub:m===md?'сейчас':'',ic:'ic-b-lamp',data:`data-lmode="${m}"`,cls:m===md?'on':'',tip:{auto:'Горит ночью, гаснет на рассвете',on:'Горит всегда',off:'Не горит'}[m]})}
   if(q.k==='barracks')keys+=card({id:'a-army',n:'Армия',ic:'ic-b-army',tip:'Армия этой части: сборка и приказы'});
   keys+=card({id:'a-dem',n:'Снести',sub:fmt((b.cost||0)*0.3),ic:'ic-b-demolish',cls:'red',tip:'Снести постройку: вернётся 30 % цены'});
   el.innerHTML=pcHead(q.k==='rail'?'ic-b-rail':'ic-b-'+q.k,b.n,state+(pr?' · '+pr:''))+`<div class="pc-s">${PCS[q.k]||'Действия'}</div><div class="pc-r">${keys}</div>${more}<div class="pc-g">${g}</div><div class="pc-d">${b.d}</div>`;
   $('a-close').onclick=closeSel;$('a-dem').onclick=()=>{demolish(player(),q);closeSel();updHUD()};
   const ab=$('a-army');if(ab)ab.onclick=()=>{const a=player().armies.find(x=>x.home===q);if(a){G.sel={army:a};panelSig='';updPanel()}};
   const rb=$('a-rail');if(rb)rb.onclick=()=>{setBuild(null);G.mode=G.mode==='rail'?null:'rail';panelSig='';updCatalog();if(G.mode)toast('Нажмите на вокзал и, не отпуская, ведите путь к другому вокзалу или к месту нового','ic-b-rail')};
+  for(const e of el.querySelectorAll('[data-lmode]'))e.onclick=()=>{q.on=e.dataset.lmode;const l=api.lights.get(q.uid*8);if(l)api.lights.setMode(l.id,q.on);panelSig='';updPanel()};
   for(const e of el.querySelectorAll('[data-mod]'))e.onclick=()=>{G.forPort=q;setBuild(G.build===e.dataset.mod?null:e.dataset.mod);panelSig=''};
   for(const e of el.querySelectorAll('[data-make]'))e.onclick=()=>{const Q=q.queue||(q.queue=[]);if(Q.length>=6){toast('Очередь цеха полна (6)');return}Q.push(e.dataset.make);panelSig='';onBuilt('order',true)};
   const qc=$('a-qclr');if(qc)qc.onclick=()=>{if(q.paid){const d=DRN[q.queue[0]];if(p.res.money!==Infinity)p.res.money+=d.cost;p.res.metal+=d.metal;p.res.fuel+=d.fuel;q.paid=0}q.queue=[];q.pt=0;panelSig=''};
@@ -667,14 +678,14 @@ function buyUp(s,q,u){const c=creative()&&s.isP?0:UPG[u].cost;if(s.res.money<c){
 const atWarAny=()=>G.states.some(t=>atWar(0,t.id));
 // bottom panel (as in DroneFlames): tabs КАРТА ГОРОДА УДАР ПВО АРМИЯ ПОЛИТ. ФЛОТ on the panel: pause, speed, then the keys of the tab
 const TABS=[['map','Карта'],['cities','Города'],['strike','Удар'],['aa','ПВО'],['army','Армия'],['pol','Полит.'],['fleet','Флот']];
-const ECON=['city','village','farm','factory','power','solar','mine','sawmill','oil','gaswell','refinery','port','airport','station'];
+const ECON=['city','village','farm','factory','power','solar','mine','sawmill','oil','gaswell','refinery','port','airport','station','lamp'];
 const STRIKE=['droneport','dramp','drwy','dstore','dronefab'];
 const tabOf=k=>k==='sam'?'aa':k==='barracks'||k==='assembly'?'army':ECON.includes(k)||k==='rail'?'cities':STRIKE.includes(k)||k==='order'||k==='uav'?'strike':null;
 let tab='cities',tabSig='';
 const TABIC={map:'ic-tab-map',cities:'ic-tab-city',strike:'ic-tab-strike',aa:'ic-tab-aa',army:'ic-tab-army',pol:'ic-tab-pol',fleet:'ic-tab-fleet'};
 const TABSUB={map:'Слои карты и переходы',cities:'Экономика: города, сёла, заводы, энергия, добыча, железная дорога',strike:'Дронопорт, его модули, цех БПЛА и удары дронами',aa:'Противовоздушная оборона',army:'Военные части и армии',pol:'Государства, союзы, война и мир',fleet:'Порты и флот'};
 // the short names of the keys (the full one is in the tooltip)
-const SHORT={city:'Город',village:'Село',farm:'Колхоз',factory:'Завод',power:'ТЭЦ',solar:'Солнце',mine:'Рудник',sawmill:'Лесопилка',oil:'Нефть',gaswell:'Газ',refinery:'НПЗ',port:'Порт',airport:'Аэропорт',station:'Вокзал',
+const SHORT={lamp:'Фонарь',city:'Город',village:'Село',farm:'Колхоз',factory:'Завод',power:'ТЭЦ',solar:'Солнце',mine:'Рудник',sawmill:'Лесопилка',oil:'Нефть',gaswell:'Газ',refinery:'НПЗ',port:'Порт',airport:'Аэропорт',station:'Вокзал',
   barracks:'Воен. часть',sam:'ПВО',droneport:'Дронопорт',dramp:'Рампа',drwy:'ВПП',dstore:'Склад БПЛА',dronefab:'Цех БПЛА'};
 function buildTabs(){const t=$('bb-tabs');t.innerHTML='';TABS.forEach(([k,n],i)=>{const b=document.createElement('button');b.dataset.t=k;b.dataset.tn=n+' · клавиша '+(i+1);b.dataset.td=TABSUB[k];
   b.innerHTML=`<i>${i+1}</i><span class="ic ${TABIC[k]}"></span><b>${n}</b>`;b.onclick=()=>setTab(k,true);t.appendChild(b)})}
@@ -732,6 +743,20 @@ let lastTouch=false,shiftDown=false;
 const PL=Placement({check:(k,x,y,a)=>canBuild(player(),k,x,y,rotK(k)?a:undefined),rotates:rotK,onChange:()=>updPbar(),
   build:(k,x,y,a)=>{const p=player();if(p.res.money<BLD[k].cost&&!creative())return 'Не хватает денег: нужно '+fmt(BLD[k].cost);return startBuild(p,k,x,y,rotK(k)?a:undefined)?true:'Не удалось начать стройку'}});
 // after a building was placed: leave the mode (unless Shift keeps it), back to the drone port card for its modules
+// ---------- light sources (stage 6): built from the finished builds of all states — the lamps of the player, the
+// floodlights of every yard (at its corners, one mast for a small one). Ids are stable (uid*8 + n), so a light keeps its
+// level (no flicker) when the set is rebuilt
+let lightsDirty=true;
+function syncLights(){if(!api||!api.lights||!G)return;lightsDirty=false;const L=api.lights,mine=l=>typeof l.owner==='number'||(typeof l.owner==='string'&&l.owner[0]==='b'),prev=new Map(L.all().filter(mine).map(l=>[l.id,l.lv]));
+  // only the lights the game owns (of its builds) are rebuilt; lights added by others stay
+  for(const l of L.all())if(mine(l))L.remove(l.id);
+  for(const s of G.states)for(const q of s.builds){if(!q.done)continue;
+    if(q.k==='lamp'){L.add({id:q.uid*8,x:q.x,y:q.y,kind:'lamp',mode:q.on||'auto',owner:'b'+q.uid});continue}
+    if(q.id<0||q.k==='rail')continue;const z=W.zones[q.id],b=BLD[q.k];if(!z||z.dead||!b||!b.zk)continue;
+    // masts stand inside the yard near its corners (the light falls on the concrete, not on the grass of the apron)
+    const big=z.W*z.H>60000,ins=big?16:6,hw=z.W/2-ins,hh=z.H/2-ins,pts=big?[[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]]:[[hw,hh]],r=M.min(80,42+M.sqrt(z.W*z.H)/25);
+    pts.forEach(([u,v],i)=>L.add({id:q.uid*8+1+i,x:z.x+u*z.ca-v*z.sa,y:z.y+u*z.sa+v*z.ca,kind:'flood',owner:q.id,r}))}
+  for(const l of L.all())if(prev.has(l.id))l.lv=prev.get(l.id)}
 function placeDone(keep){const fp=G.forPort;if(!keep)setBuild(null);if(fp&&!keep){G.sel={build:fp};panelSig=''}updHUD();updPbar()}
 function placeTap(x,y){const r=PL.tap(x,y,lastTouch,shiftDown&&!lastTouch);if(r==='built')placeDone(shiftDown&&!lastTouch);else if(r==='bad'&&PL.state.bad&&!lastTouch)toast(PL.state.bad);return r}
 function placeConfirm(){const r=PL.confirm(false);if(r==='built')placeDone(false);else if(r==='bad'&&PL.state.bad)toast(PL.state.bad);return r}
@@ -837,7 +862,7 @@ function drawObjects(ctx,A){const m=A.cam.m,T=A.T;drawPennants(ctx,A);ctx.textAl
     ctx.strokeStyle=bad?'rgba(255,107,90,0.95)':'rgba(127,209,139,0.95)';ctx.fillStyle=bad?'rgba(255,107,90,0.14)':'rgba(127,209,139,0.14)';ctx.lineWidth=2;ctx.setLineDash([8,6]);ctx.lineDashOffset=-T*24;
     if(b.zk){const w=M.max(8,b.W/m),h=M.max(8,b.H/m),an=k==='station'?stationAng(player(),x,y):rotK(k)?S.ang:0;ctx.save();ctx.translate(X,Y);ctx.rotate(an);ctx.beginPath();ctx.rect(-w/2,-h/2,w,h);ctx.fill();ctx.stroke();
       // the front of the building (its gate side) — so the angle reads
-      if(rotK(k)){ctx.setLineDash([]);ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-w/2,h/2);ctx.lineTo(w/2,h/2);ctx.stroke()}ctx.restore()}else{const r=M.max(10,(k==='city'?b.R:320)/m);ctx.beginPath();ctx.arc(X,Y,r,0,7);ctx.fill();ctx.stroke()}
+      if(rotK(k)){ctx.setLineDash([]);ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-w/2,h/2);ctx.lineTo(w/2,h/2);ctx.stroke()}ctx.restore()}else{const r=M.max(10,(k==='city'?b.R:b.point?b.r:320)/m);ctx.beginPath();ctx.arc(X,Y,r,0,7);ctx.fill();ctx.stroke()}
     if(b.mod||k==='solar'){ctx.setLineDash([3,5]);ctx.strokeStyle='rgba(255,210,90,0.65)';for(const q of player().builds)if(q.k==='droneport'){ctx.beginPath();ctx.arc(A.sxw(q.x),A.syw(q.y),(b.mod?1100:700)/m,0,7);ctx.stroke()}}
     if(k==='village'||k==='farm'){ctx.setLineDash([3,5]);ctx.strokeStyle='rgba(255,210,90,0.6)';for(const p of player().places)if(p.k==='village'){ctx.beginPath();ctx.arc(A.sxw(p.x),A.syw(p.y),1400/m,0,7);ctx.stroke()}}
     ctx.setLineDash([]);
@@ -984,16 +1009,16 @@ function drawPennants(ctx,A){const m=A.cam.m,a=smoothst(4,8,m)*smoothst(70,48,m)
     ctx.fillStyle='#131410';ctx.beginPath();ctx.moveTo(X-4,y0+s);ctx.lineTo(X+4,y0+s);ctx.lineTo(X,Y-1);ctx.closePath();ctx.fill();ctx.drawImage(bIcon(q.k),x0+2,y0+2,s-4,s-4)}ctx.restore()}
 function drawMiniBuilds(mx,s){const p=player();for(const q of p.builds){if(!q.done||q.k==='rail'||BLD[q.k].mod)continue;const x=q.x*s,y=q.y*s;mx.fillStyle='#131410';mx.fillRect(x-2.5,y-2.5,5,5);mx.fillStyle=PCOL[q.k]||'#fbf3e0';mx.fillRect(x-1.5,y-1.5,3,3)}}
 // ---------- engine hooks
-function ownBuildAt(x,y){for(const q of player().builds){if(!q.done||q.id<0||q.k==='rail')continue;const z=W.zones[q.id];if(z&&!z.dead&&rectHit(z,x,y,1,1))return q}return null}
+function ownBuildAt(x,y){for(const q of player().builds){if(q.done&&q.k==='lamp'&&M.hypot(q.x-x,q.y-y)<M.max(8,16*api.cam.m))return q;if(!q.done||q.id<0||q.k==='rail')continue;const z=W.zones[q.id];if(z&&!z.dead&&rectHit(z,x,y,1,1))return q}return null}
 function pickArmy(sx,sy){for(const s of G.states){if(!s.isP)continue;for(const a of s.armies){if(!a.units.length)continue;if(M.abs(api.sxw(a.x)-sx)<18&&M.abs(api.syw(a.y)-sy)<14)return a}}
   for(const s of G.states)if(s.isP)for(const a of s.armies){const q=a.home;if(!q.done)continue;const b=BLD.barracks;if(M.abs(q.x-api.toWorld(sx,sy)[0])<b.W/2&&M.abs(q.y-api.toWorld(sx,sy)[1])<b.H/2)return a}return null}
 const hooks={
-  pdown(x,y,sx,sy){if(G&&G.phase==='play'&&G.build&&lastTouch){const b=BLD[G.build];if(PL.grab(x,y,(b.R||(b.W?M.max(b.W,b.H)/2:320))+16*api.cam.m))return true}
+  pdown(x,y,sx,sy){if(G&&G.phase==='play'&&G.build&&lastTouch){const b=BLD[G.build];if(PL.grab(x,y,(b.R||(b.W?M.max(b.W,b.H)/2:b.point?12:320))+16*api.cam.m))return true}
     if(!G||G.phase!=='play'||G.mode!=='rail')return false;const q=stationAtScreen(sx,sy);if(!q)return false;closeConfirm();railDrag={a:q,x,y,sx,sy,ev:null,et:0};return true},
   pmove(x,y,sx,sy){if(PL.state.drag){PL.move(x,y);return}if(railDrag){railDrag.x=x;railDrag.y=y;railDrag.sx=sx;railDrag.sy=sy}},
   pup(x,y,sx,sy,cancel){if(PL.state.drag){PL.release();return}if(!railDrag)return;const d=railDrag;railDrag=null;if(cancel)return;const ev=railEval(d.a,x,y,sx,sy);if(ev.bad){toast(ev.bad);return}
     G.railAsk=ev;openAsk(`ЖД путь ${fmtKm(ev.L)}${ev.nb?' и новый вокзал':''}`,`${ev.B?'Соединит два вокзала':'В конце пути встанет вокзал'}<br>Стоимость <b>${fmt(ev.cost)}</b>`,()=>{if(buildRailway(ev)){onBuilt('rail',false);updHUD()}},sx,sy)},
-  frame(dt){if(!G||G.over&&G.speed===0){return}const sp=G.phase==='play'&&own&&api&&api.ready?G.speed:0;if(sp>0){simAcc+=dt*sp;prf('sim',()=>{while(simAcc>0.1){sim(0.1);simAcc-=0.1}})}
+  frame(dt){if(lightsDirty&&G&&api&&api.lights){lightsDirty=false;syncLights()}if(!G||G.over&&G.speed===0){return}const sp=G.phase==='play'&&own&&api&&api.ready?G.speed:0;if(sp>0){simAcc+=dt*sp;prf('sim',()=>{while(simAcc>0.1){sim(0.1);simAcc-=0.1}})}
     if(G.flights)for(const f of G.flights)f.g.s=flAt(f.g,G.t+simAcc-f.t0);
     G._hud=(G._hud||0)+dt;if(G._hud>0.25){G._hud=0;prf('hud',()=>{updHUD();updDip()})}},
   draw:(ctx,A)=>{drawOverlay(ctx,A);if(G&&G.phase==='play'&&own)drawObjects(ctx,A)},
@@ -1023,7 +1048,7 @@ const hooks={
     return `<tr><td>Государство</td><td><span class="own"><i class="chip" style="background:${s.color}"></i>${esc(s.name)}${c.cap!==undefined?' · столица':''}</span></td></tr>`}};
 
 // ---------- boot / phases
-function boot(caps,onReady,ops){if(api){api.destroy();api=null}
+function boot(caps,onReady,ops){if(api){api.destroy();api=null}lightsDirty=true;
   const vo=ui.viewOpts();api=startWorld({seed:cfg.seed,opt:mapOpt(caps),ops:ops||[],mode:'game',tod:cfg.rules.dayNight?9.5:12.5,dayNight:cfg.rules.dayNight,view:vo,hooks,onReady:A=>{onReady&&onReady(A)}});
   W=api.W;ui.loading('Отрисовка карты',api.W.cities.length+' населённых пунктов · '+api.W.zones.length+' объектов');api.setTodRate(G.speed*4/60);if(!cfg.rules.dayNight)api.setTodRate(0);document.getElementById('fps').classList.toggle('hid',!vo.fps)}
 function mkState(i,o,isP){return {id:i,name:o.name,capital:o.capital,gov:o.gov,flag:o.flag,color:o.color,isP,diff:isP?1:o.diff,trait:o.trait==='random'?['trader','militarist','cautious','adventurer'][(hsh(i,77)*4)|0]:o.trait,
@@ -1102,6 +1127,6 @@ function wire(u){ui=u;
   $('overm').onclick=()=>{$('over').classList.remove('show');ui.toMenu()};$('overk').onclick=()=>$('over').classList.remove('show')}
 return {wire,newGame,load,save,exit,setSpeed:v=>G&&setSpeed(v),get G(){return G},get api(){return api},paused:()=>G?G.speed===0:true,
   pauseInfo:()=>G?`${esc(player().name)} · ${gameClock()} · ${fmt(player().score)} очков · ячейка ${cfg.slot||1}`:'',setIcon:(k,img)=>{ICONIMG[k]=img},
-  _prof:PRF,_dbg:DBG,_test:{startBuildFor:(i,k,x,y)=>startBuild(G.states[i],k,x,y),canBuildFor:(i,k,x,y)=>canBuild(G.states[i],k,x,y),signVisa:i=>signVisa(player(),G.states[i]),visa:i=>visa(player(),G.states[i]),flightPath,demolish:q=>demolish(player(),q),run:sec=>{for(let t=0;t<sec;t+=0.1)sim(0.1)},validSite:(x,y)=>validSite(x,y),found,get own(){return own},chooseCaps,canBuild:(k,x,y,a)=>canBuild(player(),k,x,y,a),startBuild:(k,x,y,a)=>startBuild(player(),k,x,y,a),PL,setBuild,placeTap,placeConfirm,set touch(v){lastTouch=v},set shift(v){shiftDown=v},BLD,declareWar:(i)=>declareWar(player(),G.states[i]),launchDrone,launchUav:(k,x,y,to)=>launchUav(player(),k,x,y,to),startRail:(a,b,L)=>startRail(player(),a,b,L),railEval,buildRailway,
+  _prof:PRF,_dbg:DBG,_test:{startBuildFor:(i,k,x,y)=>startBuild(G.states[i],k,x,y),canBuildFor:(i,k,x,y)=>canBuild(G.states[i],k,x,y),signVisa:i=>signVisa(player(),G.states[i]),visa:i=>visa(player(),G.states[i]),flightPath,demolish:q=>demolish(player(),q),run:sec=>{for(let t=0;t<sec;t+=0.1)sim(0.1)},validSite:(x,y)=>validSite(x,y),found,get own(){return own},chooseCaps,canBuild:(k,x,y,a)=>canBuild(player(),k,x,y,a),startBuild:(k,x,y,a)=>startBuild(player(),k,x,y,a),PL,setBuild,placeTap,placeConfirm,syncLights,set touch(v){lastTouch=v},set shift(v){shiftDown=v},BLD,declareWar:(i)=>declareWar(player(),G.states[i]),launchDrone,launchUav:(k,x,y,to)=>launchUav(player(),k,x,y,to),startRail:(a,b,L)=>startRail(player(),a,b,L),railEval,buildRailway,
     buyUp:(q,u)=>buyUp(player(),q,u),clearDeps,updHidden,DRN,oreIcon,uavCap:()=>uavCap(player()),daylight,stationAtScreen,get hidSig(){return hidSig},get vis(){return vis}}};
 })();

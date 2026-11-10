@@ -25,7 +25,7 @@ const INIT = () => { const B = window.__bench = { on: false, thr: [], px: new Ui
     const g = document.getElementById('c').getContext('webgl2'), t0 = performance.now(); sw = 3; for (let i = 0; i < 4; i++) cb(ts + i * 6); g.readPixels(0, 0, 1, 1, g.RGBA, g.UNSIGNED_BYTE, B.px); B.thr.push((performance.now() - t0) / 4); }); }; };
 
 // buildings the scenario places, in order (modules need the drone port, the farm needs a village)
-const ORDER = ['village', 'farm', 'city', 'factory', 'power', 'solar', 'sawmill', 'refinery', 'barracks', 'sam', 'station', 'airport', 'droneport', 'dronefab', 'port', 'oil', 'gaswell', 'mine', 'dramp', 'drwy', 'dstore'];
+const ORDER = ['village', 'farm', 'city', 'factory', 'power', 'solar', 'sawmill', 'refinery', 'barracks', 'sam', 'station', 'airport', 'droneport', 'dronefab', 'port', 'oil', 'gaswell', 'mine', 'dramp', 'drwy', 'dstore', 'lamp'];
 
 async function scenario(browser, dev, opts) {
   const ctx = await browser.newContext(opts);
@@ -100,7 +100,7 @@ async function scenario(browser, dev, opts) {
   // ---- place every building type through the UI
   const placed = [];
   // the desktop places every type with the mouse; the phone checks the touch flow on a representative set
-  const LIST = touch ? ['village', 'farm', 'factory', 'solar', 'station', 'droneport', 'dramp'] : ORDER;
+  const LIST = touch ? ['village', 'farm', 'factory', 'solar', 'station', 'droneport', 'dramp', 'lamp'] : ORDER;
   for (const k of LIST) {
     const site = await ev(async (k) => {
       const T = Game._test, G = Game.G, W = Game.api.W, p = G.states[0], c = W.cities.find((o) => o.cap === 0);
@@ -179,6 +179,22 @@ async function scenario(browser, dev, opts) {
   if (fac && !touch) check(dev, fac.za != null && Math.abs(Math.cos(fac.za - fac.a) - 1) < 1e-6, 'повёрнутый завод стоит в мире под тем же углом', `${fac.a} / ${fac.za}`);
 
   lap('build');
+  // ---- light sources: the lamp is a game object — it lights the ground at night (real light: the pixel under it is brighter
+  // than with the lamp off), goes dark by day in the 'auto' mode, the cap holds with 2000 lights in view
+  const lt = await ev(async () => {
+    const a = Game.api, L = a.lights, p = Game.G.states[0], sl = (ms) => new Promise((r) => setTimeout(r, ms)); Game.setSpeed(0); Game._test.syncLights();
+    const q = p.builds.find((b) => b.k === 'lamp' && b.done); if (!q) return { err: 'нет фонаря' }; const lid = q.uid * 8, lg = () => L.get(lid); if (!lg()) return { err: 'у фонаря нет источника света' };
+    const px = async () => { await sl(1400); const g = __world.gl.gl; let v = 0; await new Promise((r) => requestAnimationFrame(() => { const b = new Uint8Array(4 * 9), w = g.drawingBufferWidth, h = g.drawingBufferHeight; g.readPixels((w >> 1) - 1, (h >> 1) - 1, 3, 3, g.RGBA, g.UNSIGNED_BYTE, b); for (let i = 0; i < 9; i++) v += b[i * 4] + b[i * 4 + 1] + b[i * 4 + 2]; v /= 27; r() })); return v };
+    a.setTod(23); a.cam.x = q.x + 5; a.cam.y = q.y + 5; a.cam.m = 0.3; const on = await px(); const lvN = lg().lv; L.setMode(lid, 'off'); const off = await px(); L.setMode(lid, 'auto');
+    a.setTod(12); await sl(1500); const lvD = lg().lv; a.setTod(23); await sl(1200);
+    // the cap: 2000 extra lights around the camera
+    for (let i = 0; i < 2000; i++) L.add({ x: q.x + (i % 50) * 9 - 225, y: q.y + Math.floor(i / 50) * 9 - 180, mode: 'on', owner: 'test' }); await sl(800);
+    const st = a.stats().lights; L.removeOwner('test'); a.setTod(12);
+    return { on: +on.toFixed(1), off: +off.toFixed(1), lvNight: lvN, lvDay: lvD, vis: st.visible, cap: L.cap, all: st.all };
+  });
+  check(dev, !lt.err && lt.on > lt.off * 1.5, 'фонарь ночью освещает землю (ярче, чем выключенный)', JSON.stringify(lt));
+  check(dev, lt.lvNight === 1 && lt.lvDay === 0, 'фонарь «авто»: горит ночью, гаснет днём', JSON.stringify(lt));
+  check(dev, lt.vis <= lt.cap && lt.all > 2000, 'лимит одновременных источников света держится', `видно ${lt.vis} из ${lt.all}, лимит ${lt.cap}`);
   // ---- cancel: Esc, right button, ✕, the same key again
   if (!(await ev(() => document.querySelector('#bb-tabs [data-t="cities"]').classList.contains('on')))) await page.click('#bb-tabs [data-t="cities"]'); await ev(() => document.body.classList.remove('tray-off')); await page.waitForTimeout(80);
   const ways = touch ? ['x', 'key'] : ['esc', 'rmb', 'x', 'key'];

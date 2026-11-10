@@ -45,6 +45,9 @@ in vec2 vUV; in vec2 vP; in vec4 vCol; in vec4 vTint; flat in float vL;
 out vec4 o;
 uniform float uPre;
 uniform vec3 uAmb; // ambient light: everything drawn before the lights is multiplied by it (no full-screen multiply pass)
+// the light map (stage 6, phase 7): ambient + the pools of the light sources, per screen pixel — replaces uAmb when on
+uniform sampler2D uLm; uniform float uLmOn; uniform vec2 uLmS;
+vec3 ambAt(){ return uLmOn > 0.5 ? texture(uLm, vec2(vP.x * uLmS.x, 1.0 - vP.y * uLmS.y)).rgb : uAmb; }
 // spatial vignette: every draw is darkened by (1 - v); the colour part c*v is added once, in the tile pass
 uniform vec4 uVig; uniform vec4 uVigC; uniform float uVigOn;
 float vigA(){ return uVigOn < 0.5 ? 0.0 : uVigC.a * clamp((length(vP - uVig.xy) - uVig.z) / (uVig.w - uVig.z), 0.0, 1.0); }
@@ -52,7 +55,7 @@ vec4 shade(vec4 t){
   vec3 c = uPre > 0.5 ? (t.a > 0.0 ? t.rgb / t.a : vec3(0.0)) : t.rgb;
   c = mix(c, vTint.rgb, vTint.a);
   float a = t.a * vCol.a;
-  return vec4(c * vCol.rgb * uAmb * a * (1.0 - vigA()), a);
+  return vec4(c * vCol.rgb * ambAt() * a * (1.0 - vigA()), a);
 }
 `;
   const FS_2D = FS_HEAD + `uniform sampler2D uT; void main(){ o = shade(texture(uT, vUV)); }`;
@@ -64,7 +67,7 @@ void main(){ vec4 c = shade(texture(uA, vec3(vUV, vL)));
     if (q.x >= 0.0 && q.x <= 1.0 && q.y >= 0.0 && q.y <= 1.0) { vec4 sh = texture(uOv, q);
       // add: an additive layer (the bloom of the lights), weighted so that the draws of one screen cell sum to 1
       if (uOvAdd > 0.5) c += vec4(sh.rgb * (1.0 - vigA()), sh.a) * vCol.a * uOvN;
-      else c = c * (1.0 - sh.a) + vec4(sh.rgb * uAmb * (1.0 - vigA()), sh.a) * vCol.a; } }
+      else c = c * (1.0 - sh.a) + vec4(sh.rgb * ambAt() * (1.0 - vigA()), sh.a) * vCol.a; } }
   if (uVigAdd > 0.5) c.rgb += uVigC.rgb * vigA() * vCol.a;
   o = c; }`;
   // a premultiplied layer with the vignette in the same pass (the clouds — the last full-screen layer of the frame):
@@ -93,7 +96,7 @@ void main(){ float t = clamp((length(vP - uC) - uR.x) / (uR.y - uR.x), 0.0, 1.0)
   let P2, PA, PP, PV, PC, vao, ibuf, qbuf;
   let ovT = null, ovM = [0, 0, 0, 0], ovAdd = 0, ovN = 1; // the screen layer composited over tiles (null — none)
   let AMB = [1, 1, 1]; // ambient multiplier of the draws (see uAmb)
-  let VIG = null, vigAdd = false; // spatial vignette [cx, cy, r0, r1, r, g, b, a] in device px, null — off
+  let VIG = null, vigAdd = false, LM = null, LMS = null; // spatial vignette [cx, cy, r0, r1, r, g, b, a] in device px, null — off
   function init() {
     P2 = mkProg(FS_2D); PA = mkProg(FS_ARR); PP = mkProg(FS_PAT); PV = mkProg(FS_VIG); PC = mkProg(FS_CV);
     vao = gl.createVertexArray(); gl.bindVertexArray(vao);
@@ -150,6 +153,9 @@ void main(){ float t = clamp((length(vP - uC) - uR.x) / (uR.y - uR.x), 0.0, 1.0)
     gl.uniform2f(prog.u.uS, 2 / tW, 2 / tH);
     if (prog.u.uPre) gl.uniform1f(prog.u.uPre, tex && tex.pre ? 1 : 0);
     if (prog.u.uAmb) gl.uniform3f(prog.u.uAmb, AMB[0], AMB[1], AMB[2]);
+    // unit 2 is unbound when the light map is off: drawing INTO the light map with its texture still bound from the last
+    // frame is a feedback loop and WebGL drops the draw call
+    if (prog.u.uLmOn) { gl.uniform1f(prog.u.uLmOn, LM ? 1 : 0); gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, LM ? LM.tex.t : null); gl.uniform1i(prog.u.uLm, 2); if (LM) gl.uniform2f(prog.u.uLmS, 1 / tW, 1 / tH); gl.activeTexture(gl.TEXTURE0) }
     if (prog.u.uVigOn) { gl.uniform1f(prog.u.uVigOn, VIG ? 1 : 0); if (VIG) { gl.uniform4f(prog.u.uVig, VIG[0], VIG[1], VIG[2], VIG[3]); gl.uniform4f(prog.u.uVigC, VIG[4], VIG[5], VIG[6], VIG[7]) } }
     if (prog.u.uVigAdd) gl.uniform1f(prog.u.uVigAdd, vigAdd && VIG ? 1 : 0);
     gl.activeTexture(gl.TEXTURE0);
@@ -268,7 +274,7 @@ void main(){ float t = clamp((length(vP - uC) - uR.x) / (uR.y - uR.x), 0.0, 1.0)
   function target(L) {
     flush();
     // offscreen layers are composited later: the spatial vignette applies when they reach the screen, not inside them
-    if (L && !cur) { VIGS = VIG; VIG = null } else if (!L && cur) { VIG = VIGS; VIGS = null }
+    if (L && !cur) { VIGS = VIG; VIG = null; LMS = LM; LM = null } else if (!L && cur) { VIG = VIGS; VIGS = null; LM = LMS; LMS = null }
     cur = L || null; gl.bindFramebuffer(gl.FRAMEBUFFER, cur ? cur.fb : null);
     tW = cur ? cur.w : canvas.width; tH = cur ? cur.h : canvas.height; gl.viewport(0, 0, tW, tH);
   }
@@ -347,10 +353,12 @@ void main(){ float t = clamp((length(vP - uC) - uR.x) / (uR.y - uR.x), 0.0, 1.0)
   };
   // the ambient multiplier for the following draws ([1,1,1] — none)
   api.getAmbient = () => AMB.slice();
+  // the light map layer for the following draws (null — the uniform ambient)
+  api.lightmap = function (L) { if (L === LM) return; flush(); LM = L || null };
   // spatial vignette on (device px centre and radii, colour, max alpha) or off (null); add — the tile draws add the colour
   api.spatialVignette = function (v) { flush(); VIG = v } ; api.vignetteAdd = function (on) { if (on === vigAdd) return; flush(); vigAdd = on };
   api.ambient = function (r, g, b) { if (r === AMB[0] && g === AMB[1] && b === AMB[2]) return; flush(); AMB = [r, g, b] };
-  api.begin = function () { stats.draws = 0; stats.inst = 0; stats.uploads = 0; ovT = null; AMB = [1, 1, 1]; VIG = null; vigAdd = false; target(null); T = [1, 0, 0, 1, 0, 0]; api.globalAlpha = 1; api.globalCompositeOperation = 'source-over'; api.tint = null };
+  api.begin = function () { stats.draws = 0; stats.inst = 0; stats.uploads = 0; ovT = null; AMB = [1, 1, 1]; VIG = null; vigAdd = false; LM = null; LMS = null; target(null); T = [1, 0, 0, 1, 0, 0]; api.globalAlpha = 1; api.globalCompositeOperation = 'source-over'; api.tint = null };
   api.end = function () { api.gpuMark(null); flush() };
   api.flush = flush; api.target = target; api.clear = clear; api.layer = layer; api.pool = pool; api.sprite = addSprite; api.texture = tex2D;
   api.lost = () => gl.isContextLost();
