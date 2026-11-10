@@ -311,6 +311,15 @@ body.sel #gpanel{display:flex}
 #hintn{display:block;font:800 10px/1.2 var(--df);text-transform:uppercase;letter-spacing:.04em;color:var(--tt);text-shadow:var(--tsh)}
 .hint-t{font:600 12.5px/1.38 var(--df);text-shadow:0 1px 0 var(--to)}.hint-t b{color:var(--tgo)}
 #hint .xb{position:absolute;right:6px;top:50%;transform:translateY(-50%)}
+/* stage 6: the placement bar (armed building) — the hint box of DroneFlames with ⟲ ✓ ✕; touch targets ≥ 44 px */
+#pbar{display:none;align-items:center;gap:9px;width:min(600px,94vw);padding:6px;border:1px solid var(--k0);background:var(--riv),var(--sla);box-shadow:var(--brass),0 3px 0 rgba(0,0,0,0.35);animation:hintIn .2s}
+#pbar.show{display:flex}#pbar small{display:block;font:800 11px/1.2 var(--df);text-transform:uppercase;letter-spacing:.04em;color:var(--tgo);text-shadow:var(--tsh)}
+#pbar.bad .hint-t{color:#ff9c8e}#pbar.bad .hint-i{background:#d9503c;box-shadow:inset 1px 1px 0 #ffb0a0,inset -1px -1px 0 #7a2014}
+.pb-b{display:flex;gap:5px;flex:none}.pbb{width:40px;height:40px;padding:0;border:1px solid var(--k0);border-radius:0;background:var(--o4);color:#fff;font:900 20px/1 var(--df);text-shadow:var(--tsh);box-shadow:var(--bev);cursor:pointer}
+.pbb.ok{background:#4f9a3c}.pbb.no{background:#d9503c}.pbb:disabled{filter:saturate(.3) brightness(.6);cursor:default}.pbb[hidden]{display:none}
+#pbar:not(.touch) .pbb.ok{display:none}
+body.placing-k #hint{display:none}
+@media (pointer:coarse){.pbb{width:48px;height:48px}}
 #toasts{flex-direction:column;align-items:center;gap:5px;pointer-events:none}
 .toast{position:relative;pointer-events:auto;display:flex;align-items:center;gap:9px;width:min(470px,92vw);padding:6px 42px 10px 6px;border:1px solid var(--k0);
   background:var(--riv),var(--sla);box-shadow:var(--brass),0 3px 0 rgba(0,0,0,0.35);font:600 12px/1.36 var(--df);text-shadow:0 1px 0 var(--to);animation:tIn .25s}
@@ -480,3 +489,20 @@ body.m-game #insp button{font:800 10.5px var(--df);text-transform:uppercase;colo
 .ld-bar i{top:3px;bottom:3px;background:repeating-linear-gradient(90deg,#4caf3a 0 10px,#5bbb43 10px 14px);box-shadow:inset 0 1px 0 #b4f185}
 .ld-tip{font:500 12.5px/1.5 var(--df);color:var(--tm);text-shadow:0 1px 0 var(--to)}.ld-tip b{color:var(--tt);font:800 11px var(--df)}
 .ol .fcol>span,.ol .tile small,.ol .tile span{font:700 10.5px var(--df);color:var(--tm);text-shadow:0 1px 0 var(--to)}
+
+/* ---------------------------------------------------------------- stage 6: layout as in DroneFlames
+   the rail of Штаб / Залежи stands on the right edge, centred (DroneFlames: Штаб, Бой, Залежи… on the right); the windows
+   it opens slide out to its left; the diplomacy window moves under the top bar on the left */
+#lrail{left:auto;right:6px;top:calc(50% - var(--bbh) / var(--z,1) / 2 + 20px);transform:translateY(-50%)}
+#orep{left:auto;right:84px;top:92px}#hqp{left:auto;right:84px}#dip{right:auto;left:6px;top:92px}
+/* narrow screens (phones held upright): the plan button shrinks to its counter, the resources pill keeps the middle */
+@media (max-width:760px){
+  #plan{padding:6px 7px}#plan b{display:none}#plan:before{content:'';width:16px;height:16px;background:currentColor;-webkit-mask:var(--bulb) center/contain no-repeat;mask:var(--bulb) center/contain no-repeat;color:var(--tgo)}
+  #topcol{top:51px;width:calc(100vw / var(--z,1) - 12px)}#hres{max-width:calc(100vw / var(--z,1) - 120px)}
+  #hint,#pbar{width:calc(100vw / var(--z,1) - 12px)}
+  #orep,#hqp,#mystate,#dip{left:6px;right:6px;width:auto}
+}
+:root{--bulb:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 21h6v-1H9zm3-19a7 7 0 0 0-4 12.7V18h8v-3.3A7 7 0 0 0 12 2z'/%3E%3C/svg%3E")}
+
+/* phones: news as in DroneFlames — one compact line at a time, never a stack over the middle of the map */
+@media (max-width:760px){#toasts .toast:nth-last-child(n+2){display:none}#toasts .toast{padding-top:4px;padding-bottom:7px}#toasts .toast .t-i{transform:scale(.85)}}

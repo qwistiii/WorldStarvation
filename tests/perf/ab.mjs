@@ -12,7 +12,7 @@ for (const [n, m, tod, wx] of (process.argv[3] ? JSON.parse(process.argv[3]) : [
     w.stop(); w.setTod(tod); w.setWeather(wx); Game.setSpeed(0); w.cam.x = c.x; w.cam.y = c.y; w.cam.m = m;
     for (let i = 0; i < 150; i++) { await sl(100); const s = w.stats(); if (!s.queue && !s.pending) break; } await sl(400);
     const out = {}; for (const k in CFG) out[k] = [];
-    for (let rep = 0; rep < 6; rep++) for (const k in CFG) { for (const q in __world.dbg) delete __world.dbg[q]; Object.assign(__world.dbg, CFG[k]); await sl(150); B.thr.length = 0; B.on = true; await sl(700); B.on = false; const a = B.thr.slice(2).sort((x, y) => x - y); out[k].push(a[a.length >> 1]); }
+    for (let rep = 0; rep < 6; rep++) for (const k in CFG) { for (const q in __world.dbg) delete __world.dbg[q]; Object.assign(__world.dbg, CFG[k]); w.opt.labels = !CFG[k].noLabels; for (const q of ['border','fill','dep','caps','names']) Game._dbg[q] = !!(CFG[k].g || {})[q]; await sl(150); B.thr.length = 0; B.on = true; await sl(700); B.on = false; const a = B.thr.slice(2).sort((x, y) => x - y); out[k].push(a[a.length >> 1]); }
     for (const k in out) { const a = out[k].sort((x, y) => x - y); out[k] = +((a[2] + a[3]) / 2).toFixed(2); } for (const q in __world.dbg) delete __world.dbg[q]; return out; }, [m, tod, wx, CFG]);
   console.log(n.padEnd(9), JSON.stringify(r));
 }

@@ -2761,7 +2761,7 @@ function renderTile(z,tx,ty){
   if(mpp<7){T();drawPower(ctx,rl,mpp);ctx.setTransform(1,0,0,1,0,0)}
   blockCache=null;
   grain(ctx,x0,y0,mpp,feats.length>0||rl.length>0);
-  return cv;
+  cv.op=TOPAQ;return cv;
 }
 function drawCross(ctx,f,x0,y0,s,qx0,qy0,qx1,qy1){if(f.kind!=='city'||f.type===0||GROW.has(f.id))return;const N=f.N,D=f.D;
   const [i0,i1,j0,j1]=blkRange(f,qx0,qy0,qx1,qy1);
@@ -2773,12 +2773,14 @@ function drawCross(ctx,f,x0,y0,s,qx0,qy0,qx1,qy1){if(f.kind!=='city'||f.type===0
     if(up)zeb(1,0,hvI+1.6,hvJ-0.4);if(um)zeb(-1,0,hvI+1.6,hvJ-0.4);if(vp)zeb(0,1,hvJ+1.6,hvI-0.4);if(vm)zeb(0,-1,hvJ+1.6,hvI-0.4);
     if(up)ctx.rect(cx+hvI+5.4,cy,0.35,hvJ-0.6);if(um)ctx.rect(cx-hvI-5.75,cy-hvJ+0.6,0.35,hvJ-0.6);if(vp)ctx.rect(cx-hvI+0.6,cy+hvJ+5.4,hvI-0.6,0.35);if(vm)ctx.rect(cx,cy-hvJ-5.75,hvI-0.6,0.35)}
   ctx.fill()}
-function grain(ctx,x0,y0,mpp,vec){if(!vec&&!SPLIT)return;
-  const img=ctx.getImageData(0,0,TS,TS),d=img.data;const i1=1/(2.2*mpp),i2=1/(7*mpp);let o=0;const fine=mpp<3;
-  for(let py=0;py<TS;py++){const wy=y0+(py+0.5)*mpp;for(let px=0;px<TS;px++,o+=4){if(d[o+3]<250)continue;if(!vec){const v=SHD[o>>2];if(v!==1){d[o]*=v;d[o+1]*=v;d[o+2]*=v}continue}const wx=x0+(px+0.5)*mpp;
+// stage 6: TOPAQ — the last tile has no translucent pixel (the renderer then draws it without blending)
+let TOPAQ=false;
+function grain(ctx,x0,y0,mpp,vec){TOPAQ=false;if(!vec&&!SPLIT)return;
+  const img=ctx.getImageData(0,0,TS,TS),d=img.data;const i1=1/(2.2*mpp),i2=1/(7*mpp);let o=0;const fine=mpp<3;let tr=0;
+  for(let py=0;py<TS;py++){const wy=y0+(py+0.5)*mpp;for(let px=0;px<TS;px++,o+=4){if(d[o+3]<250){tr++;continue}if(!vec){const v=SHD[o>>2];if(v!==1){d[o]*=v;d[o+1]*=v;d[o+2]*=v}continue}const wx=x0+(px+0.5)*mpp;
     let g=noise(wx*i1+3.1,wy*i1+1.7)*0.05+noise(wx*i2+9.3,wy*i2+4.1)*0.04;if(fine){const h=mix32((px*73856093)^(py*19349663)^(x0*7|0));g+=((h&255)/255-0.5)*0.05}
     const m=(1+g)*SHD[o>>2];d[o]*=m;d[o+1]*=m;d[o+2]*=m}}
-  ctx.putImageData(img,0,0)}
+  ctx.putImageData(img,0,0);TOPAQ=tr===0}
 function drawFeat(ctx,f,pass,x0,y0,s,mpp,qx0,qy0,qx1,qy1){
   if(f.kind==='city'){if(f.type===0){if(mpp>9)return;for(let i=0;i<f.vst.length;i++){const st=f.vst[i];setFrame(ctx,st.x0,st.y0,st.ca,st.sa,x0,y0,s);const vk='v'+f.id+'_'+i+(LITE2?'b':LITE?'a':'')+(GROW.has(f.id)?'g'+GROW.get(f.id).toFixed(2):'');let P=bcGet(vk);if(!P){P=genVillage(f,i);bcSet(vk,P)}
         if(pass===1){ctx.beginPath();drawPrims(ctx,P,1,mpp);ctx.fillStyle=SHADOW;ctx.fill()}else drawPrims(ctx,P,pass,mpp)}return}

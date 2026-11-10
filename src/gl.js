@@ -71,9 +71,10 @@ void main(){ vec4 c = shade(texture(uA, vec3(vUV, vL)));
   // out = (layer over dst) * (1 - v) + colour * v
   const FS_CV = `#version 300 es
 precision highp float;
-in vec2 vUV; in vec2 vP; in vec4 vCol; out vec4 o; uniform sampler2D uT; uniform vec2 uC; uniform vec2 uR; uniform vec4 uCol;
-void main(){ vec4 c = texture(uT, vUV) * vCol.a; float t = clamp((length(vP - uC) - uR.x) / (uR.y - uR.x), 0.0, 1.0); float va = uCol.a * t;
-  o = vec4(c.rgb * (1.0 - va) + uCol.rgb * va, 1.0 - (1.0 - c.a) * (1.0 - va)); }`;
+in vec2 vUV; in vec2 vP; in vec4 vCol; out vec4 o; uniform sampler2D uT; uniform vec2 uC; uniform vec2 uR; uniform vec4 uCol; uniform vec4 uHaze;
+// clouds over dst, then the height haze (a uniform colour, alpha h), then the vignette: one pass instead of three
+void main(){ vec4 c = texture(uT, vUV) * vCol.a; float t = clamp((length(vP - uC) - uR.x) / (uR.y - uR.x), 0.0, 1.0); float va = uCol.a * t; float h = uHaze.a;
+  o = vec4((c.rgb * (1.0 - h) + uHaze.rgb * h) * (1.0 - va) + uCol.rgb * va, 1.0 - (1.0 - c.a) * (1.0 - h) * (1.0 - va)); }`;
   // a repeating texture through a matrix: the device position goes back to texture pixels
   const FS_PAT = FS_HEAD + `uniform sampler2D uT; uniform mat3 uInv; uniform vec2 uSz;
 void main(){ vec3 q = uInv * vec3(vP, 1.0); o = shade(texture(uT, q.xy / uSz)); }`;
@@ -135,7 +136,9 @@ void main(){ float t = clamp((length(vP - uC) - uR.x) / (uR.y - uR.x), 0.0, 1.0)
 
   // ---------------------------------------------------------------- batching
   function setBlend(b) {
-    if (b === blend) return; blend = b;
+    if (b === blend) return;
+    if (b === 'opaque') gl.disable(gl.BLEND); else if (blend === 'opaque' || blend === '') gl.enable(gl.BLEND);
+    blend = b; if (b === 'opaque') return;
     if (b === 'lighter') gl.blendFunc(gl.ONE, gl.ONE);
     else if (b === 'screen-add') gl.blendFunc(gl.ONE, gl.ONE); // same as lighter (a separate name keeps batches apart)
     else if (b === 'multiply') gl.blendFunc(gl.DST_COLOR, gl.ONE_MINUS_SRC_ALPHA);
@@ -336,9 +339,9 @@ void main(){ float t = clamp((length(vP - uC) - uR.x) / (uR.y - uR.x), 0.0, 1.0)
   };
   // drawImage of a premultiplied layer with the vignette applied in the same pass (see FS_CV); the image must cover the
   // whole target, otherwise the caller draws the vignette separately
-  api.drawImageVignette = function (r, sx, sy, sw, sh, dx, dy, dw, dh, cx, cy, r0, r1, col, alpha) {
+  api.drawImageVignette = function (r, sx, sy, sw, sh, dx, dy, dw, dh, cx, cy, r0, r1, col, alpha, haze) {
     const t = r.tex; flush(); prog = PC; tex = t; setBlend('source-over'); const S = M.hypot(T[0], T[1]), TT = T.slice();
-    PC.set = () => { gl.uniform2f(PC.u.uC, TT[0] * cx + TT[2] * cy + TT[4], TT[1] * cx + TT[3] * cy + TT[5]); gl.uniform2f(PC.u.uR, r0 * S, r1 * S); gl.uniform4f(PC.u.uCol, col[0], col[1], col[2], alpha) };
+    PC.set = () => { gl.uniform2f(PC.u.uC, TT[0] * cx + TT[2] * cy + TT[4], TT[1] * cx + TT[3] * cy + TT[5]); gl.uniform2f(PC.u.uR, r0 * S, r1 * S); gl.uniform4f(PC.u.uCol, col[0], col[1], col[2], alpha); const H = haze || [0, 0, 0, 0]; gl.uniform4f(PC.u.uHaze, H[0], H[1], H[2], H[3]) };
     let u0 = (r.x + sx) / t.w, u1 = (r.x + sx + sw) / t.w, v0 = (r.y + sy) / t.h, v1 = (r.y + sy + sh) / t.h; if (r.flip) { v0 = 1 - v0; v1 = 1 - v1 }
     const T0 = T; T = [1, 0, 0, 1, 0, 0]; quad(T, dx, dy, dw, dh, u0, v0, u1, v1, 0, 1, 1, 1, api.globalAlpha, null); T = T0; flush(); PC.set = null; prog = null;
   };
@@ -348,9 +351,46 @@ void main(){ float t = clamp((length(vP - uC) - uR.x) / (uR.y - uR.x), 0.0, 1.0)
   api.spatialVignette = function (v) { flush(); VIG = v } ; api.vignetteAdd = function (on) { if (on === vigAdd) return; flush(); vigAdd = on };
   api.ambient = function (r, g, b) { if (r === AMB[0] && g === AMB[1] && b === AMB[2]) return; flush(); AMB = [r, g, b] };
   api.begin = function () { stats.draws = 0; stats.inst = 0; stats.uploads = 0; ovT = null; AMB = [1, 1, 1]; VIG = null; vigAdd = false; target(null); T = [1, 0, 0, 1, 0, 0]; api.globalAlpha = 1; api.globalCompositeOperation = 'source-over'; api.tint = null };
-  api.end = function () { flush() };
+  api.end = function () { api.gpuMark(null); flush() };
   api.flush = flush; api.target = target; api.clear = clear; api.layer = layer; api.pool = pool; api.sprite = addSprite; api.texture = tex2D;
   api.lost = () => gl.isContextLost();
+  // ---------------------------------------------------------------- thick polylines (state borders): miter joins, the
+  // quads of neighbouring segments share their edges — no overlap, so a translucent line does not darken at its bends
+  // (as one Canvas stroke). pts: device px [x0,y0,x1,y1,…]; w: device px; col: [r,g,b,a]
+  const LVS = `#version 300 es
+layout(location=0) in vec2 aP; layout(location=1) in vec4 aC; uniform vec2 uS; out vec4 vC;
+void main(){ gl_Position = vec4(aP.x * uS.x - 1.0, 1.0 - aP.y * uS.y, 0.0, 1.0); vC = aC; }`;
+  const LFS = `#version 300 es
+precision highp float; in vec4 vC; out vec4 o; void main(){ o = vec4(vC.rgb * vC.a, vC.a); }`;
+  let LP = null, lvao = null, lbuf = null, lv = new Float32Array(6 * 4096), ln = 0;
+  function lineInit() { const p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, LVS)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, LFS)); gl.linkProgram(p); LP = { p, uS: gl.getUniformLocation(p, 'uS') };
+    lvao = gl.createVertexArray(); gl.bindVertexArray(lvao); lbuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, lbuf);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 24, 0); gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 24, 8); gl.bindVertexArray(vao) }
+  function lpush(x, y, c, a) { if (ln * 6 + 6 > lv.length) { const d = new Float32Array(lv.length * 2); d.set(lv); lv = d } const o = ln * 6; lv[o] = x; lv[o + 1] = y; lv[o + 2] = c[0]; lv[o + 3] = c[1]; lv[o + 4] = c[2]; lv[o + 5] = a; ln++ }
+  api.polyline = function (pts, n, w, col) {
+    if (n < 2) return; const a = col[3] * api.globalAlpha, h = w / 2; if (a <= 0) return;
+    const OX = new Float32Array(n * 2);
+    for (let i = 0; i < n; i++) { // offset vector of vertex i (miter, limited to 2.5 half-widths)
+      const px = pts[(i > 0 ? i - 1 : i) * 2], py = pts[(i > 0 ? i - 1 : i) * 2 + 1], qx = pts[(i < n - 1 ? i + 1 : i) * 2], qy = pts[(i < n - 1 ? i + 1 : i) * 2 + 1], cx = pts[i * 2], cy = pts[i * 2 + 1];
+      let ax = cx - px, ay = cy - py, la = M.hypot(ax, ay), bx = qx - cx, by = qy - cy, lb = M.hypot(bx, by); if (la < 1e-6) { ax = bx; ay = by; la = lb } if (lb < 1e-6) { bx = ax; by = ay; lb = la } if (la < 1e-6) { OX[i * 2] = 0; OX[i * 2 + 1] = h; continue }
+      const n1x = -ay / la, n1y = ax / la, n2x = -by / lb, n2y = bx / lb; let mx = n1x + n2x, my = n1y + n2y; const ml = M.hypot(mx, my) || 1; mx /= ml; my /= ml;
+      const d = mx * n1x + my * n1y; const k = M.min(2.5, 1 / M.max(0.2, d)) * h; OX[i * 2] = mx * k; OX[i * 2 + 1] = my * k }
+    for (let i = 0; i < n - 1; i++) { const x0 = pts[i * 2], y0 = pts[i * 2 + 1], x1 = pts[i * 2 + 2], y1 = pts[i * 2 + 3], o0x = OX[i * 2], o0y = OX[i * 2 + 1], o1x = OX[i * 2 + 2], o1y = OX[i * 2 + 3];
+      lpush(x0 - o0x, y0 - o0y, col, a); lpush(x0 + o0x, y0 + o0y, col, a); lpush(x1 + o1x, y1 + o1y, col, a); lpush(x0 - o0x, y0 - o0y, col, a); lpush(x1 + o1x, y1 + o1y, col, a); lpush(x1 - o1x, y1 - o1y, col, a) }
+  };
+  // draws the polylines collected since the last call (one draw call)
+  api.linesFlush = function () { if (!ln) return; flush(); if (!LP) lineInit(); gl.useProgram(LP.p); gl.uniform2f(LP.uS, 2 / tW, 2 / tH); setBlend('source-over'); gl.bindVertexArray(lvao); gl.bindBuffer(gl.ARRAY_BUFFER, lbuf);
+    gl.bufferData(gl.ARRAY_BUFFER, lv.subarray(0, ln * 6), gl.STREAM_DRAW); gl.drawArrays(gl.TRIANGLES, 0, ln); gl.bindVertexArray(vao); stats.draws++; ln = 0; prog = null };
+  // GPU time per pass (EXT_disjoint_timer_query_webgl2): gpuMark(name) closes the running interval and opens the next one;
+  // the results arrive a few frames later and are smoothed into api.gpu = {name: ms}. Off unless api.gpuOn is set.
+  const TQ = gl.getExtension('EXT_disjoint_timer_query_webgl2'); api.gpu = {}; api.gpuOn = false; let qCur = null; const qPend = [];
+  api.gpuMark = function (name) {
+    if (!TQ || !api.gpuOn) return; flush();
+    if (qCur) { gl.endQuery(TQ.TIME_ELAPSED_EXT); qPend.push(qCur); qCur = null }
+    if (name) { const q = gl.createQuery(); gl.beginQuery(TQ.TIME_ELAPSED_EXT, q); qCur = { q, name } }
+    while (qPend.length && gl.getQueryParameter(qPend[0].q, gl.QUERY_RESULT_AVAILABLE)) { const e = qPend.shift(); if (!gl.getParameter(TQ.GPU_DISJOINT_EXT)) { const ms = gl.getQueryParameter(e.q, gl.QUERY_RESULT) / 1e6; api.gpu[e.name] = api.gpu[e.name] == null ? ms : api.gpu[e.name] * 0.9 + ms * 0.1 } gl.deleteQuery(e.q) }
+    if (qPend.length > 60) for (const e of qPend.splice(0, 30)) gl.deleteQuery(e.q);
+  };
   // frees every texture, buffer and program of this instance (the canvas and its context stay for the next world)
   api.dispose = function () {
     n = 0; for (const t of OWN) gl.deleteTexture(t); OWN.length = 0; pages.length = 0; WHITE = null;

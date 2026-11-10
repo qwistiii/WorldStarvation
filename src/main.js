@@ -49,7 +49,8 @@ function slotOf(v,P){if(v.s>=0)return v.s;if(!v.b)return -1;let s=P.upload(v.b);
 // draws an entry (whole tile or a source rect of it); false when it has nothing to show
 function drawE(v,P,sx,sy,sw,sh,X0,Y0,W0,H0){const s=slotOf(v,P);if(s<0)return false;ctx.tile(P,s,sx,sy,sw,sh,X0,Y0,W0,H0);return true}
 const workers=[];let mainRender=false;
-const NW=M.max(2,M.min((navigator.deviceMemory||4)>=8?7:5,(navigator.hardwareConcurrency||4)-2)); // stage 5.12: up to 7 workers on 8+ GB machines
+const NWQ=+(new URLSearchParams(location.search).get('workers')||0); // ?workers=N — a fixed number of tile workers (tests, slow devices)
+const NW=NWQ>0?M.min(8,NWQ|0):M.max(2,M.min((navigator.deviceMemory||4)>=8?7:5,(navigator.hardwareConcurrency||4)-2)); // stage 5.12: up to 7 workers on 8+ GB machines
 const wsrc=(typeof FlagArt==='function'?FlagArt.toString():'')+WorldGen.toString()+`
 let G=null;
 onmessage=function(e){const m=e.data;
@@ -59,14 +60,14 @@ onmessage=function(e){const m=e.data;
  else if(m.t==='hid'){G.setHidden(m.ids)}
  else if(m.t==='op'){G[m.op.f](m.op.q)}
  else if(m.t==='tile'){if(m.L){const c=G.renderLights(m.z,m.x,m.y,m.hb);if(!c){postMessage({t:'tile',key:m.key,L:m.L,b:null,gv:m.gv});return}const b=c.transferToImageBitmap();postMessage({t:'tile',key:m.key,L:m.L,b,gv:m.gv},[b]);return}
-   const c=G.renderTile(m.z,m.x,m.y);const b=c.transferToImageBitmap();postMessage({t:'tile',key:m.key,b,s:G.season(),gv:m.gv},[b])}};`;
+   const c=G.renderTile(m.z,m.x,m.y);const op=!!c.op;const b=c.transferToImageBitmap();postMessage({t:'tile',key:m.key,b,s:G.season(),gv:m.gv,op},[b])}};`;
 let wurl=null;try{if(HS.indexOf('cpu')>=0)throw 0;const url=URL.createObjectURL(new Blob([wsrc],{type:'text/javascript'}));
   for(let i=0;i<NW;i++){const w=new Worker(url);w.busy=0;w.ready=false;w.dead=false;
     w.onmessage=e=>{const m=e.data;if(m.t==='ready'){if(m.ok){w.ready=true;mainRender=false} // a slow start fell back to the main thread: hand rendering back to the workers
           else{w.dead=true;if(workers.every(q=>q.dead))mainRender=true}return}
       if(m.t==='tile'){w.busy--;if(!alive){if(m.b&&m.b.close)m.b.close();return}
         if(m.L){LPS[m.L].delete(m.key);if(outdated(m.key,m.gv)){if(m.b&&m.b.close)m.b.close();return}LCS[m.L].set(m.key,{b:m.b,s:-1,f:frameNo,t0:T,keep:m.key===0});lastArr=T;return}
-        pending.delete(m.key);if(m.s!==season||outdated(m.key,m.gv)){if(m.b&&m.b.close)m.b.close();return}cache.set(m.key,{b:m.b,s:-1,f:frameNo,t0:T,keep:m.key===0});lastArr=T}};
+        pending.delete(m.key);if(m.s!==season||outdated(m.key,m.gv)){if(m.b&&m.b.close)m.b.close();return}cache.set(m.key,{b:m.b,s:-1,f:frameNo,t0:T,keep:m.key===0,op:!!m.op});lastArr=T}};
     w.onerror=()=>{w.dead=true;if(workers.every(q=>q.dead))mainRender=true};w.postMessage({t:'init',seed:SEED,season,opt:cfg.opt,grow:[...GROWS],ops:OPS});if(HIDL.length)w.postMessage({t:'hid',ids:HIDL});workers.push(w)}wurl=url}
 catch(e){mainRender=true}
 setTimeout(()=>{if(alive&&!workers.some(w=>w.ready))mainRender=true},4000+(cfg.opt?3000:0));
@@ -75,7 +76,7 @@ function request(z,x,y,p){const k=tkey(z,x,y);if(cache.has(k)||pending.has(k))re
 function requestL(z,x,y,p,L){const k=tkey(z,x,y);if(LCS[L].has(k)||LPS[L].has(k))return;queue.push({k,z,x,y,p,L})}
 function dispatch(){queue.sort((a,b)=>a.p-b.p);let qi=0;
   if(mainRender){const t0=performance.now();while(qi<queue.length&&performance.now()-t0<12){const q=queue[qi++];
-      if(q.L){if(LCS[q.L].has(q.k))continue;LCS[q.L].set(q.k,{b:W.renderLights(q.z,q.x,q.y,LHB[q.L]),s:-1,f:frameNo,keep:q.k===0})}else{if(cache.has(q.k))continue;cache.set(q.k,{b:W.renderTile(q.z,q.x,q.y),s:-1,f:frameNo,keep:q.k===0})}}return}
+      if(q.L){if(LCS[q.L].has(q.k))continue;LCS[q.L].set(q.k,{b:W.renderLights(q.z,q.x,q.y,LHB[q.L]),s:-1,f:frameNo,keep:q.k===0})}else{if(cache.has(q.k))continue;const c=W.renderTile(q.z,q.x,q.y);cache.set(q.k,{b:c,s:-1,f:frameNo,keep:q.k===0,op:!!c.op})}}return}
   for(const w of workers){if(!w.ready||w.dead)continue;while(w.busy<2&&qi<queue.length){const q=queue[qi++];
       if(q.L){if(LPS[q.L].has(q.k)||LCS[q.L].has(q.k))continue;LPS[q.L].add(q.k)}else{if(pending.has(q.k)||cache.has(q.k))continue;pending.add(q.k)}
       w.busy++;w.postMessage({t:'tile',z:q.z,x:q.x,y:q.y,key:q.k,L:q.L,hb:LHB[q.L],gv:GV})}}}
@@ -146,7 +147,7 @@ let hold=null; // a game tool that holds the pointer (press on a station and dra
 cv.addEventListener('pointerdown',e=>{if(MODE==='bg')return;cv.setPointerCapture(e.pointerId);
   if(HK.pdown&&ptr.size===0&&e.button===0){const w=[cam.x+(e.clientX-VW/2)*cam.m,cam.y+(e.clientY-VH/2)*cam.m];let r=false;try{r=HK.pdown(w[0],w[1],e.clientX,e.clientY)}catch(err){console.error(err)}if(r){hold=e.pointerId;fly=null;vel.x=vel.y=0;return}}
   ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});drag=true;fly=null;vel.x=vel.y=0;if(ptr.size===2)pinch=null;
-  downAt=ptr.size===1?{x:e.clientX,y:e.clientY,t:performance.now(),moved:0}:null},SIG);
+  downAt=ptr.size===1&&e.button===0?{x:e.clientX,y:e.clientY,t:performance.now(),moved:0}:null},SIG); // the right / middle button drag the map but never click
 cv.addEventListener('pointermove',e=>{hover.x=e.clientX;hover.y=e.clientY;hover.on=true;
   if(hold===e.pointerId){if(HK.pmove)try{HK.pmove(cam.x+(e.clientX-VW/2)*cam.m,cam.y+(e.clientY-VH/2)*cam.m,e.clientX,e.clientY)}catch(err){console.error(err)}return}const p=ptr.get(e.pointerId);if(!p)return;
   if(ptr.size===1){const dx=e.clientX-p.x,dy=e.clientY-p.y;if(downAt)downAt.moved+=M.abs(dx)+M.abs(dy);cam.x-=dx*cam.m;cam.y-=dy*cam.m;const now=performance.now(),dtm=M.max(1,now-lastMove)/1000;lastMove=now;
@@ -288,7 +289,9 @@ function drawTiles(){
   for(let ty=ty0;ty<=ty1;ty++)for(let tx=tx0;tx<=tx1;tx++){const k=tkey(z,tx,ty);const e=cache.get(k);
     const [X0,X1,Y0,Y1]=tileRect(tx,ty,ts);
     if(e){e.f=frameNo;if(e.t0!==undefined&&!e.up){if(upN<8){e.up=1;upN++;e.t0=T}else if(fallback(k,z,tx,ty,X0,Y0,X1,Y1))continue;else e.up=1}
-      let u=e.t0===undefined?1:(T-e.t0)/FADE;if(u>=1)e.t0=undefined;else if(fallback(k,z,tx,ty,X0,Y0,X1,Y1)){u=u<0?0:u;ctx.globalAlpha=u*u*(3-2*u)}drawE(e,DPOOL,0,0,256,256,X0,Y0,X1-X0,Y1-Y0);ctx.globalAlpha=1;continue}
+      let u=e.t0===undefined?1:(T-e.t0)/FADE;if(u>=1)e.t0=undefined;else if(fallback(k,z,tx,ty,X0,Y0,X1,Y1)){u=u<0?0:u;ctx.globalAlpha=u*u*(3-2*u)}
+      // stage 6: an opaque tile shown in full replaces what is under it — no blending (half the memory traffic of the pass)
+      if(e.op&&ctx.globalAlpha>=1&&!DBG.blendAll)ctx.globalCompositeOperation='opaque';drawE(e,DPOOL,0,0,256,256,X0,Y0,X1-X0,Y1-Y0);ctx.globalCompositeOperation='source-over';ctx.globalAlpha=1;continue}
     const cxp=(tx+0.5)*ts-cam.x,cyp=(ty+0.5)*ts-cam.y;request(z,tx,ty,M.hypot(cxp,cyp)/ts);
     const st=stale.get(k);if(st){st.f=frameNo;if(drawE(st,DPOOL,0,0,256,256,X0,Y0,X1-X0,Y1-Y0))continue}
     anc2(z,tx,ty,X0,Y0,X1,Y1)}
@@ -308,10 +311,10 @@ function drawLights(z,a){if(a<0.01)return;ctx.setTransform(1,0,0,1,0,0);ctx.glob
   const fogB=1+wcur.fog*0.9+wcur.rain*0.3;
   requestL(0,0,0,-1e9,1);
   const far=1-smooth(15,200,cam.m)*0.55;
-  // stage 6: the two bloom levels (coarser LODs, already blurred in the tiles) are summed in a half-resolution buffer and
+  // stage 6: the two bloom levels (coarser LODs, already blurred in the tiles) are summed in a third-resolution buffer (stage 6: 1/3 — under the blur of these tiles) and
   // added in one pass — they carry no detail a full-resolution pass would keep; the sharp level stays full resolution
   if(DBG.bloomFull){lightLevel(M.max(0,z-2),a*(lowQ?0.7:0.45)*fogB*far,3,-2e5);if(!lowQ)lightLevel(M.max(0,z-1),a*0.42*fogB,2,-1e5)}
-  else if(!DBG.bloom){const bw=M.ceil(cv.width/2),bh=M.ceil(cv.height/2);BLB.resize(bw,bh);ctx.target(BLB);ctx.clear(0,0,0,0);ctx.setTransform(bw/cv.width,0,0,bh/cv.height,0,0);ctx.globalCompositeOperation='lighter';
+  else if(!DBG.bloom){const BQ=DBG.bloomHalf?2:3,bw=M.ceil(cv.width/BQ),bh=M.ceil(cv.height/BQ);BLB.resize(bw,bh);ctx.target(BLB);ctx.clear(0,0,0,0);ctx.setTransform(bw/cv.width,0,0,bh/cv.height,0,0);ctx.globalCompositeOperation='lighter';
     lightLevel(M.max(0,z-2),a*(lowQ?0.7:0.45)*fogB*far,3,-2e5);if(!lowQ)lightLevel(M.max(0,z-1),a*0.42*fogB,2,-1e5);
     ctx.target(null);ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='lighter';
     // the bloom is added by the draws of the sharp level (one pass; the grid covers the screen) — or alone where the world
@@ -551,7 +554,7 @@ function drawSel(){if(!sel)return;const ctx=octx;ctx.setTransform(DPR,0,0,DPR,0,
   ctx.stroke();ctx.setLineDash([])}
 
 // ------------------------------------------------------------ main loop
-const VIGC=[0,8/255,20/255],CLRC=[0,0,0,1];
+const VIGC=[0,8/255,20/255],CLRC=[0,0,0,1],HZC=[0,0,0,0];
 // debug switches of the frame passes (F3 profiling, tests): __world.dbg.tiles = true skips the tiles, etc.
 const DBG={};
 let last=performance.now(),fpsA=60,hudT=0,zNow=0,lowQ=false,qT=0,pfT=0,CAMMV=false,pcm=0;
@@ -568,12 +571,12 @@ function frameBody(now){const dt=M.min(0.06,(now-last)/1000);last=now;T+=dt;fram
   // ambient light (dusk / night / overcast) multiplies everything drawn before the lights: as a shader uniform, which is
   // exact (compositing is linear in colour) and saves the full-screen multiply pass of stages 1–5
   const AMBON=!DBG.amb&&(A[0]<0.995||A[1]<0.995||A[2]<0.995);
-  ctx.begin();if(AMBON)ctx.ambient(A[0],A[1],A[2]);ctx.clear(14/255*(AMBON?A[0]:1),46/255*(AMBON?A[1]:1),82/255*(AMBON?A[2]:1),1);ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.begin();ctx.gpuMark('layers');if(AMBON)ctx.ambient(A[0],A[1],A[2]);ctx.clear(14/255*(AMBON?A[0]:1),46/255*(AMBON?A[1]:1),82/255*(AMBON?A[2]:1),1);ctx.setTransform(DPR,0,0,DPR,0,0);
   // the vignette (stage 6): 'cloud' — in the pass of the cloud layer, 'spatial' — a factor of every draw (no pass of its
   // own: night, close views), 'pass' — a separate pass (the edge of the world is in view, haze or lightning)
   let CLB=null;if(opt.clouds&&!DBG.clouds){const c=LG.cloud;tintClouds(c[0],c[1],c[2],flash>0.05?0:0.92);CLB=drawClouds(false,true)}
   const hz=smooth(40,600,cam.m)*0.16;const wX0=sxw(0),wY0=syw(0),wX1=sxw(WORLD),wY1=syw(WORLD),inWorld=wX0<=0&&wY0<=0&&wX1>=VW&&wY1>=VH;
-  const VM=DBG.vign?'off':hz>0||flash>0.01?'pass':covers(CLB)?'cloud':CLB||!inWorld||DBG.vigPass?'pass':'spatial';
+  const VM=DBG.vign?'off':flash>0.01?'pass':covers(CLB)&&!DBG.vigPass?'cloud':hz>0||CLB||!inWorld||DBG.vigPass?'pass':'spatial';
   if(VM==='spatial'){ctx.spatialVignette([VW/2*DPR,VH/2*DPR,vg.r0*DPR,vg.r1*DPR,VIGC[0],VIGC[1],VIGC[2],0.38]);
     // the clear colour shows through the translucent water of the tiles: there it is drawn as a quad, so it is vignetted
     if(waterClip()){ctx.fillStyle=CLRC;CLRC[0]=14/255*(AMBON?A[0]:1);CLRC[1]=46/255*(AMBON?A[1]:1);CLRC[2]=82/255*(AMBON?A[2]:1);for(const q of WCLIP)ctx.fillRect(q[0],q[1],q[2],q[3])}}
@@ -582,38 +585,40 @@ function frameBody(now){const dt=M.min(0.06,(now-last)/1000);last=now;T+=dt;fram
   // so ripples stay glued to the water and never look like a stretched picture
   // cost: each layer is a full-screen pattern fill. In the game the ripples fade out above ~14 m/px (they cannot be seen
   // from there anyway); only the 'high' quality draws two layers per octave
-  const gaW=(0.2+0.8*LG.day)*(1-wcur.cover*0.35)*(1-smooth(6,90,cam.m)*0.8)*(MODE==='game'?smooth(5,2.5,cam.m):1);
+  ctx.gpuMark('water');const gaW=(0.2+0.8*LG.day)*(1-wcur.cover*0.35)*(1-smooth(6,90,cam.m)*0.8)*(MODE==='game'?smooth(5,2.5,cam.m):1);
   if(!opt.noWater&&gaW>0.03&&waterClip()){const ga=gaW,NLW=VQ.dpr>=2?2:1;ctx.save();const lv=M.log2(M.max(cam.m,0.01)/0.08)+0.6,k0=M.floor(lv),fr=lv-k0;
     for(let o=0;o<2;o++){const wgt=o?fr:1-fr;if(wgt<0.03||ga*wgt<0.03||(LITE&&o!==(fr>0.5?1:0)))continue;const tm=0.08*M.pow(2,k0+o),sp=M.sqrt(tm/0.08);
       for(let l=0;l<NLW;l++){const sc=tm*(l?1.41:1)/cam.m,ang=l?0.35:0,ca=M.cos(ang)*sc,sa=M.sin(ang)*sc;const dx=W.WDX*T*(l?2.2:3.4)*sp+l*61*tm,dy=W.WDY*T*(l?2.2:3.4)*sp+l*29*tm;
         ctx.globalAlpha=(l?0.45:NLW===1?0.8:0.65)*wgt*ga;ctx.pattern(wavePat,[ca,sa,-sa,ca,(dx-cam.x)/cam.m+VW/2,(dy-cam.y)/cam.m+VH/2],WCLIP)}}ctx.globalAlpha=1;ctx.restore()}
   // the cloud shadow layer is composited over the tiles in the tile pass (stage 6): no separate full-screen pass
   const SHB=opt.clouds&&!DBG.shadows?drawClouds(true,true):null;if(SHB)ctx.tileOverlay(SHB.L,SHB.sw,SHB.sh,SHB.dx,SHB.dy,SHB.dw,SHB.dh);
-  pf('water');ctx.vignetteAdd(true);zNow=DBG.tiles?tileZ():drawTiles();ctx.vignetteAdd(false);ctx.tileOverlay(null);pf('tiles');
+  pf('water');ctx.gpuMark('tiles');ctx.vignetteAdd(true);zNow=DBG.tiles?tileZ():drawTiles();ctx.vignetteAdd(false);ctx.tileOverlay(null);pf('tiles');
   {ctx.setTransform(DPR,0,0,DPR,0,0);ctx.fillStyle='rgba(14,46,82,0.8)';const X0=sxw(0),Y0=syw(0),X1=sxw(WORLD),Y1=syw(WORLD);if(X0>0||Y0>0||X1<VW||Y1<VH){ // outside the world: four bands around it
     const a=M.max(-5,M.min(VH+5,Y0)),b=M.max(-5,M.min(VH+5,Y1));if(a>-5)ctx.fillRect(-5,-5,VW+10,a+5);if(b<VH+5)ctx.fillRect(-5,b,VW+10,VH+5-b);
     if(X0>-5)ctx.fillRect(-5,a,M.min(VW+5,X0)+5,b-a);if(X1<VW+5){const l=M.max(-5,X1);ctx.fillRect(l,a,VW+5-l,b-a)}}}
-  pf('edge');pf('shadows');
+  ctx.gpuMark('sprites');pf('edge');pf('shadows');
   let rs=[];const trafficOn=opt.traffic&&cam.m<30;
   if(trafficOn){rs=cam.m<8?W.queryRoads(vx0,vy0,vx1,vy1).filter(W.roadShown):[];if(cam.m<3.2)drawTraffic(rs);else cbn=0;if(cam.m<8)drawTrains(rs,0);drawShips(0)}else cbn=0;
   pf('traffic');drawEmitters();drawTurbines(0);pf('emit');
   if(opt.traffic)drawFlights();else FLB.length=0;
   pf('flights');drawFog();pf('fog');
   // ambient light (dusk / night / overcast)
-  ctx.ambient(1,1,1); // the ambient point: from here on (lights, precipitation, clouds) nothing is darkened
+  ctx.gpuMark('lights');ctx.ambient(1,1,1); // the ambient point: from here on (lights, precipitation, clouds) nothing is darkened
   // emissive layers
   if(NL>0.01&&!DBG.lights){drawLights(zNow,NL);if(trafficOn&&!DBG.carl){drawCarLights(NL);if(cam.m<8)drawTrains(rs,NL)}if(opt.traffic||cam.m<120)drawShips(NL);drawTurbines(NL);}
   drawFlares(NL);if(opt.traffic)drawFlightLights(LG.night);pf('lights');
   dispatch();pf('dispatch');
   pf('lights');drawPrecip(dt);
-  const merge=VM==='cloud';if(CLB){ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;
-    if(merge){ctx.setTransform(DPR,0,0,DPR,0,0);ctx.drawImageVignette(CLB.L,0,0,CLB.sw,CLB.sh,CLB.dx,CLB.dy,CLB.dw,CLB.dh,VW/2,VH/2,vg.r0,vg.r1,VIGC,0.38)}
+  ctx.gpuMark('clouds+vign');const merge=VM==='cloud';if(CLB){ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;
+    if(merge){ctx.setTransform(DPR,0,0,DPR,0,0);HZC[0]=(160*A[0]|0)/255;HZC[1]=(195*A[1]|0)/255;HZC[2]=(230*A[2]|0)/255;HZC[3]=hz>0?hz:0;ctx.drawImageVignette(CLB.L,0,0,CLB.sw,CLB.sh,CLB.dx,CLB.dy,CLB.dw,CLB.dh,VW/2,VH/2,vg.r0,vg.r1,VIGC,0.38,HZC)}
     else ctx.drawImage(CLB.L,0,0,CLB.sw,CLB.sh,CLB.dx,CLB.dy,CLB.dw,CLB.dh)}
   ctx.setTransform(DPR,0,0,DPR,0,0);
-  if(hz>0){ctx.fillStyle=`rgba(${160*A[0]|0},${195*A[1]|0},${230*A[2]|0},${hz})`;ctx.fillRect(0,0,VW,VH)}
+  if(hz>0&&!merge){ctx.fillStyle=`rgba(${160*A[0]|0},${195*A[1]|0},${230*A[2]|0},${hz})`;ctx.fillRect(0,0,VW,VH)}
   if(wcur.storm>0.3){nextBolt-=dt;if(nextBolt<0){flash=1;nextBolt=3+M.random()*12}}
   if(flash>0.01){const f=flash*(0.6+0.4*M.sin(T*60));ctx.globalCompositeOperation='lighter';ctx.fillStyle=`rgba(190,200,255,${0.3*f})`;ctx.fillRect(0,0,VW,VH);ctx.globalCompositeOperation='source-over';flash*=M.exp(-dt*7)}
-  pf('clouds');if(VM==='pass')ctx.vignette(VW/2,VH/2,vg.r0,vg.r1,VIGC,0.38);ctx.spatialVignette(null);ctx.end();
+  pf('clouds');if(VM==='pass')ctx.vignette(VW/2,VH/2,vg.r0,vg.r1,VIGC,0.38);ctx.spatialVignette(null);
+  // the game's own GL layer (state borders): above the vignette, under the 2D overlay — where its 2D drawing used to be
+  if(HK.glDraw&&!DBG.hook){ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;hk('glDraw',ctx,API);ctx.linesFlush();ctx.globalAlpha=1}ctx.end();
   // the 2D overlay: labels, the game layer, the selection
   octx.setTransform(1,0,0,1,0,0);octx.clearRect(0,0,ov.width,ov.height);
   if(opt.labels)drawLabels();pf('labels');
@@ -650,7 +655,7 @@ function bgCam(dt){bgA+=dt*0.02;const r=bgC.R*0.5;cam.x=bgC.x+M.cos(bgA)*r;cam.y
 if(MODE==='bg')bgCam(0);
 function destroy(){if(!alive)return;alive=false;AC.abort();clearInterval(lowT);clearTimeout(introT);clearTimeout(clickT);for(const w of workers)w.terminate();if(wurl)URL.revokeObjectURL(wurl);
   for(const mp of [cache,stale,LCS[1],LCS[2],LCS[3],LST[1],LST[2],LST[3]])for(const v of mp.values())if(v.b&&v.b.close)v.b.close();ctx.dispose();octx.setTransform(1,0,0,1,0,0);octx.clearRect(0,0,ov.width,ov.height);closeInsp();if(window.__world&&window.__world.W===W)window.__world=null}
-const API={gflights:GFL,get ops(){return OPS},op,W,cam,setHidden,flyTo,zoomAt,maxM,opt,LG,wcur,hover,setGrow,invalidate,setTod,setSpeed,setSeason,destroy,closeInsp,pick,
+const API={gl:ctx,gflights:GFL,get ops(){return OPS},op,W,cam,setHidden,flyTo,zoomAt,maxM,opt,LG,wcur,hover,setGrow,invalidate,setTod,setSpeed,setSeason,destroy,closeInsp,pick,
   get VW(){return VW},get VH(){return VH},get DPR(){return DPR},get T(){return T},get tod(){return tod},get fps(){return fpsA},get ready(){return readyFired},
   sxw,syw,toWorld:(sx,sy)=>[cam.x+(sx-VW/2)*cam.m,cam.y+(sy-VH/2)*cam.m],setTodRate:r=>{todRate=r},isNight,
   showCity:c=>{sel={k:'city',o:c};showInsp()},

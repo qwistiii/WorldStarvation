@@ -18,7 +18,9 @@ const FREEZE = (s) => {
   if (!s.includes(b)) throw new Error('clock hook not found');
   return s.replace(a, 'const dt=window.__dt!=null?window.__dt:M.min(0.06,(now-last)/1000);').replace(b, 'last=now;T=window.__T!=null?window.__T:T+dt;frameNo++;');
 };
+// the reference is the whole page of the ref (all of src/), the new run only gets the clock hooks in main.js
 const OLD = { 'index.html': git('index.html'), 'src/main.js': FREEZE(git('src/main.js')) };
+for (const f of execSync(`git ls-tree --name-only ${ref} src/`, { encoding: 'utf8' }).split(/\r?\n/).filter((f) => /\.(js|css)$/.test(f))) if (!OLD[f]) OLD[f] = git(f);
 const NEW = { 'src/main.js': FREEZE(fs.readFileSync('src/main.js', 'utf8')) };
 
 // [name, x, y (fraction of the world or 'city'), m, tod, weather, dx (camera shift in metres)]
@@ -37,9 +39,9 @@ const VIEWS = [
 
 async function shoot(tag, files) {
   const ctx = await (await browserP).newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
-  await ctx.route(/\/(index\.html|src\/main\.js)(\?|$)/, (r) => {
+  await ctx.route(/\/(index\.html|src\/[^?]+\.(js|css))(\?|$)/, (r) => {
     const u = new URL(r.request().url()); const k = u.pathname.slice(1);
-    if (files[k] !== undefined) return r.fulfill({ body: files[k], contentType: k.endsWith('.html') ? 'text/html' : 'text/javascript' });
+    if (files[k] !== undefined) return r.fulfill({ body: files[k], contentType: k.endsWith('.html') ? 'text/html' : k.endsWith('.css') ? 'text/css' : 'text/javascript' });
     return r.continue();
   });
   const page = await ctx.newPage();

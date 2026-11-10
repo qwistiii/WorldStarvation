@@ -11,7 +11,7 @@ const QV={high:{dpr:2},balance:{dpr:1.25},fast:{dpr:1,lite:true}};
 let S=Object.assign({},SDEF);try{Object.assign(S,JSON.parse(localStorage.getItem('ws.settings')||'{}'))}catch(e){}
 function saveS(){try{localStorage.setItem('ws.settings',JSON.stringify(S))}catch(e){}applyS()}
 // the game HUD scales with the window (as the UI of DroneFlames) and with «Масштаб интерфейса»
-function applyZ(){document.documentElement.style.setProperty('--z',(Math.min(1.6,Math.max(0.9,Math.min(innerHeight/780,innerWidth/1300)))*S.ui).toFixed(3))}
+function applyZ(){const lo=innerWidth<520?0.8:0.9; /* phones: a bit smaller, the keys still ≥ 44 px */document.documentElement.style.setProperty('--z',(Math.min(1.6,Math.max(lo,Math.min(innerHeight/780,innerWidth/1300)))*S.ui).toFixed(3))}
 addEventListener('resize',applyZ);
 function applyS(){document.documentElement.style.setProperty('--ui',S.ui);applyZ();const a=Game.api;if(a){a.opt.clouds=S.clouds;a.opt.traffic=S.traffic;a.opt.labels=S.labels}$('fps').classList.toggle('hid',!S.fps)}
 

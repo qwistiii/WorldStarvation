@@ -3,7 +3,7 @@ import { chromium } from 'playwright';
 import { serve } from '../../tools/serve.mjs';
 
 // Real GPU (ANGLE/D3D11 on Windows) when available, otherwise Chromium falls back to SwiftShader by itself.
-export const GPU_ARGS = ['--enable-gpu', '--ignore-gpu-blocklist', '--use-angle=d3d11', '--enable-unsafe-swiftshader'];
+export const GPU_ARGS = ['--enable-gpu', '--ignore-gpu-blocklist', '--use-angle=d3d11', '--enable-unsafe-swiftshader', '--enable-webgl-draft-extensions', '--enable-privileged-webgl-extensions'];
 
 export async function launch(extra = []) {
   return chromium.launch({ args: [...GPU_ARGS, ...extra] });
@@ -23,9 +23,9 @@ export function watchErrors(page) {
 }
 
 // opens index.html, waits for the menu; returns ms to the menu
-export async function openMenu(page, port) {
+export async function openMenu(page, port, query = '') {
   const t0 = Date.now();
-  await page.goto(`http://127.0.0.1:${port}/index.html`);
+  await page.goto(`http://127.0.0.1:${port}/index.html${query}`);
   await page.waitForFunction(() => document.getElementById('loading').classList.contains('fade'), null, { timeout: 90000 });
   return Date.now() - t0;
 }
