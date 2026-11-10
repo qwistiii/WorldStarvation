@@ -555,7 +555,7 @@ function placeZone(c,kind){
   return null}
 let ZSTRICT=true;
 // the access road starts on the edge of the zone's grounds (never runs under its buildings)
-function zoneExit(z,ux,uy){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const p of z.prims)if(p.k==='g'){x0=M.min(x0,p.x);y0=M.min(y0,p.y);x1=M.max(x1,p.x+p.w);y1=M.max(y1,p.y+p.h)}
+function zoneExit(z,ux,uy){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;if(z.pads){x0=-z.W/2;y0=-z.H/2;x1=z.W/2;y1=z.H/2}else for(const p of z.prims)if(p.k==='g'){x0=M.min(x0,p.x);y0=M.min(y0,p.y);x1=M.max(x1,p.x+p.w);y1=M.max(y1,p.y+p.h)} // a shaped zone: its exit is at the edge of its footprint
   if(x0>x1){x0=-z.W/2;x1=z.W/2;y0=-z.H/2;y1=z.H/2}const lx=ux*z.ca+uy*z.sa,ly=-ux*z.sa+uy*z.ca;
   const tx=lx>1e-9?x1/lx:lx<-1e-9?x0/lx:1e9,ty=ly>1e-9?y1/ly:ly<-1e-9?y0/ly:1e9,t=M.max(0,M.min(tx,ty)-3);return [z.x+ux*t,z.y+uy*t]}
 let NOACC=false;
@@ -1021,6 +1021,7 @@ function genZone(z){
     G(P,-W/2,-H/2,W,H,[146,150,112]);P.push({k:'solar',x:-W/2+15,y:-H/2+15,w:W-30,h:H-30});
     B(P,-W/2+4,-H/2+4,14,10,4,[200,200,200],'f');
   }
+  if(EMPTY&&z.o&&!NOSHAPE[z.zk])zoneShape(z);
   if(z.o)zoneFill(z);
   dedupeZone(z);z.prims=dropCrowns(fitGround(z.prims));
 }
@@ -1034,6 +1035,31 @@ const ZFILL={air2:['trk','trees','shed','trees','pal'],ind:['pal','cont','trk','
   mil:['crateM','tent','vehM','berm','contM','crateM'],dport:['crateM','contM','vehM','berm','mast','bladder','tent'],dfab:['crateM','contM','pal','trk','drum','shed','trees'],dstore:['crateM','contM'],
   oil:['drum','pipe','tankS','skip'],gasw:['drum','pipe','skip'],port:['pal','cont','trk','drum','kiosk']};
 const FCC=[[180,60,48],[46,110,164],[224,160,48],[58,125,68],[136,136,136],[200,90,40],[96,70,130]];
+// stage 6.1: every building of the game has its own silhouette, not one rectangle. The base pad of the zone (its first
+// ground rectangle W × H) is replaced by the union of rounded pads around what actually stands there — the tank farm and
+// units of a refinery, the barns and silos of a farm, the halls and yards of a factory; the empty corners stay land. The
+// pads (z.pads, local rectangles) also shape the apron around the building (padAt) and bound its filler (zoneFill).
+const NOSHAPE={port:1,sam:1,oil:1,gasw:1,dramp:1,drwy:1,stn:1,sol2:1,solar:1,air:1,air2:1,dstore:1,mil:1}; // mil: fenced compounds on grass already
+function zoneShape(z){const P=z.prims,W=z.W,H=z.H,b=P[0];if(!b||b.k!=='g'||b.w<W*0.95||b.h<H*0.95)return;
+  const cs=12,nx=M.ceil(W/cs),ny=M.ceil(H/cs),x0=-W/2,y0=-H/2,occ=new Uint8Array(nx*ny),mg=9;
+  const mark=(ax,ay,bx,by)=>{const i0=M.max(0,M.floor((ax-mg-x0)/cs)),i1=M.min(nx-1,M.floor((bx+mg-x0)/cs)),j0=M.max(0,M.floor((ay-mg-y0)/cs)),j1=M.min(ny-1,M.floor((by+mg-y0)/cs));for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++)occ[j*nx+i]=1};
+  for(let q=1;q<P.length;q++){const p=P[q],k=p.k;if(k==='t'||k==='lflood'||k==='ship'||k==='mow'||k==='gl'||k==='rail')continue; // the inner roads and tracks run between the pads
+    if(p.pts){for(let i=0;i<p.pts.length;i+=2)mark(p.pts[i],p.pts[i+1],p.pts[i],p.pts[i+1]);continue}
+    if(k==='cyl'||k==='pile'||k==='gc'||k==='helipad'||k==='berm'){const r=p.r||4;mark(p.x-r,p.y-r,p.x+r,p.y+r);continue}
+    if(k==='quarry'){mark(p.x-p.rx,p.y-p.ry,p.x+p.rx,p.y+p.ry);continue}
+    if(k==='crane'||k==='cat'){mark(p.x,p.y-4,p.x+(p.len||10),p.y+4);continue}
+    if(p.w!=null&&p.h!=null){if(p.a){const f=fpBox(p);mark(f[0],f[1],f[2],f[3])}else mark(p.x,p.y,p.x+p.w,p.y+p.h);continue}
+    if(p.x!=null&&p.y!=null)mark(p.x-6,p.y-6,p.x+6,p.y+6)}
+  // close small gaps (one cell) so the silhouette is a few bold pads, not a lace
+  const o2=occ.slice();for(let j=1;j<ny-1;j++)for(let i=1;i<nx-1;i++){if(occ[j*nx+i])continue;const h=occ[j*nx+i-1]&&occ[j*nx+i+1],v=occ[(j-1)*nx+i]&&occ[(j+1)*nx+i];if(h||v)o2[j*nx+i]=1}
+  // greedy rectangles over the cells
+  const used=new Uint8Array(nx*ny),R=[];for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){if(!o2[j*nx+i]||used[j*nx+i])continue;let w=1;while(i+w<nx&&o2[j*nx+i+w]&&!used[j*nx+i+w])w++;
+    let h=1;for(;j+h<ny;h++){let ok=true;for(let a=i;a<i+w;a++)if(!o2[(j+h)*nx+a]||used[(j+h)*nx+a]){ok=false;break}if(!ok)break}
+    for(let bb=j;bb<j+h;bb++)for(let a=i;a<i+w;a++)used[bb*nx+a]=1;R.push([x0+i*cs,y0+j*cs,M.min(w*cs,W/2-(x0+i*cs)),M.min(h*cs,H/2-(y0+j*cs))])}
+  if(!R.length||R.length>400)return;let area=0;for(const r of R)area+=r[2]*r[3];if(area>W*H*0.93)return; // nearly full: the rectangle is its shape
+  // the pads: a little larger than the cells and rounded, so that neighbours overlap and the corners are soft
+  const e=4;z.pads=R.map(r=>[r[0]-e,r[1]-e,r[2]+2*e,r[3]+2*e]);
+  const out=z.pads.map(r=>({k:'g',x:r[0],y:r[1],w:r[2],h:r[3],c:b.c,rr:9,tr:b.tr,gm:b.gm}));P.splice(0,1,...out)}
 function zoneFill(z){const L=ZFILL[z.zk];if(!L)return;const P=z.prims,W=z.W,H=z.H,R=rng(z.seed^0x5f11),cam=R()*3|0;
   const cs=8,m=11,nx=M.floor((W-2*m)/cs),ny=M.floor((H-2*m)/cs);if(nx<2||ny<2)return;const occ=new Uint8Array(nx*ny),x0=-W/2+m,y0=-H/2+m;
   const mark=(ax,ay,bx,by,cl)=>{const i0=M.max(0,M.floor((ax-cl-x0)/cs)),i1=M.min(nx-1,M.floor((bx+cl-x0)/cs)),j0=M.max(0,M.floor((ay-cl-y0)/cs)),j1=M.min(ny-1,M.floor((by+cl-y0)/cs));for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++)occ[j*nx+i]=1};
@@ -1049,7 +1075,7 @@ function zoneFill(z){const L=ZFILL[z.zk];if(!L)return;const P=z.prims,W=z.W,H=z.
     else if(k==='g'&&pi>0){const c=p.c,dark=c[0]+c[1]+c[2]<330;if(apron&&!dark){for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const cx=x0+(i+0.5)*cs,cy=y0+(j+0.5)*cs;if(cx>p.x+3&&cx<p.x+p.w-3&&cy>p.y+3&&cy<p.y+p.h-3&&!occ[j*nx+i])occ[j*nx+i]=2}}else if(dark)mark(p.x,p.y,p.x+p.w,p.y+p.h,2)}}
   // stage 6.1: the filler stands on the zone's own ground only (inside its ground rectangles): not on the water between the
   // piers of a port, not on the land around a zone that is not its own
-  {const Gr=P.filter(p=>p.k==='g');for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){if(occ[j*nx+i]===1)continue;const cx=x0+(i+0.5)*cs,cy=y0+(j+0.5)*cs;let on=false;
+  if(z.pads||z.zk==='port'){const Gr=P.filter(p=>p.k==='g');for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){if(occ[j*nx+i]===1)continue;const cx=x0+(i+0.5)*cs,cy=y0+(j+0.5)*cs;let on=false;
     for(const g of Gr)if(cx>g.x+1.5&&cx<g.x+g.w-1.5&&cy>g.y+1.5&&cy<g.y+g.h-1.5){on=true;break}if(!on)occ[j*nx+i]=1}}
   let cls=0;const free=(i,j,w,h)=>{for(let b=j;b<j+h;b++)for(let a=i;a<i+w;a++)if(a>=nx||b>=ny||occ[b*nx+a]!==cls)return false;return true};
   const AL=['vehM','crateM','apron','apron'];
@@ -1562,8 +1588,9 @@ const PADK={sam:[14,0.25],sol2:[12,0.2],dramp:[14,0.35],drwy:[18,0.35],farm:[22,
 // pad field of zone c at (x, y): 1 on the pad, falling to 0 across the apron; signed distance to the turned rectangle with
 // rounded corners (no corner spikes), the apron width breathes along the outline with world noise (tiles agree)
 function padAt(c,x,y){const pk=PADK[c.zk]||PADD,ap=pk[0];const dx=x-c.x,dy=y-c.y;const lx=dx*c.ca+dy*c.sa,ly=-dx*c.sa+dy*c.ca;
-  const hw=c.W/2,hh=c.H/2,ax=M.abs(lx)-hw,ay=M.abs(ly)-hh;if(ax>ap*1.6||ay>ap*1.6)return 0;
-  const r=M.min(16,hw*0.3,hh*0.3),qx=ax+r,qy=ay+r;const d=M.hypot(qx>0?qx:0,qy>0?qy:0)+M.min(M.max(qx,qy),0)-r;if(d<=0)return 1;
+  const hw=c.W/2,hh=c.H/2,ax=M.abs(lx)-hw,ay=M.abs(ly)-hh;if(ax>ap*1.6||ay>ap*1.6)return 0;let d;
+  if(c.pads){d=1e9;for(const p of c.pads){const ph=p[2]/2,pv=p[3]/2,r=M.min(9,ph,pv),qx=M.abs(lx-p[0]-ph)-ph+r,qy=M.abs(ly-p[1]-pv)-pv+r,v=M.hypot(qx>0?qx:0,qy>0?qy:0)+M.min(M.max(qx,qy),0)-r;if(v<d)d=v}} // the union of the pads of a shaped zone
+  else{const r=M.min(16,hw*0.3,hh*0.3),qx=ax+r,qy=ay+r;d=M.hypot(qx>0?qx:0,qy>0?qy:0)+M.min(M.max(qx,qy),0)-r}if(d<=0)return 1;
   const w=ap*(0.7+0.6*(noise(x/41+c.id*1.7,y/41-c.id*0.9)*0.5+0.5));return smooth(w,0,d)}
 // the strongest pad of the zones near (x, y): [field 0..1, wear 0..1]; neighbouring pads merge into one apron
 function padField(zs,x,y){let f=0,w=0;for(const c of zs){if(c.kind!=='zone'||!c.dyn)continue;const v=padAt(c,x,y);if(v>f)f=v;const pw=v*(PADK[c.zk]||PADD)[1];if(pw>w)w=pw}return [f,w]}
@@ -2390,8 +2417,8 @@ function groundMat(p){const c=p.c,r=c[0],g=c[1],b=c[2];if(p.tr)return 'pave';
 function drawPrims(ctx,P,pass,mpp){const s=1/mpp;
   for(let q=0;q<P.length;q++){const p=P[q];const k=p.k;if(p.r<0||p.rx<0||p.ry<0)continue; // a round thing that did not fit its (small) block
     if(pass===0){
-      if(k==='g'){if(p.w*s<0.4&&p.h*s<0.4)continue;ctx.fillStyle=cs(seasonC(p.c,p.tr?4:0),1);ctx.fillRect(p.x,p.y,p.w,p.h);
-        if(s>0.45&&p.w*s>3&&p.h*s>3){const m=p.gm||(p.gm=groundMat(p));matRect(ctx,m,s,SEASON===2?(m==='grass'||m==='soil'?0.15:0.35):m==='grass'?0.6:0.5,p.x,p.y,p.w,p.h,0,(p.x*7.3+p.y*3.1)|0)}}
+      if(k==='g'){if(p.w*s<0.4&&p.h*s<0.4)continue;ctx.fillStyle=cs(seasonC(p.c,p.tr?4:0),1);const rr=p.rr&&ctx.roundRect;if(rr){ctx.beginPath();ctx.roundRect(p.x,p.y,p.w,p.h,M.min(p.rr,p.w/2,p.h/2));ctx.fill()}else ctx.fillRect(p.x,p.y,p.w,p.h);
+        if(s>0.45&&p.w*s>3&&p.h*s>3){const m=p.gm||(p.gm=groundMat(p));if(rr){ctx.save();ctx.clip()}matRect(ctx,m,s,SEASON===2?(m==='grass'||m==='soil'?0.15:0.35):m==='grass'?0.6:0.5,p.x,p.y,p.w,p.h,0,(p.x*7.3+p.y*3.1)|0);if(rr)ctx.restore()}}
       else if(k==='gl'){ctx.strokeStyle=cs(seasonC(p.c,4),1);ctx.lineWidth=M.max(p.w,mpp*0.6);ctx.lineCap='butt';if(p.dash)ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(p.pts[0],p.pts[1]);for(let i=2;i<p.pts.length;i+=2)ctx.lineTo(p.pts[i],p.pts[i+1]);ctx.stroke();if(p.dash)ctx.setLineDash([])}
       else if(k==='wood'){if(s<1.5)continue;ctx.fillStyle='rgba(14,18,28,0.3)';ctx.fillRect(p.x+0.4,p.y+0.3,p.w,p.h);ctx.fillStyle='#8a6440';ctx.fillRect(p.x,p.y,p.w,p.h);if(s>4){ctx.fillStyle='#c09868';const r=rng(p.x*9|0);for(let q=0;q<p.w*p.h*12;q++){ctx.beginPath();ctx.arc(p.x+0.1+r()*(p.w-0.2),p.y+0.1+r()*(p.h-0.2),0.07,0,TAU);ctx.fill()}}}
       else if(k==='path'){ctx.fillStyle=SEASON===2?'#d8dce0':'#b4aa98';ctx.fillRect(p.x,p.y,p.w,p.h);matRect(ctx,'pave',s,0.5,p.x,p.y,p.w,p.h,0,0)}
