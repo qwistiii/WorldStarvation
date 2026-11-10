@@ -16,12 +16,22 @@ const only = (args.find((a) => a.startsWith('--only=')) || '').slice(7);
 const PORT = 8120 + Math.floor(Math.random() * 50);
 
 const INIT = () => {
-  const B = window.__bench = { on: false, sync: true, count: false, cost: [], js: [], dc: 0, dcs: [], px: new Uint8Array(4) };
+  const B = window.__bench = { on: false, sync: true, count: false, cost: [], js: [], dc: 0, dcs: [], px: new Uint8Array(4), multi: 0, thr: [] };
+  // the engine schedules its next frame inside the callback: in throughput mode the extra frames call the same function
+  // directly (cb2), the scheduled one is swallowed
+  let swallow = 0;
   const RAF = window.requestAnimationFrame.bind(window);
   window.requestAnimationFrame = function (cb) {
     if (cb.name !== 'frame') return RAF(cb);
+    if (swallow > 0) { swallow--; return 0 }
     return RAF(function (ts) {
       if (!B.on) return cb(ts);
+      // throughput mode: k frames back to back, one read-back for all of them (the GPU pipelines them as a real
+      // uncapped display would); cost per frame = wall time / k
+      if (B.multi > 1) { const c = document.getElementById('c'), g = c.getContext('webgl2'), t0 = performance.now(); swallow = B.multi - 1;
+        for (let i = 0; i < B.multi; i++) cb(ts + i * 1000 / 165);
+        if (g) g.readPixels(0, 0, 1, 1, g.RGBA, g.UNSIGNED_BYTE, B.px); else c.getContext('2d').getImageData(0, 0, 1, 1);
+        B.thr.push((performance.now() - t0) / B.multi); return }
       B.dc = 0; const t0 = performance.now(); cb(ts); const t1 = performance.now();
       if (B.sync) { const c = document.getElementById('c'); const g = c.getContext('webgl2'); if (g) g.readPixels(0, 0, 1, 1, g.RGBA, g.UNSIGNED_BYTE, B.px); else c.getContext('2d').getImageData(0, 0, 1, 1); }
       const t2 = performance.now(); B.cost.push(t2 - t0); B.js.push(t1 - t0);
@@ -75,6 +85,8 @@ async function measure(page, sc, secs) {
     const r0 = performance.now(); let rafN = 0; const cnt = () => { rafN++; if (B.on) requestAnimationFrame(cnt); }; requestAnimationFrame(cnt);
     await sl(secs * 1000);
     const cost = B.cost.slice(5), js = B.js.slice(5); const wall = performance.now() - r0;
+    // throughput: 4 frames per tick, one read-back
+    B.thr.length = 0; B.multi = 4; await sl(1500); B.multi = 0; const thr = B.thr.slice(3);
     // draw calls: a short separate pass
     B.dcs.length = 0; B.count = true; B.sync = false; await sl(500); B.count = false; const dcs = B.dcs.slice(2);
     B.on = false; const mv = mover; mover = null; void mv;
@@ -83,7 +95,7 @@ async function measure(page, sc, secs) {
     const tiles = st.tiles + String(st.lights).split('/').reduce((q, x) => q + (+x || 0), 0);
     // texture memory: the GL renderer has fixed pools (st.gl.texMB); the Canvas 2D one kept one bitmap per tile
     const mem = performance.memory ? performance.memory.usedJSHeapSize : 0;
-    return { cost, js, dcs, rafFps: rafN / (wall / 1000), tiles, texMB: st.gl ? st.gl.slots * 0.25 + lay / 1048576 : (tiles * 256 * 256 * 4 + lay) / 1048576, heapMB: mem / 1048576, lowQ: st.lowQ, cars: st.cars,
+    return { cost, js, dcs, thr, rafFps: rafN / (wall / 1000), tiles, texMB: st.gl ? st.gl.slots * 0.25 + lay / 1048576 : (tiles * 256 * 256 * 4 + lay) / 1048576, heapMB: mem / 1048576, lowQ: st.lowQ, cars: st.cars,
       prof: Object.fromEntries(Object.entries(W.PROF || {}).map(([k, v]) => [k, +v.toFixed(2)])) };
   }, [sc, secs]);
 }
@@ -103,9 +115,10 @@ async function device(browser, name, opts, throttle) {
   for (const sc of SCEN) {
     const r = await measure(page, sc, secs);
     const c = stat(r.cost), d = stat(r.dcs);
-    res.scen[sc.n] = { cost: c, js: stat(r.js), fps: c ? +(1000 / c.avg).toFixed(1) : 0, fps95: c ? +(1000 / c.p95).toFixed(1) : 0, rafFps: +r.rafFps.toFixed(1),
+    const th = stat(r.thr);
+    res.scen[sc.n] = { cost: c, js: stat(r.js), thr: th, fpsThr: th ? +(1000 / th.avg).toFixed(1) : 0, fps: c ? +(1000 / c.avg).toFixed(1) : 0, fps95: c ? +(1000 / c.p95).toFixed(1) : 0, rafFps: +r.rafFps.toFixed(1),
       drawCalls: d ? Math.round(d.avg) : 0, drawCallsMax: d ? d.max : 0, tiles: r.tiles, texMB: +r.texMB.toFixed(1), heapMB: +r.heapMB.toFixed(1), cars: r.cars, lowQ: r.lowQ, prof: r.prof };
-    console.log(`${name.padEnd(7)} ${sc.n.padEnd(7)} cost ${c.avg.toFixed(2).padStart(6)} ms (p95 ${c.p95.toFixed(2).padStart(6)}) → ${(1000 / c.avg).toFixed(0).padStart(4)} fps · js ${stat(r.js).avg.toFixed(2)} ms · draw ${res.scen[sc.n].drawCalls} · tex ${r.texMB.toFixed(0)} MB · heap ${r.heapMB.toFixed(0)} MB`);
+    console.log(`${name.padEnd(7)} ${sc.n.padEnd(7)} thr ${th ? th.avg.toFixed(2).padStart(6) : '  —  '} ms → ${th ? (1000 / th.avg).toFixed(0).padStart(4) : '—'} fps · sync ${c.avg.toFixed(2).padStart(6)} ms (p95 ${c.p95.toFixed(2).padStart(6)}) · js ${stat(r.js).avg.toFixed(2)} ms · draw ${res.scen[sc.n].drawCalls} · tex ${r.texMB.toFixed(0)} MB · heap ${r.heapMB.toFixed(0)} MB`);
   }
   const m = await cdp.send('Performance.enable').then(() => cdp.send('Performance.getMetrics')).catch(() => null);
   if (m) { const g2 = Object.fromEntries(m.metrics.map((q) => [q.name, q.value])); res.heap = { usedMB: +(g2.JSHeapUsedSize / 1048576).toFixed(1), totalMB: +(g2.JSHeapTotalSize / 1048576).toFixed(1), nodes: g2.Nodes }; }

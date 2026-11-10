@@ -173,20 +173,23 @@ addEventListener('blur',()=>{for(const k in keys)keys[k]=false},SIG);
 function mk(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;return c}
 // water ripples: tileable height field (sum of wind-aligned waves with integer wave vectors), lit by the sun:
 // faces toward the sun -> light, away -> dark, plus sparse sun glints. Signed alpha like the ground materials.
-const wavePat=(()=>{const N=256,c=mk(N,N),x=c.getContext('2d'),id=x.createImageData(N,N),d=id.data;const R=W.rng(99);const waves=[];const wa=M.atan2(W.WDY,W.WDX);
+// procedural textures are pixel loops (~0.3–0.8 s): they are kept between worlds (menu → game → menu) in AST, by seed
+const AST=window.__wsAssets||(window.__wsAssets={});const cached=(k,f)=>AST[k]||(AST[k]=f());
+const wavePat=(()=>{const c=cached('wave',()=>{const N=256,c=mk(N,N),x=c.getContext('2d'),id=x.createImageData(N,N),d=id.data;const R=W.rng(99);const waves=[];const wa=M.atan2(W.WDY,W.WDX);
   for(let i=0;i<64;i++){const k=4+R()*R()*40,a=wa+(R()-0.5)*(i<20?1.6:TAU);const kx=M.round(M.cos(a)*k),ky=M.round(M.sin(a)*k);if(!kx&&!ky)continue;waves.push([kx,ky,R()*TAU,1/M.pow(M.hypot(kx,ky),1.15)])}
   const S=new Float32Array(N*N),Hh=new Float32Array(N*N);let ms=0,mh=0;const lx=-W.SUNX,ly=-W.SUNY;
   for(let j=0;j<N;j++)for(let i=0;i<N;i++){let gx=0,gy=0,h=0;for(const w of waves){const ph=(w[0]*i+w[1]*j)/N*TAU+w[2],cv=M.cos(ph)*w[3];gx+=cv*w[0];gy+=cv*w[1];h+=M.sin(ph)*w[3]}
     const q=j*N+i;S[q]=gx*lx+gy*ly;Hh[q]=h;ms=M.max(ms,M.abs(S[q]));mh=M.max(mh,h)}
   for(let q=0;q<N*N;q++){const v=S[q]/ms,gl=M.pow(M.max(0,v),6)*1.6+M.pow(M.max(0,Hh[q]/mh),8)*0.6;const o=q*4;
     if(v>=0){d[o]=230;d[o+1]=242;d[o+2]=255;d[o+3]=clamp((v*0.55+gl)*200,0,255)}else{d[o]=4;d[o+1]=20;d[o+2]=44;d[o+3]=clamp(-v*0.7*200,0,255)}}
-  x.putImageData(id,0,0);return {tex:ctx.texture(0,0,c,true),x:0,y:0,w:N,h:N}})();
-function cloudSprite(seed){const N=256,c=mk(N,N),x=c.getContext('2d'),id=x.createImageData(N,N),d=id.data;const den=new Float32Array(N*N);const ox=seed*17.3,oy=seed*5.1;
+  x.putImageData(id,0,0);return c});return {tex:ctx.texture(0,0,c,true),x:0,y:0,w:256,h:256}})();
+function cloudSprite(seed){return SP(cached('cloud'+seed+'|'+SEED,()=>cloudCanvas(seed)))}
+function cloudCanvas(seed){const N=256,c=mk(N,N),x=c.getContext('2d'),id=x.createImageData(N,N),d=id.data;const den=new Float32Array(N*N);const ox=seed*17.3,oy=seed*5.1;
   for(let j=0;j<N;j++)for(let i=0;i<N;i++){const u=i/N-0.5,v=j/N-0.5;const r=M.sqrt(u*u+v*v)*2;let n=0,a=0.55,f=2.2;for(let o=0;o<5;o++){n+=a*W.noise(u*f+ox+o*3.1,v*f+oy-o*1.7);a*=0.48;f*=2.05}
     den[j*N+i]=clamp(n*1.1+0.62-r*r*1.25-r*0.2,0,1)}
   for(let j=0;j<N;j++)for(let i=0;i<N;i++){const k=j*N+i,dd=den[k];const k2=M.min(N-1,j+5)*N+M.min(N-1,i+5),k3=M.max(0,j-5)*N+M.max(0,i-5);
     const lit=clamp(0.92-(den[k2]-den[k3])*1.4+dd*0.08,0.55,1.05);const o=k*4;d[o]=clamp(250*lit,0,255);d[o+1]=clamp(252*lit,0,255);d[o+2]=clamp(255*lit+6,0,255);d[o+3]=smooth(0.02,0.6,dd)*235}
-  x.putImageData(id,0,0);return SP(c)} // the shadow ('#061018' silhouette) and the tinted cloud are the same sprite with a tint
+  x.putImageData(id,0,0);return c} // the shadow ('#061018' silhouette) and the tinted cloud are the same sprite with a tint
 const CLS=[];for(let i=0;i<6;i++)CLS.push(cloudSprite(i+SEED%100));
 // cloud groups are generated for full overcast; weather "cover" decides how many are shown
 const clouds=[];{const R=W.rng(SEED^0xc10d);const NG=160;const ord=[];for(let i=0;i<NG;i++)ord.push(i);for(let i=NG-1;i>0;i--){const j=(R()*(i+1))|0;[ord[i],ord[j]]=[ord[j],ord[i]]}
@@ -221,9 +224,9 @@ const SHIPS=new Map();function shipSprite(L,st,c,m){const ps=m<0.15?8:m<0.4?4:2,
   if(!e){const w=L*(st===2?0.16:0.14),h=L/2;const cw=M.ceil((L+10)*ps),ch=M.ceil((w+10)*ps);const cv2=mk(cw,ch),x=cv2.getContext('2d');x.scale(ps,ps);x.translate(h+3,w/2+3);W.drawShip(x,L,st,c);
     e={r:{tex:ctx.texture(0,0,cv2),x:0,y:0,w:cw,h:ch},ox:-(h+3),oy:-(w/2+3),w:cw/ps,h:ch/ps,f:0};SHIPS.set(key,e)}e.f=frameNo;return e}
 // tileable fog texture
-const FOG=(()=>{const N=256,c=mk(N,N),x=c.getContext('2d'),id=x.createImageData(N,N),d=id.data;const f=(i,j)=>{let n=0,a=0.55,q=4/N;for(let o=0;o<5;o++){n+=a*W.noise(i*q+o*7.1,j*q-o*3.3);a*=0.5;q*=2}return n};
+const FOG=(()=>{const c=cached('fog'+SEED,()=>{const N=256,c=mk(N,N),x=c.getContext('2d'),id=x.createImageData(N,N),d=id.data;const f=(i,j)=>{let n=0,a=0.55,q=4/N;for(let o=0;o<5;o++){n+=a*W.noise(i*q+o*7.1,j*q-o*3.3);a*=0.5;q*=2}return n};
   for(let j=0;j<N;j++)for(let i=0;i<N;i++){const u=i/N,v=j/N;const n=f(i,j)*(1-u)*(1-v)+f(i-N,j)*u*(1-v)+f(i,j-N)*(1-u)*v+f(i-N,j-N)*u*v;const a=smooth(-0.32,0.42,n*1.6);const o=(j*N+i)*4;d[o]=232;d[o+1]=236;d[o+2]=240;d[o+3]=a*255}
-  x.putImageData(id,0,0);return {tex:ctx.texture(0,0,c,true),x:0,y:0,w:N,h:N}})();
+  x.putImageData(id,0,0);return c});return {tex:ctx.texture(0,0,c,true),x:0,y:0,w:256,h:256}})();
 
 // ------------------------------------------------------------ time of day & weather
 let tod=((hv(/,t(\d+(?:\.\d+)?)/,cfg.tod!=null?cfg.tod:17.2))%24+24)%24,tSpeed=1,todRate=null,readyFired=false;const DN=cfg.dayNight!==false;const SPEEDS=[0,4/60,40/60]; // game hours per real second (4 game min/s → day = 6 min)
@@ -301,8 +304,14 @@ function lightLevel(z,a,L,prio){const n=1<<z,ts=WORLD/n,mp=LCS[L];
 function drawLights(z,a){if(a<0.01)return;ctx.setTransform(1,0,0,1,0,0);ctx.globalCompositeOperation='lighter';
   const fogB=1+wcur.fog*0.9+wcur.rain*0.3;
   requestL(0,0,0,-1e9,1);
-  const far=1-smooth(15,200,cam.m)*0.55;lightLevel(M.max(0,z-2),a*(lowQ?0.7:0.45)*fogB*far,3,-2e5);if(!lowQ)lightLevel(M.max(0,z-1),a*0.42*fogB,2,-1e5);
-  lightLevel(z,a*(1-wcur.fog*0.3),1,0.3);
+  const far=1-smooth(15,200,cam.m)*0.55;
+  // stage 6: the two bloom levels (coarser LODs, already blurred in the tiles) are summed in a half-resolution buffer and
+  // added in one pass — they carry no detail a full-resolution pass would keep; the sharp level stays full resolution
+  if(DBG.bloomFull){lightLevel(M.max(0,z-2),a*(lowQ?0.7:0.45)*fogB*far,3,-2e5);if(!lowQ)lightLevel(M.max(0,z-1),a*0.42*fogB,2,-1e5)}
+  else{const bw=M.ceil(cv.width/2),bh=M.ceil(cv.height/2);BLB.resize(bw,bh);ctx.target(BLB);ctx.clear(0,0,0,0);ctx.setTransform(bw/cv.width,0,0,bh/cv.height,0,0);ctx.globalCompositeOperation='lighter';
+    lightLevel(M.max(0,z-2),a*(lowQ?0.7:0.45)*fogB*far,3,-2e5);if(!lowQ)lightLevel(M.max(0,z-1),a*0.42*fogB,2,-1e5);
+    ctx.target(null);ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='lighter';ctx.drawImage(BLB,0,0,bw,bh,0,0,cv.width,cv.height)}
+  ctx.setTransform(1,0,0,1,0,0);lightLevel(z,a*(1-wcur.fog*0.3),1,0.3);
   {const g=camGoal();if(g){const zt=tileZAt(g[2]);if(zt!==z){preRect(M.max(0,zt-2),g[0],g[1],g[2],g[3],3);if(!lowQ)preRect(M.max(0,zt-1),g[0],g[1],g[2],g[3]+20,2);preRect(zt,g[0],g[1],g[2],g[3]+40,1)}}}
   ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}
 
@@ -428,9 +437,11 @@ function drawFlightLights(a){if(a<0.02||!FLB.length)return;ctx.globalCompositeOp
 // the camera moved (by a third of a pixel), the wind drifted the clouds by a third of a pixel, the cover, the daylight
 // or the tint changed. A still camera blits one image per pass.
 const CLL=[{c:ctx.layer(4,4),key:'',cx:0,cy:0},{c:ctx.layer(4,4),key:'',cx:0,cy:0}];
-function drawClouds(shadowPass){const H=camH();const cloudFar=1; // clouds are seen from orbit too (stage 5.5); near the cloud layer they dissolve (game)
+const BLB=ctx.layer(4,4); // half-resolution bloom buffer of the night lights
+// get: return where the layer goes ({L, sw, sh, dx, dy, dw, dh} in device px, null — nothing) instead of drawing it
+function drawClouds(shadowPass,get){const H=camH();const cloudFar=1; // clouds are seen from orbit too (stage 5.5); near the cloud layer they dissolve (game)
   const span=WORLD*1.3;
-  if(shadowPass&&(LG.day<0.03||cam.m<0.12))return;
+  if(shadowPass&&(LG.day<0.03||cam.m<0.12))return null;
   // the layer is a margin larger than the screen: a pan (the shadows always, the clouds when seen from far above, where
   // they have no parallax) only shifts the old picture until it would show its edge
   const PAD=64,L=CLL[shadowPass?0:1],q=3/cam.m,lw=M.max(4,M.ceil((VW+PAD*2)*DPR)),lh=M.max(4,M.ceil((VH+PAD*2)*DPR));
@@ -440,7 +451,7 @@ function drawClouds(shadowPass){const H=camH();const cloudFar=1; // clouds are s
   // stage 5.12: a flat layer is reused while the camera zooms (scaled, up to 8 %) and while the wind drifts it (shifted);
   // it is redrawn when the scale drifts further, its edge would show or the camera stops (then at the exact scale)
   let need=key!==L.key;if(!need){if(flat){const r=L.m/cam.m,X0=ox+(-PAD-VW/2)*r+VW/2+(T-L.T)*9/cam.m,Y0=oy+(-PAD-VH/2)*r+VH/2;need=M.abs(M.log(r))>(CAMMV?0.08:0.002)||X0>-2||Y0>-2||X0+(VW+PAD*2)*r<VW+2||Y0+(VH+PAD*2)*r<VH+2}else need=M.abs(ox)>0.34||M.abs(oy)>0.34}
-  if(need){L.key=key;L.cx=cam.x;L.cy=cam.y;L.m=cam.m;L.T=T;L.c.resize(lw,lh);const x2=ctx,T0=ctx.getTransform(),A0=ctx.globalAlpha;ctx.target(L.c);ctx.clear(0,0,0,0);x2.setTransform(DPR*f,0,0,DPR*f,PAD*DPR*f,PAD*DPR*f);let n=0,ms=1e9;L.f=f;
+  if(need){L.key=key;L.cx=cam.x;L.cy=cam.y;L.m=cam.m;L.T=T;L.c.resize(lw,lh);const x2=ctx,T0=ctx.getTransform(),A0=ctx.globalAlpha,AM0=ctx.getAmbient();ctx.ambient(1,1,1);ctx.target(L.c);ctx.clear(0,0,0,0);x2.setTransform(DPR*f,0,0,DPR*f,PAD*DPR*f,PAD*DPR*f);let n=0,ms=1e9;L.f=f;
     ctx.tint=shadowPass?CLSH:CLT;
     for(let ci=0;ci<clouds.length;ci++){const c=clouds[ci];const vis=clamp((wcur.cover-c.g)*14,0,1);if(vis<=0)continue;
       let x=((c.x+T*9+WORLD*0.15)%span+span)%span-WORLD*0.15,y=c.y;
@@ -449,8 +460,12 @@ function drawClouds(shadowPass){const H=camH();const cloudFar=1; // clouds are s
       if(H<c.alt*1.12)continue;let a=smooth(c.alt*1.12,c.alt*2.6,H)*(MODE==='game'?smooth(c.alt*3,c.alt*6,H)*0.85:1);if(a<=0.01)continue; // game: no white-out when the camera comes down through the cloud layer
       Parallax.project(cam,VW,VH,x,y,c.alt,PJ);const X=PJ[0],Y=PJ[1],sz=c.s/cam.m*PJ[2];if(X+sz/2<-PAD||Y+sz/2<-PAD||X-sz/2>VW+PAD||Y-sz/2>VH+PAD)continue;
       const ca=a*0.95*vis*cloudFar*(MODE==='game'?smooth(VW*2.4,VW*1.3,sz):1);if(ca<0.02)continue;/* game: no screen-filling cloud sprites */x2.globalAlpha=ca;x2.drawImage(CLS[c.v],X-sz/2,Y-sz/2,sz,sz);n++;if(sz<ms)ms=sz}
-    L.n=n;L.ms=ms;ctx.tint=null;ctx.target(null);ctx.setTransform(T0[0],T0[1],T0[2],T0[3],T0[4],T0[5]);ctx.globalAlpha=A0}
-  if(!L.n)return;const dx=(L.cx-cam.x)/cam.m,dy=(L.cy-cam.y)/cam.m;ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;{const lf=L.f||1,r=flat?L.m/cam.m:1,X0=dx+(-PAD-VW/2)*r+VW/2+(flat?(T-L.T)*9/cam.m:0),Y0=dy+(-PAD-VH/2)*r+VH/2;if(lf>=1&&!flat)ctx.drawImage(L.c,M.round(X0*DPR),M.round(Y0*DPR));else ctx.drawImage(L.c,0,0,lw*lf,lh*lf,X0*DPR,Y0*DPR,lw*r,lh*r)}ctx.setTransform(DPR,0,0,DPR,0,0)}
+    L.n=n;L.ms=ms;ctx.tint=null;ctx.target(null);ctx.setTransform(T0[0],T0[1],T0[2],T0[3],T0[4],T0[5]);ctx.globalAlpha=A0;ctx.ambient(AM0[0],AM0[1],AM0[2])}
+  if(!L.n)return null;const dx=(L.cx-cam.x)/cam.m,dy=(L.cy-cam.y)/cam.m;const lf=L.f||1,r=flat?L.m/cam.m:1,X0=dx+(-PAD-VW/2)*r+VW/2+(flat?(T-L.T)*9/cam.m:0),Y0=dy+(-PAD-VH/2)*r+VH/2;
+  const B=lf>=1&&!flat?{L:L.c,sw:lw,sh:lh,dx:M.round(X0*DPR),dy:M.round(Y0*DPR),dw:lw,dh:lh}:{L:L.c,sw:lw*lf,sh:lh*lf,dx:X0*DPR,dy:Y0*DPR,dw:lw*r,dh:lh*r};if(get)return B;
+  ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.drawImage(B.L,0,0,B.sw,B.sh,B.dx,B.dy,B.dw,B.dh);ctx.setTransform(DPR,0,0,DPR,0,0);return B}
+// does a layer placement cover the whole canvas?
+const covers=B=>B&&B.dx<=0.5&&B.dy<=0.5&&B.dx+B.dw>=cv.width-0.5&&B.dy+B.dh>=cv.height-0.5;
 function drawFog(){const f=wcur.fog;if(f<0.01)return;ctx.setTransform(DPR,0,0,DPR,0,0);
   for(let l=0;l<2;l++){const P=l?1700:5200,sc=P/256/cam.m;const ox=VW/2-(cam.x-T*(l?9:5))/cam.m,oy=VH/2-(cam.y+T*(l?3:-2))/cam.m;
     ctx.globalAlpha=f*(l?0.42:0.6);ctx.pattern(FOG,[sc,0,0,sc,ox+l*91,oy+l*57],[[0,0,VW,VH]])}
@@ -540,7 +555,10 @@ function frameBody(now){const dt=M.min(0.06,(now-last)/1000);last=now;T+=dt;fram
   pfT=performance.now();updateCam(dt);CAMMV=!!(fly||zoomT||pinch)||M.abs(cam.m-pcm)>cam.m*1e-4;pcm=cam.m;
   vx0=cam.x-VW/2*cam.m;vy0=cam.y-VH/2*cam.m;vx1=cam.x+VW/2*cam.m;vy1=cam.y+VH/2*cam.m;
   const A=LG.amb,NL=LG.lights;
-  ctx.begin();ctx.clear(14/255,46/255,82/255,1);ctx.setTransform(DPR,0,0,DPR,0,0);
+  // ambient light (dusk / night / overcast) multiplies everything drawn before the lights: as a shader uniform, which is
+  // exact (compositing is linear in colour) and saves the full-screen multiply pass of stages 1–5
+  const AMBON=!DBG.amb&&(A[0]<0.995||A[1]<0.995||A[2]<0.995);
+  ctx.begin();if(AMBON)ctx.ambient(A[0],A[1],A[2]);ctx.clear(14/255*(AMBON?A[0]:1),46/255*(AMBON?A[1]:1),82/255*(AMBON?A[2]:1),1);ctx.setTransform(DPR,0,0,DPR,0,0);
   // animated water glints (seen through translucent water in tiles)
   // world-anchored octaves: texel size 0.08*2^k m; the two octaves around the current zoom cross-fade,
   // so ripples stay glued to the water and never look like a stretched picture
@@ -551,29 +569,36 @@ function frameBody(now){const dt=M.min(0.06,(now-last)/1000);last=now;T+=dt;fram
     for(let o=0;o<2;o++){const wgt=o?fr:1-fr;if(wgt<0.03||ga*wgt<0.03||(LITE&&o!==(fr>0.5?1:0)))continue;const tm=0.08*M.pow(2,k0+o),sp=M.sqrt(tm/0.08);
       for(let l=0;l<NLW;l++){const sc=tm*(l?1.41:1)/cam.m,ang=l?0.35:0,ca=M.cos(ang)*sc,sa=M.sin(ang)*sc;const dx=W.WDX*T*(l?2.2:3.4)*sp+l*61*tm,dy=W.WDY*T*(l?2.2:3.4)*sp+l*29*tm;
         ctx.globalAlpha=(l?0.45:NLW===1?0.8:0.65)*wgt*ga;ctx.pattern(wavePat,[ca,sa,-sa,ca,(dx-cam.x)/cam.m+VW/2,(dy-cam.y)/cam.m+VH/2],WCLIP)}}ctx.globalAlpha=1;ctx.restore()}
-  pf('water');zNow=DBG.tiles?tileZ():drawTiles();pf('tiles');
+  // the cloud shadow layer is composited over the tiles in the tile pass (stage 6): no separate full-screen pass
+  const SHB=opt.clouds&&!DBG.shadows?drawClouds(true,true):null;if(SHB)ctx.tileOverlay(SHB.L,SHB.sw,SHB.sh,SHB.dx,SHB.dy,SHB.dw,SHB.dh);
+  pf('water');zNow=DBG.tiles?tileZ():drawTiles();ctx.tileOverlay(null);pf('tiles');
   {ctx.setTransform(DPR,0,0,DPR,0,0);ctx.fillStyle='rgba(14,46,82,0.8)';const X0=sxw(0),Y0=syw(0),X1=sxw(WORLD),Y1=syw(WORLD);if(X0>0||Y0>0||X1<VW||Y1<VH){ // outside the world: four bands around it
     const a=M.max(-5,M.min(VH+5,Y0)),b=M.max(-5,M.min(VH+5,Y1));if(a>-5)ctx.fillRect(-5,-5,VW+10,a+5);if(b<VH+5)ctx.fillRect(-5,b,VW+10,VH+5-b);
     if(X0>-5)ctx.fillRect(-5,a,M.min(VW+5,X0)+5,b-a);if(X1<VW+5){const l=M.max(-5,X1);ctx.fillRect(l,a,VW+5-l,b-a)}}}
-  pf('edge');if(opt.clouds&&!DBG.shadows)drawClouds(true);pf('shadows');
+  pf('edge');pf('shadows');
   let rs=[];const trafficOn=opt.traffic&&cam.m<30;
   if(trafficOn){rs=cam.m<8?W.queryRoads(vx0,vy0,vx1,vy1).filter(W.roadShown):[];if(cam.m<3.2)drawTraffic(rs);else cbn=0;if(cam.m<8)drawTrains(rs,0);drawShips(0)}else cbn=0;
   pf('traffic');drawEmitters();drawTurbines(0);pf('emit');
   if(opt.traffic)drawFlights();else FLB.length=0;
   pf('flights');drawFog();pf('fog');
   // ambient light (dusk / night / overcast)
-  if(!DBG.amb&&(A[0]<0.995||A[1]<0.995||A[2]<0.995)){ctx.setTransform(DPR,0,0,DPR,0,0);ctx.globalCompositeOperation='multiply';ctx.fillStyle=`rgb(${A[0]*255|0},${A[1]*255|0},${A[2]*255|0})`;ctx.fillRect(0,0,VW,VH);ctx.globalCompositeOperation='source-over'}
+  ctx.ambient(1,1,1); // the ambient point: from here on (lights, precipitation, clouds) nothing is darkened
   // emissive layers
   if(NL>0.01&&!DBG.lights){drawLights(zNow,NL);if(trafficOn){drawCarLights(NL);if(cam.m<8)drawTrains(rs,NL)}if(opt.traffic||cam.m<120)drawShips(NL);drawTurbines(NL);}
   drawFlares(NL);if(opt.traffic)drawFlightLights(LG.night);pf('lights');
   dispatch();pf('dispatch');
   pf('lights');drawPrecip(dt);
-  if(opt.clouds&&!DBG.clouds){const c=LG.cloud;tintClouds(c[0],c[1],c[2],flash>0.05?0:0.92);drawClouds(false)}
+  let CLB=null;if(opt.clouds&&!DBG.clouds){const c=LG.cloud;tintClouds(c[0],c[1],c[2],flash>0.05?0:0.92);CLB=drawClouds(false,true)}
+  const hz=smooth(40,600,cam.m)*0.16;
+  // the clouds take the vignette into their pass when nothing is drawn between them (haze, lightning) and they cover the screen
+  const merge=!DBG.vign&&covers(CLB)&&hz<=0&&flash<=0.01;if(CLB){ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;
+    if(merge){ctx.setTransform(DPR,0,0,DPR,0,0);ctx.drawImageVignette(CLB.L,0,0,CLB.sw,CLB.sh,CLB.dx,CLB.dy,CLB.dw,CLB.dh,VW/2,VH/2,vg.r0,vg.r1,VIGC,0.38)}
+    else ctx.drawImage(CLB.L,0,0,CLB.sw,CLB.sh,CLB.dx,CLB.dy,CLB.dw,CLB.dh)}
   ctx.setTransform(DPR,0,0,DPR,0,0);
-  const hz=smooth(40,600,cam.m)*0.16;if(hz>0){ctx.fillStyle=`rgba(${160*A[0]|0},${195*A[1]|0},${230*A[2]|0},${hz})`;ctx.fillRect(0,0,VW,VH)}
+  if(hz>0){ctx.fillStyle=`rgba(${160*A[0]|0},${195*A[1]|0},${230*A[2]|0},${hz})`;ctx.fillRect(0,0,VW,VH)}
   if(wcur.storm>0.3){nextBolt-=dt;if(nextBolt<0){flash=1;nextBolt=3+M.random()*12}}
   if(flash>0.01){const f=flash*(0.6+0.4*M.sin(T*60));ctx.globalCompositeOperation='lighter';ctx.fillStyle=`rgba(190,200,255,${0.3*f})`;ctx.fillRect(0,0,VW,VH);ctx.globalCompositeOperation='source-over';flash*=M.exp(-dt*7)}
-  pf('clouds');if(!DBG.vign)ctx.vignette(VW/2,VH/2,vg.r0,vg.r1,VIGC,0.38);ctx.end();
+  pf('clouds');if(!DBG.vign&&!merge)ctx.vignette(VW/2,VH/2,vg.r0,vg.r1,VIGC,0.38);ctx.end();
   // the 2D overlay: labels, the game layer, the selection
   octx.setTransform(1,0,0,1,0,0);octx.clearRect(0,0,ov.width,ov.height);
   if(opt.labels)drawLabels();pf('labels');

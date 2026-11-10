@@ -44,15 +44,29 @@ precision highp float;
 in vec2 vUV; in vec2 vP; in vec4 vCol; in vec4 vTint; flat in float vL;
 out vec4 o;
 uniform float uPre;
+uniform vec3 uAmb; // ambient light: everything drawn before the lights is multiplied by it (no full-screen multiply pass)
 vec4 shade(vec4 t){
   vec3 c = uPre > 0.5 ? (t.a > 0.0 ? t.rgb / t.a : vec3(0.0)) : t.rgb;
   c = mix(c, vTint.rgb, vTint.a);
   float a = t.a * vCol.a;
-  return vec4(c * vCol.rgb * a, a);
+  return vec4(c * vCol.rgb * uAmb * a, a);
 }
 `;
   const FS_2D = FS_HEAD + `uniform sampler2D uT; void main(){ o = shade(texture(uT, vUV)); }`;
-  const FS_ARR = FS_HEAD + `uniform highp sampler2DArray uA; void main(){ o = shade(texture(uA, vec3(vUV, vL))); }`;
+  // tiles; optionally a premultiplied screen layer composited over them in the same pass (the cloud shadows):
+  // o = tile * (1 - s.a) + s — the same as drawing the layer over the tiles, one full-screen pass less
+  const FS_ARR = FS_HEAD + `uniform highp sampler2DArray uA; uniform sampler2D uOv; uniform float uOvOn; uniform vec4 uOvM;
+void main(){ vec4 c = shade(texture(uA, vec3(vUV, vL)));
+  if (uOvOn > 0.5) { vec2 q = vec2((vP.x - uOvM.x) * uOvM.z, 1.0 - (vP.y - uOvM.y) * uOvM.w);
+    if (q.x >= 0.0 && q.x <= 1.0 && q.y >= 0.0 && q.y <= 1.0) { vec4 sh = texture(uOv, q); c = c * (1.0 - sh.a) + vec4(sh.rgb * uAmb, sh.a) * vCol.a; } }
+  o = c; }`;
+  // a premultiplied layer with the vignette in the same pass (the clouds — the last full-screen layer of the frame):
+  // out = (layer over dst) * (1 - v) + colour * v
+  const FS_CV = `#version 300 es
+precision highp float;
+in vec2 vUV; in vec2 vP; in vec4 vCol; out vec4 o; uniform sampler2D uT; uniform vec2 uC; uniform vec2 uR; uniform vec4 uCol;
+void main(){ vec4 c = texture(uT, vUV) * vCol.a; float t = clamp((length(vP - uC) - uR.x) / (uR.y - uR.x), 0.0, 1.0); float va = uCol.a * t;
+  o = vec4(c.rgb * (1.0 - va) + uCol.rgb * va, 1.0 - (1.0 - c.a) * (1.0 - va)); }`;
   // a repeating texture through a matrix: the device position goes back to texture pixels
   const FS_PAT = FS_HEAD + `uniform sampler2D uT; uniform mat3 uInv; uniform vec2 uSz;
 void main(){ vec3 q = uInv * vec3(vP, 1.0); o = shade(texture(uT, q.xy / uSz)); }`;
@@ -68,9 +82,11 @@ void main(){ float t = clamp((length(vP - uC) - uR.x) / (uR.y - uR.x), 0.0, 1.0)
     const u = {}; const nU = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS); for (let i = 0; i < nU; i++) { const a = gl.getActiveUniform(p, i); u[a.name] = gl.getUniformLocation(p, a.name) }
     return { p, u };
   }
-  let P2, PA, PP, PV, vao, ibuf, qbuf;
+  let P2, PA, PP, PV, PC, vao, ibuf, qbuf;
+  let ovT = null, ovM = [0, 0, 0, 0]; // the screen layer composited over tiles (null — none)
+  let AMB = [1, 1, 1]; // ambient multiplier of the draws (see uAmb)
   function init() {
-    P2 = mkProg(FS_2D); PA = mkProg(FS_ARR); PP = mkProg(FS_PAT); PV = mkProg(FS_VIG);
+    P2 = mkProg(FS_2D); PA = mkProg(FS_ARR); PP = mkProg(FS_PAT); PV = mkProg(FS_VIG); PC = mkProg(FS_CV);
     vao = gl.createVertexArray(); gl.bindVertexArray(vao);
     qbuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, qbuf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
@@ -113,6 +129,7 @@ void main(){ float t = clamp((length(vP - uC) - uR.x) / (uR.y - uR.x), 0.0, 1.0)
   function setBlend(b) {
     if (b === blend) return; blend = b;
     if (b === 'lighter') gl.blendFunc(gl.ONE, gl.ONE);
+    else if (b === 'screen-add') gl.blendFunc(gl.ONE, gl.ONE); // same as lighter (a separate name keeps batches apart)
     else if (b === 'multiply') gl.blendFunc(gl.DST_COLOR, gl.ONE_MINUS_SRC_ALPHA);
     else gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   }
@@ -121,8 +138,11 @@ void main(){ float t = clamp((length(vP - uC) - uR.x) / (uR.y - uR.x), 0.0, 1.0)
     gl.useProgram(prog.p);
     gl.uniform2f(prog.u.uS, 2 / tW, 2 / tH);
     if (prog.u.uPre) gl.uniform1f(prog.u.uPre, tex && tex.pre ? 1 : 0);
+    if (prog.u.uAmb) gl.uniform3f(prog.u.uAmb, AMB[0], AMB[1], AMB[2]);
     gl.activeTexture(gl.TEXTURE0);
-    if (prog === PA) { gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex.t); gl.uniform1i(prog.u.uA, 0) }
+    if (prog === PA) { gl.bindTexture(gl.TEXTURE_2D_ARRAY, tex.t); gl.uniform1i(prog.u.uA, 0);
+      gl.uniform1f(prog.u.uOvOn, ovT ? 1 : 0); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, ovT ? ovT.t : null); gl.uniform1i(prog.u.uOv, 1);
+      gl.uniform4f(prog.u.uOvM, ovM[0], ovM[1], ovM[2], ovM[3]); gl.activeTexture(gl.TEXTURE0) }
     else if (tex) { gl.bindTexture(gl.TEXTURE_2D, tex.t); if (prog.u.uT) gl.uniform1i(prog.u.uT, 0) }
     if (prog.set) prog.set();
     gl.bindBuffer(gl.ARRAY_BUFFER, ibuf);
@@ -294,14 +314,30 @@ void main(){ float t = clamp((length(vP - uC) - uR.x) / (uR.y - uR.x), 0.0, 1.0)
     PV.set = () => { gl.uniform2f(PV.u.uC, T[0] * cx + T[2] * cy + T[4], T[1] * cx + T[3] * cy + T[5]); gl.uniform2f(PV.u.uR, r0 * s, r1 * s); gl.uniform4f(PV.u.uCol, col[0], col[1], col[2], alpha) };
     push(0, 0, tW, 0, 0, tH, 0, 0, 0, 0, 0, 1, 1, 1, 1, null); flush(); PV.set = null; prog = null;
   };
-  api.begin = function () { stats.draws = 0; stats.inst = 0; stats.uploads = 0; target(null); T = [1, 0, 0, 1, 0, 0]; api.globalAlpha = 1; api.globalCompositeOperation = 'source-over'; api.tint = null };
+  // composite the layer L over every tile drawn from now on: the layer's source rect (0,0,sw,sh) lands at the device rect
+  // (dx,dy,dw,dh) — exactly where drawImage(L, 0,0,sw,sh, dx,dy,dw,dh) would put it; null switches it off
+  api.tileOverlay = function (L, sw, sh, dx, dy, dw, dh) {
+    flush(); if (!L) { ovT = null; return } ovT = L.tex; ovM = [dx, dy, sw / L.w / dw, sh / L.h / dh];
+  };
+  // drawImage of a premultiplied layer with the vignette applied in the same pass (see FS_CV); the image must cover the
+  // whole target, otherwise the caller draws the vignette separately
+  api.drawImageVignette = function (r, sx, sy, sw, sh, dx, dy, dw, dh, cx, cy, r0, r1, col, alpha) {
+    const t = r.tex; flush(); prog = PC; tex = t; setBlend('source-over'); const S = M.hypot(T[0], T[1]), TT = T.slice();
+    PC.set = () => { gl.uniform2f(PC.u.uC, TT[0] * cx + TT[2] * cy + TT[4], TT[1] * cx + TT[3] * cy + TT[5]); gl.uniform2f(PC.u.uR, r0 * S, r1 * S); gl.uniform4f(PC.u.uCol, col[0], col[1], col[2], alpha) };
+    let u0 = (r.x + sx) / t.w, u1 = (r.x + sx + sw) / t.w, v0 = (r.y + sy) / t.h, v1 = (r.y + sy + sh) / t.h; if (r.flip) { v0 = 1 - v0; v1 = 1 - v1 }
+    const T0 = T; T = [1, 0, 0, 1, 0, 0]; quad(T, dx, dy, dw, dh, u0, v0, u1, v1, 0, 1, 1, 1, api.globalAlpha, null); T = T0; flush(); PC.set = null; prog = null;
+  };
+  // the ambient multiplier for the following draws ([1,1,1] — none)
+  api.getAmbient = () => AMB.slice();
+  api.ambient = function (r, g, b) { if (r === AMB[0] && g === AMB[1] && b === AMB[2]) return; flush(); AMB = [r, g, b] };
+  api.begin = function () { stats.draws = 0; stats.inst = 0; stats.uploads = 0; ovT = null; AMB = [1, 1, 1]; target(null); T = [1, 0, 0, 1, 0, 0]; api.globalAlpha = 1; api.globalCompositeOperation = 'source-over'; api.tint = null };
   api.end = function () { flush() };
   api.flush = flush; api.target = target; api.clear = clear; api.layer = layer; api.pool = pool; api.sprite = addSprite; api.texture = tex2D;
   api.lost = () => gl.isContextLost();
   // frees every texture, buffer and program of this instance (the canvas and its context stay for the next world)
   api.dispose = function () {
     n = 0; for (const t of OWN) gl.deleteTexture(t); OWN.length = 0; pages.length = 0; WHITE = null;
-    for (const P of [P2, PA, PP, PV]) gl.deleteProgram(P.p); gl.deleteBuffer(ibuf); gl.deleteBuffer(qbuf); gl.deleteVertexArray(vao);
+    for (const P of [P2, PA, PP, PV, PC]) gl.deleteProgram(P.p); gl.deleteBuffer(ibuf); gl.deleteBuffer(qbuf); gl.deleteVertexArray(vao);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   };
   return api;

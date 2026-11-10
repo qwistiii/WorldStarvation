@@ -56,12 +56,14 @@ async function shoot(tag, files) {
       if (wx === 'city') { x = c.x; y = c.y } else if (wx === 'port') { const z = W.zones.find((q) => q.zk === 'port') || c; x = z.x; y = z.y }
       A.setTod(tod); A.setWeather(w); A.setSpeed(0); A.closeInsp && A.closeInsp();
       A.cam.x = x + dx; A.cam.y = y; A.cam.m = m === 'max' ? A.maxM() : m;
-      let q = 0; for (let i = 0; i < 300; i++) { await sl(100); const s = A.stats(); if (!s.queue && !s.pending) { if (++q > 8) break } else q = 0 }
+      let q = 0, sig = ''; for (let i = 0; i < 400; i++) { await sl(100); const s = A.stats(), g = s.tiles + '/' + s.lights; if (!s.queue && !s.pending && g === sig) { if (++q > 10) break } else q = 0; sig = g }
       // freeze the clock at the same moment in both runs: T is read from the engine and set by stepping dt
-      window.__dt = 0; window.__T = 1000; await sl(900);
+      window.__dt = 0; window.__T = 100000; await sl(900);
     }, [wx, wy, m, tod, w, dx]);
     const f = `${OUT}/${tag}-${name}.png`;
     await page.screenshot({ path: f });
+    const st = await page.evaluate(() => { const s = __world.stats(); return s.tiles + '+' + s.lights + ' q' + s.queue + ' p' + s.pending; });
+    console.log(tag, name, st);
     res.push(f);
   }
   await ctx.close();
