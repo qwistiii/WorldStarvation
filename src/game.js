@@ -761,7 +761,12 @@ function syncLights(){if(!api||!api.lights||!G)return;lightsDirty=false;const L=
     if(q.id<0||q.k==='rail')continue;const z=W.zones[q.id],b=BLD[q.k];if(!z||z.dead||!b||!b.zk)continue;
     // masts stand inside the yard near its corners (the light falls on the concrete, not on the grass of the apron)
     const big=z.W*z.H>60000,ins=big?16:6,hw=z.W/2-ins,hh=z.H/2-ins,pts=big?[[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]]:[[hw,hh]],r=M.min(80,42+M.sqrt(z.W*z.H)/25);
-    pts.forEach(([u,v],i)=>L.add({id:q.uid*8+1+i,x:z.x+u*z.ca-v*z.sa,y:z.y+u*z.sa+v*z.ca,kind:'flood',owner:q.id,r}))}
+    pts.forEach(([u,v],i)=>L.add({id:q.uid*8+1+i,x:z.x+u*z.ca-v*z.sa,y:z.y+u*z.sa+v*z.ca,kind:'flood',owner:q.id,r}));
+    // stage 6.1: a lamp over each entrance (the gate or the loading docks of a hall, 2 m out of the wall), up to three
+    // a building — the biggest halls first; lit at night, its pool on the ground, the head at its height (parallax)
+    const E=[];for(const p of z.prims){if(p.k!=='b'||p.a||p.H0||(p.gate==null&&!p.dk))continue;for(const e of p.gate!=null?[p.gate]:p.dk){const cx=p.x+p.w/2,cy=p.y+p.h/2,
+      u=e===1?p.x+p.w+2:e===3?p.x-2:cx,v=e===0?p.y-2:e===2?p.y+p.h+2:cy;E.push([p.w*p.h,u,v])}}
+    E.sort((a,b)=>b[0]-a[0]).slice(0,3).forEach(([,u,v],i)=>L.add({id:q.uid*8+5+i,x:z.x+u*z.ca-v*z.sa,y:z.y+u*z.sa+v*z.ca,kind:'lamp',owner:q.id}))}
   for(const l of L.all())if(prev.has(l.id))l.lv=prev.get(l.id)}
 function placeDone(keep){const fp=G.forPort;if(!keep)setBuild(null);if(fp&&!keep){G.sel={build:fp};panelSig=''}updHUD();updPbar()}
 function placeTap(x,y){const r=PL.tap(x,y,lastTouch,shiftDown&&!lastTouch);if(r==='built')placeDone(shiftDown&&!lastTouch);else if(r==='bad'&&PL.state.bad&&!lastTouch)toast(PL.state.bad);return r}

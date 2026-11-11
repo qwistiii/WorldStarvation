@@ -1041,7 +1041,7 @@ const FCC=[[180,60,48],[46,110,164],[224,160,48],[58,125,68],[136,136,136],[200,
 // pads (z.pads, local rectangles) also shape the apron around the building (padAt) and bound its filler (zoneFill).
 const NOSHAPE={port:1,sam:1,oil:1,gasw:1,dramp:1,drwy:1,stn:1,sol2:1,solar:1,air:1,air2:1,dstore:1,mil:1}; // mil: fenced compounds on grass already
 function zoneShape(z){const P=z.prims,W=z.W,H=z.H,b=P[0];if(!b||b.k!=='g'||b.w<W*0.95||b.h<H*0.95)return;
-  const cs=12,nx=M.ceil(W/cs),ny=M.ceil(H/cs),x0=-W/2,y0=-H/2,occ=new Uint8Array(nx*ny),mg=9;
+  const cs=18,nx=M.ceil(W/cs),ny=M.ceil(H/cs),x0=-W/2,y0=-H/2,occ=new Uint8Array(nx*ny),mg=8;
   const mark=(ax,ay,bx,by)=>{const i0=M.max(0,M.floor((ax-mg-x0)/cs)),i1=M.min(nx-1,M.floor((bx+mg-x0)/cs)),j0=M.max(0,M.floor((ay-mg-y0)/cs)),j1=M.min(ny-1,M.floor((by+mg-y0)/cs));for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++)occ[j*nx+i]=1};
   for(let q=1;q<P.length;q++){const p=P[q],k=p.k;if(k==='t'||k==='lflood'||k==='ship'||k==='mow'||k==='gl'||k==='rail')continue; // the inner roads and tracks run between the pads
     if(p.pts){for(let i=0;i<p.pts.length;i+=2)mark(p.pts[i],p.pts[i+1],p.pts[i],p.pts[i+1]);continue}
