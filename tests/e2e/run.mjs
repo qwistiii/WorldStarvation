@@ -360,6 +360,7 @@ async function menuJob(browser) {
     await page.evaluate(() => { for (let r = 0; r < 60000; r += 1500) for (let a = 0; a < 6.28; a += 0.3) { const x = 65536 + Math.cos(a) * r, y = 65536 + Math.sin(a) * r; if (Game._test.validSite(x, y) === null) { Game._test.found(x, y); return; } } });
     await page.waitForFunction(() => Game.G.phase === 'play' && Game.G.states[0].places.length, null, { timeout: 180000 }); await settle(page, 15000);
     check(dev, await page.evaluate(() => getComputedStyle(document.getElementById('c')).cursor !== 'none'), 'после основания столицы курсор над картой обычный');
+    await page.waitForFunction(() => document.getElementById('loading').classList.contains('fade') && document.getElementById('b-ores').offsetWidth > 0, null, { timeout: 180000 }); // the slow CI machine
     await page.click('#b-ores'); await page.waitForTimeout(200);
     check(dev, (await vis()).includes('orep'), 'в игре панель «Свободные залежи» открывается');
     await page.click('#bmenu'); await page.waitForTimeout(250); await page.click('#pexit'); await page.waitForTimeout(800);
