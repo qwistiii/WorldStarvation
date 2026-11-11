@@ -19,7 +19,12 @@ const SS=mix32(M.imul(SEED|0,0x9E3779B1)+12345);
 function hh(a,b,c){return mix32(M.imul(a|0,0x27d4eb2d)^mix32(M.imul(b|0,0x165667b1)^mix32(M.imul(c|0,0x1b873593)^SS)))}
 function hr(a,b,c){return hh(a,b,c)/4294967296}
 function rng(s){let a=s>>>0;return function(){a=(a+0x6D2B79F5)|0;let t=M.imul(a^(a>>>15),1|a);t=(t+M.imul(t^(t>>>7),61|t))^t;return ((t^(t>>>14))>>>0)/4294967296}}
-function mkCanvas(w,h){if(typeof OffscreenCanvas!=='undefined')return new OffscreenCanvas(w,h);const c=document.createElement('canvas');c.width=w;c.height=h;return c}
+// stage 6.1: every canvas of the generator is a CPU (software) canvas. The tiles are CPU canvases (they are read back for
+// the hillshade grain); a GPU-backed sprite, tree or material drawn into one forces Chrome to read its pixels back from the
+// GPU process (RasterImplementation::ReadbackImagePixels): ~2600 readbacks in 6 s at 5 km kept the GPU main thread 60 % busy
+// and the game's own frames missed vsync. CPU → CPU drawImage is a plain memory copy.
+function mkCanvas(w,h){const c=typeof OffscreenCanvas!=='undefined'?new OffscreenCanvas(w,h):(()=>{const c=document.createElement('canvas');c.width=w;c.height=h;return c})();
+  const gc=c.getContext.bind(c);c.getContext=(t,o)=>gc(t,t==='2d'?Object.assign({willReadFrequently:true},o):o);return c}
 // ---------------------------------------------------------------- seasons (stage 2): 0 summer, 1 autumn, 2 winter
 let SEASON=0;
 function setSeason(s){SEASON=s|0}

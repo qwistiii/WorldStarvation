@@ -495,19 +495,22 @@ function drawClouds(shadowPass,get){const H=camH();const cloudFar=1; // clouds a
   const ox=(L.cx-cam.x)/cam.m,oy=(L.cy-cam.y)/cam.m;
   // stage 5.12: a flat layer is reused while the camera zooms (scaled, up to 8 %) and while the wind drifts it (shifted);
   // it is redrawn when the scale drifts further, its edge would show or the camera stops (then at the exact scale)
-  let need=key!==L.key;if(!need){if(flat){const r=L.m/cam.m,X0=ox+(-PAD-VW/2)*r+VW/2+(T-L.T)*9/cam.m,Y0=oy+(-PAD-VH/2)*r+VH/2;need=M.abs(M.log(r))>(CAMMV?0.08:0.002)||X0>-2||Y0>-2||X0+(VW+PAD*2)*r<VW+2||Y0+(VH+PAD*2)*r<VH+2}else need=M.abs(ox)>0.34||M.abs(oy)>0.34}
+  let need=key!==L.key;if(!need){if(flat){const r=L.m/cam.m,X0=ox+(-PAD-VW/2)*r+VW/2+(T-L.T)*9/cam.m,Y0=oy+(-PAD-VH/2)*r+VH/2;need=M.abs(M.log(r))>(CAMMV?0.08:0.002)||X0>-2||Y0>-2||X0+(VW+PAD*2)*r<VW+2||Y0+(VH+PAD*2)*r<VH+2}else{const kb=L.kb||1,e=M.hypot(ox,oy)*(L.kd||0);need=e>0.34||M.abs(ox*kb)>PAD-2||M.abs(oy*kb)>PAD-2}}
   if(need){L.key=key;L.cx=cam.x;L.cy=cam.y;L.m=cam.m;L.T=T;L.c.resize(lw,lh);const x2=ctx,T0=ctx.getTransform(),A0=ctx.globalAlpha,AM0=ctx.getAmbient();ctx.ambient(1,1,1);ctx.target(L.c);ctx.clear(0,0,0,0);x2.setTransform(DPR*f,0,0,DPR*f,PAD*DPR*f,PAD*DPR*f);let n=0,ms=1e9;L.f=f;
-    ctx.tint=shadowPass?CLSH:CLT;
+    ctx.tint=shadowPass?CLSH:CLT;let k0=1e9,k1=0;
     for(let ci=0;ci<clouds.length;ci++){const c=clouds[ci];const vis=clamp((wcur.cover-c.g)*14,0,1);if(vis<=0)continue;
       let x=((c.x+T*9+WORLD*0.15)%span+span)%span-WORLD*0.15,y=c.y;
       if(LITE&&ci%2)continue;
       if(shadowPass){const [sx,sy]=Parallax.shadow(x,y,c.alt,PJ);if(!inView(sx,sy,c.s+PAD*cam.m*2))continue;const sz=c.s/cam.m;const sa=0.2*vis*LG.day*(1-0.45*smooth(0.6,1,wcur.cover))*cloudFar;if(sa<0.02)continue;x2.globalAlpha=sa;x2.drawImage(CLS[c.v],sxw(sx)-sz/2,syw(sy)-sz/2,sz,sz);n++;if(sz<ms)ms=sz;continue}
       if(H<c.alt*1.12)continue;let a=smooth(c.alt*1.12,c.alt*2.6,H)*(MODE==='game'?smooth(c.alt*3,c.alt*6,H)*0.85:1);if(a<=0.01)continue; // game: no white-out when the camera comes down through the cloud layer
       Parallax.project(cam,VW,VH,x,y,c.alt,PJ);const X=PJ[0],Y=PJ[1],sz=c.s/cam.m*PJ[2];if(X+sz/2<-PAD||Y+sz/2<-PAD||X-sz/2>VW+PAD||Y-sz/2>VH+PAD)continue;
-      const ca=a*0.95*vis*cloudFar*(MODE==='game'?smooth(VW*2.4,VW*1.3,sz):1);if(ca<0.02)continue;/* game: no screen-filling cloud sprites */x2.globalAlpha=ca;x2.drawImage(CLS[c.v],X-sz/2,Y-sz/2,sz,sz);n++;if(sz<ms)ms=sz}
+      const ca=a*0.95*vis*cloudFar*(MODE==='game'?smooth(VW*2.4,VW*1.3,sz):1);if(ca<0.02)continue;/* game: no screen-filling cloud sprites */x2.globalAlpha=ca;x2.drawImage(CLS[c.v],X-sz/2,Y-sz/2,sz,sz);n++;if(sz<ms)ms=sz;if(PJ[2]<k0)k0=PJ[2];if(PJ[2]>k1)k1=PJ[2]}
+    // stage 6.1: while the camera pans the picture is shifted at the mean parallax of its clouds (kb) and redrawn only when
+    // the spread of the parallax (kd = half the k range) would put a cloud more than 0.34 px off its exact place
+    L.kb=k1?(k0+k1)/2:1;L.kd=k1?(k1-k0)/2:0;
     L.n=n;L.ms=ms;ctx.tint=null;ctx.target(null);ctx.setTransform(T0[0],T0[1],T0[2],T0[3],T0[4],T0[5]);ctx.globalAlpha=A0;ctx.ambient(AM0[0],AM0[1],AM0[2])}
-  if(!L.n)return null;const dx=(L.cx-cam.x)/cam.m,dy=(L.cy-cam.y)/cam.m;const lf=L.f||1,r=flat?L.m/cam.m:1,X0=dx+(-PAD-VW/2)*r+VW/2+(flat?(T-L.T)*9/cam.m:0),Y0=dy+(-PAD-VH/2)*r+VH/2;
-  const B=lf>=1&&!flat?{L:L.c,sw:lw,sh:lh,dx:M.round(X0*DPR),dy:M.round(Y0*DPR),dw:lw,dh:lh}:{L:L.c,sw:lw*lf,sh:lh*lf,dx:X0*DPR,dy:Y0*DPR,dw:lw*r,dh:lh*r};if(get)return B;
+  if(!L.n)return null;const kp=flat?1:(L.kb||1),dx=(L.cx-cam.x)/cam.m*kp,dy=(L.cy-cam.y)/cam.m*kp;const lf=L.f||1,r=flat?L.m/cam.m:1,X0=dx+(-PAD-VW/2)*r+VW/2+(flat?(T-L.T)*9/cam.m:0),Y0=dy+(-PAD-VH/2)*r+VH/2;
+  const B=lf>=1&&!flat&&!dx&&!dy?{L:L.c,sw:lw,sh:lh,dx:M.round(X0*DPR),dy:M.round(Y0*DPR),dw:lw,dh:lh}:{L:L.c,sw:lw*lf,sh:lh*lf,dx:X0*DPR,dy:Y0*DPR,dw:lw*r,dh:lh*r};if(get)return B;
   ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.drawImage(B.L,0,0,B.sw,B.sh,B.dx,B.dy,B.dw,B.dh);ctx.setTransform(DPR,0,0,DPR,0,0);return B}
 // does a layer placement cover the whole canvas?
 const covers=B=>B&&B.dx<=0.5&&B.dy<=0.5&&B.dx+B.dw>=cv.width-0.5&&B.dy+B.dh>=cv.height-0.5;

@@ -266,6 +266,23 @@ async function scenario(browser, dev, opts) {
         warn(dev, `кадр «${n}» выше бюджета ${bud.toFixed(2)} мс по пропускной способности`, txt);
       }
     }
+    // stage 6.1: the camera MOVES — a drag and fast flicks over the biggest city at 500 m, 1, 5 and 20 km. The player saw
+    // 60–70 FPS here while the still frames passed. Per frame: throughput cost (p95 within the budget) and the longest
+    // single frame of the engine (no stall over 2.5 budgets: tile uploads, cloud redraws, readbacks)
+    for (const H of [500, 1000, 5000, 20000]) {
+      const r = await ev(async (H) => { const a = Game.api, sl = (ms) => new Promise((r) => setTimeout(r, ms)), B = window.__bench;
+        const c = a.W.cities.filter((o) => !o.vst && o.R).sort((p, q) => q.R - p.R)[0], m = H / (innerHeight * 0.9), sw = innerWidth * m;
+        a.setTod(12); a.setWeather(1); a.cam.x = c.x; a.cam.y = c.y; a.cam.m = m; for (let i = 0; i < 80; i++) { await sl(100); const s = a.stats(); if (!s.queue && !s.pending) break } await sl(300);
+        let t0 = 0, run = true; const mv = (ts) => { if (!run) return; if (!t0) t0 = ts; const t = (ts - t0) / 1000;
+          if (t < 1.4) { a.cam.x = c.x + Math.sin(t * 2.2) * sw * 1.2; a.cam.y = c.y + Math.sin(t * 1.4) * sw * 0.6; } else { const f = ((t - 1.4) % 0.35) / 0.35; a.cam.x += (f < 0.4 ? 1 : 0) * sw * 0.05 * (Math.floor((t - 1.4) / 0.35) % 2 ? -1 : 1); }
+          requestAnimationFrame(mv); };
+        B.thr.length = 0; B.on = true; requestAnimationFrame(mv); await sl(2600); run = false; B.on = false;
+        const s = B.thr.slice(2).sort((x, y) => x - y); return { p50: s[s.length >> 1], p95: s[Math.floor(s.length * 0.95)], max: s[s.length - 1], n: s.length }; }, H);
+      const bud = BUDGET[dev], txt = `p50 ${r.p50.toFixed(2)} · p95 ${r.p95.toFixed(2)} · макс ${r.max.toFixed(1)} мс (${r.n} кадров)`;
+      if (r.p95 <= bud) check(dev, true, `движение камеры на ${H} м: p95 в бюджете ${bud.toFixed(2)} мс`, txt);
+      else warn(dev, `движение камеры на ${H} м: p95 выше бюджета ${bud.toFixed(2)} мс`, txt);
+      check(dev, r.max <= bud * 2.5, `движение камеры на ${H} м: нет кадров-заиканий длиннее ${(bud * 2.5).toFixed(0)} мс`, txt);
+    }
     if (cdp) await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
   };
   check(dev, errors.length === 0, 'нет ошибок в консоли', errors.slice(0, 3).join(' | '));

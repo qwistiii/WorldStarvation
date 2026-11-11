@@ -215,6 +215,16 @@ void main(){ float t = clamp((length(vP - uC) - uR.x) / (uR.y - uR.x), 0.0, 1.0)
   }
   probeBitmaps();
 
+  // one staging texture + read framebuffer per tile size (see pool.upload); null if the copy path cannot be set up
+  const STG = {};
+  function stage(size) {
+    if (STG[size] !== undefined) return STG[size];
+    try { const t2 = gl.createTexture(); OWN.push(t2); gl.bindTexture(gl.TEXTURE_2D, t2); gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, size, size);
+      const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.READ_FRAMEBUFFER, fb); gl.framebufferTexture2D(gl.READ_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t2, 0);
+      const ok = gl.checkFramebufferStatus(gl.READ_FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE; gl.bindFramebuffer(gl.READ_FRAMEBUFFER, cur ? cur.fb : null); tex = null;
+      STG[size] = ok ? { t: t2, fb } : null; } catch (e) { STG[size] = null }
+    return STG[size];
+  }
   // texture array pool for 256 x 256 tiles: fixed slots, the caller keeps the LRU (see main.js)
   function pool(slots, size) {
     size = size || 256; slots = M.min(slots, gl.getParameter(gl.MAX_ARRAY_TEXTURE_LAYERS) || 256);
@@ -228,10 +238,16 @@ void main(){ float t = clamp((length(vP - uC) - uR.x) / (uR.y - uR.x), 0.0, 1.0)
       // uploads an ImageBitmap or a canvas into a free slot; returns the slot or -1 when the pool is full
       upload(src) {
         if (!free.length) return -1; const s = free.pop(); flush();
-        gl.bindTexture(gl.TEXTURE_2D_ARRAY, t);
         // canvases honour the unpack flag; bitmaps arrive as the probe found — make both match P.pre
         gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, bitmapPre);
-        gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, s, size, size, 1, gl.RGBA, gl.UNSIGNED_BYTE, src);
+        // stage 6.1: through a 2D staging texture and a GPU copy into the layer. texSubImage3D from an ImageBitmap has no
+        // GPU fast path in Chrome (it reads the bitmap back on the CPU: ~2.5 ms per 256² tile on an Intel iGPU, up to 8
+        // tiles a frame at 20 km = the stutter); texSubImage2D + copyTexSubImage3D stays on the GPU (~0.01 ms).
+        const g = stage(size);
+        if (g) { gl.bindTexture(gl.TEXTURE_2D, g.t); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, size, size, gl.RGBA, gl.UNSIGNED_BYTE, src);
+          gl.bindFramebuffer(gl.READ_FRAMEBUFFER, g.fb); gl.bindTexture(gl.TEXTURE_2D_ARRAY, t); gl.copyTexSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, s, 0, 0, size, size);
+          gl.bindFramebuffer(gl.READ_FRAMEBUFFER, cur ? cur.fb : null); }
+        else { gl.bindTexture(gl.TEXTURE_2D_ARRAY, t); gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, s, size, size, 1, gl.RGBA, gl.UNSIGNED_BYTE, src); }
         tex = null; stats.uploads++; return s;
       },
       release(s) { if (s >= 0) free.push(s) },
