@@ -161,7 +161,38 @@ function waterRunOK(pts,maxRun,maxFrac){let run=0,wl=0,L=0;
 
 // ---------------------------------------------------------------- settlements
 const cities=[];
-function cityF(c,x,y){const dx=x-c.x,dy=y-c.y;return M.sqrt(dx*dx+dy*dy)/c.R+0.26*noise(x/(c.R*0.9)+c.id*7.13,y/(c.R*0.9)-c.id*3.7)}
+// stage 6.1: the shape of a town follows the land, it is not a disc. Its spine runs along a river within reach (else
+// along the contour of the terrain: a coast, a valley side), the town is stretched along it (area kept), the spine bends,
+// lobes grow along the ways out and the edge is ragged (large-scale noise). cityF: < 1 inside, 0 at the centre — the
+// density of the town (pickType) still falls from the centre outwards. The grids of the towns align with the spine.
+// how far from the centre (in R) a town may reach: grids, line scans (CXT) and bounding boxes (CBB) cover this. The
+// classic world (the menu, the viewer) keeps its round towns bit for bit — tests/geometry.test.mjs guards it
+const CXT=EMPTY?1.65:1.3,CBB=EMPTY?1.7:1.4;
+function cityShape(c){if(c.shp)return c.shp;const Q=rng((c.seed^0x5e1f)>>>0);let ang=null,riv=false;
+  let best=1e9,bx=0,by=0;for(let k=0;k<24;k++){const a=k/24*TAU;for(const f of [0.3,0.65,1]){const x=c.x+M.cos(a)*c.R*f,y=c.y+M.sin(a)*c.R*f,v=M.abs(riverV(x,y));if(v<best){best=v;bx=x;by=y}}}
+  if(best<RWMAX*2.5){const e=40,gx=riverV(bx+e,by)-riverV(bx-e,by),gy=riverV(bx,by+e)-riverV(bx,by-e);if(gx||gy){ang=M.atan2(gy,gx)+PI/2;riv=true}}
+  if(ang===null){const e=c.R*0.5,gx=baseH(c.x+e,c.y,4)-baseH(c.x-e,c.y,4),gy=baseH(c.x,c.y+e,4)-baseH(c.x,c.y-e,4);if(M.hypot(gx,gy)>0.004)ang=M.atan2(gy,gx)+PI/2}
+  if(ang===null)ang=Q()*PI;
+  const asp=riv?1.4+Q()*0.35:1.1+Q()*0.5,ea=M.sqrt(asp),lobes=[];let amp=0;
+  for(let n=2+(Q()*2|0),i=0;i<n;i++){const a=0.05+Q()*0.06;amp+=a;lobes.push([[3,4,5,6,7][Q()*5|0],a,Q()*TAU])}
+  // the course of the river in the frame of the spine: v = b(u), fitted as a cubic (least squares) — the grid of a river
+  // town bends with it (see riverWarp)
+  let fit=null;if(riv){const ca=M.cos(ang),sa=M.sin(ang),pts=[];for(let i=-6;i<=6;i++){const u=i/6*c.R*1.1;let bv=null,bd=1e9,pv=null;
+      for(let j=-48;j<=48;j++){const v=j/48*c.R*1.4,x=c.x+u*ca-v*sa,y=c.y+u*sa+v*ca,rv=riverV(x,y);if(pv!==null&&(rv>0)!==(pv>0)&&M.abs(v)<bd){bd=M.abs(v);bv=v}pv=rv}
+      if(bv!==null)pts.push([u,bv])}
+    if(pts.length>=6){const A=[[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]],B=[0,0,0,0];for(const [u,v] of pts){const p=[1,u,u*u,u*u*u];for(let r=0;r<4;r++){B[r]+=p[r]*v;for(let k=0;k<4;k++)A[r][k]+=p[r]*p[k]}}
+      for(let r=0;r<4;r++){let mx=r;for(let k=r+1;k<4;k++)if(M.abs(A[k][r])>M.abs(A[mx][r]))mx=k;[A[r],A[mx]]=[A[mx],A[r]];[B[r],B[mx]]=[B[mx],B[r]];const d=A[r][r]||1e-12;for(let k=r+1;k<4;k++){const f=A[k][r]/d;for(let q=r;q<4;q++)A[k][q]-=f*A[r][q];B[k]-=f*B[r]}}
+      const X=[0,0,0,0];for(let r=3;r>=0;r--){let t=B[r];for(let k=r+1;k<4;k++)t-=A[r][k]*X[k];X[r]=t/(A[r][r]||1e-12)}if(X.every(Number.isFinite))fit=X}}
+  return c.shp={ang,ca:M.cos(ang),sa:M.sin(ang),ea,eb:1/ea,bend:(Q()-0.5)*0.55,lobes,riv,fit}}
+// a river town (game layouts): the grid frame turns to the river's direction and bends with its course — the conformal
+// map F(z) = z + L·(p (z/L)² + q (z/L)³) with Im p, Im q from the fitted course: every street parallel to the river
+// curves as the river does, the blocks keep their right angles (clamped where the map would fold)
+function riverWarp(c){const S=c.shp;if(!S||!S.fit||c.pol)return;const L=c.R*1.3,[b0,b1,b2,b3]=S.fit,cl=v=>M.max(-0.3,M.min(0.3,v));
+  c.ang=S.ang+M.atan(b1);c.ca=M.cos(c.ang);c.sa=M.sin(c.ang);if(c.lay==='grid')return; // a straight grid only turns along the river
+  const w=c.wp||[0,0,0,0];c.wp=[w[0]*0.5,cl(b2*L),w[2]*0.5,cl(b3*L*L)];c.wL=L;c.cv=1;wpSafe(c)}
+function cityF(c,x,y){if(!EMPTY){const dx=x-c.x,dy=y-c.y;return M.sqrt(dx*dx+dy*dy)/c.R+0.26*noise(x/(c.R*0.9)+c.id*7.13,y/(c.R*0.9)-c.id*3.7)}const S=c.shp||cityShape(c),dx=x-c.x,dy=y-c.y,a=(dx*S.ca+dy*S.sa)/c.R,b0=(-dx*S.sa+dy*S.ca)/c.R,b=b0-S.bend*a*a;
+  const p=a/S.ea,q=b/S.eb,r=M.sqrt(p*p+q*q);let lob=1;if(r>0.05){const th=M.atan2(q,p);for(const L of S.lobes)lob+=L[1]*M.cos(L[0]*th+L[2])}
+  return r/lob+0.28*noise(x/(c.R*0.8)+c.id*7.13,y/(c.R*0.8)-c.id*3.7)}
 {
   const CELL=2700,NC=M.floor(WORLD/CELL);const cand=[];
   if(!EMPTY)for(let cy=0;cy<NC;cy++)for(let cx=0;cx<NC;cx++){const R=rng(hh(cx,cy,11));if(R()<0.12)continue;
@@ -173,15 +204,19 @@ function cityF(c,x,y){const dx=x-c.x,dy=y-c.y;return M.sqrt(dx*dx+dy*dy)/c.R+0.2
   // capitals of the states (game): placed first, exactly where they were founded; towns in their way give room
   const capC=CAPS.map((q,i)=>({x:q.x,y:q.y,R:q.R||2900,type:3,seed:hh(q.x|0,q.y|0,1201+i),cap:q.st,st:q.st,capName:q.name,fl:q.fl}));if(capC.length)cand.unshift(...capC);
   for(const c of cand){let ok=true;for(const k of cities){const d=M.hypot(c.x-k.x,c.y-k.y);if(d<(c.R+k.R)*1.12+(c.type+k.type>1?900:250)){ok=false;break}}if(ok)cities.push(c)}
-  cities.forEach((c,i)=>{c.id=i;const R=rng(c.seed^0x777);c.name=mkName(R,c.type);if(c.capName)c.name=c.capName;c.bb=[c.x-c.R*1.4,c.y-c.R*1.4,c.x+c.R*1.4,c.y+c.R*1.4];c.kind='city'});
+  cities.forEach((c,i)=>{c.id=i;const R=rng(c.seed^0x777);c.name=mkName(R,c.type);if(c.capName)c.name=c.capName;c.bb=[c.x-c.R*CBB,c.y-c.R*CBB,c.x+c.R*CBB,c.y+c.R*CBB];c.kind='city'});
 }
 function buildCity(c){
-  const R=rng(c.seed^0x55);c.ang=R()*PI;c.ca=M.cos(c.ang);c.sa=M.sin(c.ang);
+  const R=rng(c.seed^0x55);c.ang=R()*PI;if(EMPTY){const S=cityShape(c);c.ang=S.ang+(c.ang/PI-0.5)*0.3}c.ca=M.cos(c.ang);c.sa=M.sin(c.ang); // streets along the river / the contour
   if(c.type===3){c.bu=140+R()*40;c.bv=110+R()*30}else if(c.type===2){c.bu=118+R()*30;c.bv=95+R()*25}else{c.bu=92+R()*25;c.bv=78+R()*20}
-  if(EMPTY&&c.type>=2)cityLayout(c);
+  if(EMPTY&&c.type>=2){cityLayout(c);riverWarp(c)}
   if(c.pol){buildPolar(c);return}
-  const N=c.N=M.ceil(c.R*1.3/M.min(c.bu,c.bv)),D=c.D=2*N+1;const ok=new Uint8Array(D*D);const j0=c.jit?0.6:0.7,jw=c.jit?0.85:0.6;if(c.lay)lineKinds(c);
-  const us=c.us=new Float64Array(D),vs=c.vs=new Float64Array(D);for(let k=1;k<=N;k++){us[N+k]=us[N+k-1]+c.bu*(j0+jw*R());us[N-k]=us[N-k+1]-c.bu*(j0+jw*R());vs[N+k]=vs[N+k-1]+c.bv*(j0+jw*R());vs[N-k]=vs[N-k+1]-c.bv*(j0+jw*R())}
+  const N=c.N=M.ceil(c.R*CXT/M.min(c.bu,c.bv)),D=c.D=2*N+1;const ok=new Uint8Array(D*D);const j0=c.jit?0.6:0.7,jw=c.jit?0.85:0.6;if(c.lay)lineKinds(c);
+  const us=c.us=new Float64Array(D),vs=c.vs=new Float64Array(D);
+  // the historic core (towns and up): the first lines from the centre are closer and more uneven — small irregular blocks
+  // (never smaller than the usual least block — the fillers of the blocks along the avenues need it; the core differs by spread)
+  const NC=!EMPTY?0:c.type>=2?3:c.type>=1?2:0,jc=k=>k<=NC?0.55:0;
+  for(let k=1;k<=N;k++){const g=jc(k);us[N+k]=us[N+k-1]+c.bu*(j0+(jw+g)*R());us[N-k]=us[N-k+1]-c.bu*(j0+(jw+g)*R());vs[N+k]=vs[N+k-1]+c.bv*(j0+(jw+g)*R());vs[N-k]=vs[N-k+1]-c.bv*(j0+(jw+g)*R())}
   for(let j=0;j<D;j++)for(let i=0;i<D;i++){const u=us[i],v=vs[j];let x,y;if(c.cv)[x,y]=cW(c,u,v);else{x=c.x+u*c.ca-v*c.sa;y=c.y+u*c.sa+v*c.ca}
     if(cityF(c,x,y)<1){const e=landE(x,y,0.0025);if(e>=0&&e<0.42)ok[j*D+i]=1}}
   const BD=D-1;const bl=c.blocks=new Uint8Array(BD*BD);let stad=false,cnt=0;
@@ -237,7 +272,10 @@ function cityLayout(c){const Q=rng(c.seed^0x4c41a7);
   if(fam==='grid'){c.diag=Q()<0.75?1+(Q()<0.55?1:0):0;return}
   const s=fam==='organic'?1.25:1,a=(0.12+Q()*0.1)*s,aa=Q()*TAU,b=(0.015+Q()*0.035)*s,ba=Q()*TAU;
   if(fam==='organic')c.jit=1;
-  c.wp=[a*M.cos(aa),a*M.sin(aa),b*M.cos(ba),b*M.sin(ba)];c.wL=c.R*1.3;c.cv=1}
+  c.wp=[a*M.cos(aa),a*M.sin(aa),b*M.cos(ba),b*M.sin(ba)];c.wL=c.R*1.3;c.cv=1;wpSafe(c)}
+// the conformal map stays gentle anywhere a town may reach (|z| up to CXT·R): |F'| within 0.55..1.45, so a block is
+// still the rectangle of its frame (the fillers of the blocks rely on it)
+function wpSafe(c){const w=c.wp,r=c.R*CXT/c.wL,k=2*M.hypot(w[0],w[1])*r+3*M.hypot(w[2],w[3])*r*r;if(k>0.45){const f=0.45/k;for(let i=0;i<4;i++)w[i]*=f}}
 // avenues and boulevards of a game town: the central lines and then a major line every 3..6 lines (organic: 2..6)
 function lineKinds(c){const R=rng(c.seed^0x1b2c3),D=c.D,N=c.N,g0=c.lay==='organic'?2:3;
   const mk=()=>{const a=new Uint8Array(D).fill(3);a[N]=R()<0.55?7:2;for(const dir of [1,-1]){let since=0,gap=g0+(R()*4|0);for(let q=1;q<=N;q++){if(++since>=gap){a[N+dir*q]=R()<0.3?7:2;since=0;gap=g0+(R()*4|0)}}}return a};
@@ -320,7 +358,7 @@ function addDiag(c){const R=rng(c.seed^0xd1a9),base=c.ang+PI/4+(R()-0.5)*0.35,BD
   const inner=(i,j)=>i>0&&j>0&&i<BD&&j<BD&&bl[(j-1)*BD+i-1]&&bl[(j-1)*BD+i]&&bl[j*BD+i-1]&&bl[j*BD+i];
   const snap=(x,y)=>{const q=cU(c,x,y),bi=bsr(c.us,q[0]),bj=bsr(c.vs,q[1]);let best=null,bd=1e18;for(let j=bj-3;j<=bj+4;j++)for(let i=bi-3;i<=bi+4;i++){if(!inner(i,j))continue;const p=cpt(c,i-N,j-N),d=(p[0]-x)**2+(p[1]-y)**2;if(d<bd){bd=d;best=p}}return best};
   for(let q=0;q<c.diag;q++){const a=base+q*(PI/2+(R()-0.5)*0.5),ca=M.cos(a),sa=M.sin(a),off=(R()-0.5)*c.bu*0.6,ox=-sa*off,oy=ca*off,runs=[];let cur=null;
-    for(let t=-c.R*1.3;t<=c.R*1.3;t+=20){const x=c.x+ox+ca*t,y=c.y+oy+sa*t,on=cityF(c,x,y)<0.88&&landE(x,y,0.002)>=0;if(on){if(!cur)runs.push(cur=[]);cur.push(x,y)}else cur=null}
+    for(let t=-c.R*CXT;t<=c.R*CXT;t+=20){const x=c.x+ox+ca*t,y=c.y+oy+sa*t,on=cityF(c,x,y)<0.88&&landE(x,y,0.002)>=0;if(on){if(!cur)runs.push(cur=[]);cur.push(x,y)}else cur=null}
     for(const p of runs){if(p.length<2*30)continue;const A=snap(p[0]+ca*60,p[1]+sa*60),B=snap(p[p.length-2]-ca*60,p[p.length-1]-sa*60);if(!A||!B||M.hypot(B[0]-A[0],B[1]-A[1])<600)continue;
       const pts=[A[0],A[1],B[0],B[1]];if(!waterRunOK(pts,60,0.05))continue;throughClear({k:7,pts,n:2},c);c.dgl.push(pts)}}}
 // radial and fan towns: rings at growing steps, rays (a multiple of 16); near the centre neighbouring cells merge
@@ -328,7 +366,7 @@ function addDiag(c){const R=rng(c.seed^0xd1a9),base=c.ang+PI/4+(R()-0.5)*0.35,BD
 function buildPolar(c){const P=c.pol,R=rng(c.seed^0x9a7e);c.N=0;
   if(!P.full){let best=-1,ba=c.ang;for(let q=0;q<12;q++){const a=q/12*TAU;let s=0;for(let d=0.2;d<=1.21;d+=0.2)for(const da of [-0.6,0,0.6])if(landE(c.x+M.cos(a+da)*c.R*d,c.y+M.sin(a+da)*c.R*d,0)>=0)s++;if(s>best){best=s;ba=a}}c.ang=ba;c.ca=M.cos(ba);c.sa=M.sin(ba)}
   c.px=c.x-c.ca*P.off;c.py=c.y-c.sa*P.off;
-  const rmax=P.off+c.R*1.32,bu=c.bu,bv=c.bv,rs=[P.rin];while(rs[rs.length-1]<rmax){const r=rs[rs.length-1];rs.push(r+M.min(bu*(0.8+0.4*R()),0.38*r+45))}
+  const rmax=P.off+c.R*(EMPTY?CXT:1.32),bu=c.bu,bv=c.bv,rs=[P.rin];while(rs[rs.length-1]<rmax){const r=rs[rs.length-1];rs.push(r+M.min(bu*(0.8+0.4*R()),0.38*r+45))}
   const NR=c.nr=M.max(32,M.round(P.th*0.72*rmax/(1.25*bv)/32)*32);c.prr=1000;const dv=P.th/NR*c.prr,v0=P.full?0:-P.th/2*c.prr;
   const D=c.D=M.max(rs.length,NR+1)+1,us=c.us=new Float64Array(D),vs=c.vs=new Float64Array(D);
   for(let i=0;i<D;i++){us[i]=i<rs.length?rs[i]:rs[rs.length-1]+(i-rs.length+1)*bu;vs[i]=v0+i*dv}
@@ -1067,7 +1105,7 @@ function prepPath(f){const n=f.pts.length/2,cum=[0];let L=0;for(let i=1;i<n;i++)
 // same order (the engine sends them as an op log), so ids and geometry match everywhere.
 const stOf=o=>o.cap!==undefined?o.cap:o.st;
 function addPlace(q){const city=q.k==='city';const c={x:q.x,y:q.y,R:q.R||(city?1500:320),type:city?2:0,seed:hh(q.x|0,q.y|0,2701),dyn:1,st:q.st,kind:'city'};
-  c.id=cities.length;cities.push(c);c.name=q.name||mkName(rng(c.seed),c.type);c.bb=[c.x-c.R*1.4,c.y-c.R*1.4,c.x+c.R*1.4,c.y+c.R*1.4];
+  c.id=cities.length;cities.push(c);c.name=q.name||mkName(rng(c.seed),c.type);c.bb=[c.x-c.R*CBB,c.y-c.R*CBB,c.x+c.R*CBB,c.y+c.R*CBB];
   const r0=roads.length;if(city)buildCity(c);else buildVillage(c);if(!city&&!c.vst.length)c.vst=[];live.push(c);addF(c,c.bb[0],c.bb[1],c.bb[2],c.bb[3]);
   // road to the nearest settlements of the same state (a second one for towns); it goes around the buildings in its way
   const mine=live.filter(o=>o!==c&&stOf(o)===q.st).sort((a,b)=>M.hypot(a.x-c.x,a.y-c.y)-M.hypot(b.x-c.x,b.y-c.y));
@@ -2328,7 +2366,7 @@ function plaza(ctx,p,s){const r=rng(p.seed),x=p.x,y=p.y,w=p.w,h=p.h,WI=SEASON===
 function groundMat(p){const c=p.c,r=c[0],g=c[1],b=c[2];if(p.tr)return 'pave';
   if(g>r+6&&g>=b)return 'grass';if(r>g+10&&r>b+20)return 'soil';const l=(r+g+b)/3;return l<95?'asph':(hh(p.x*3|0,p.y*3|0,17)&3)?'conc':'pave'}
 function drawPrims(ctx,P,pass,mpp){const s=1/mpp;
-  for(let q=0;q<P.length;q++){const p=P[q];const k=p.k;
+  for(let q=0;q<P.length;q++){const p=P[q];const k=p.k;if(p.r<0||p.rx<0||p.ry<0)continue; // a round thing that did not fit its (small) block
     if(pass===0){
       if(k==='g'){if(p.w*s<0.4&&p.h*s<0.4)continue;ctx.fillStyle=cs(seasonC(p.c,p.tr?4:0),1);ctx.fillRect(p.x,p.y,p.w,p.h);
         if(s>0.45&&p.w*s>3&&p.h*s>3){const m=p.gm||(p.gm=groundMat(p));matRect(ctx,m,s,SEASON===2?(m==='grass'||m==='soil'?0.15:0.35):m==='grass'?0.6:0.5,p.x,p.y,p.w,p.h,0,(p.x*7.3+p.y*3.1)|0)}}
@@ -2637,6 +2675,17 @@ function drawLightPrims(ctx,P,mpp,ind){const s=1/mpp;
     else if(k==='lflood'){for(let y=p.y+p.sp/2;y<p.y+p.h;y+=p.sp)for(let x=p.x+p.sp/2;x<p.x+p.w;x+=p.sp){fdot(ctx,p.c,x,y,p.r*2,0.38);fdot(ctx,p.c,x,y,2.5,1)}}
   }}
 const LAMP=[[[0],48,26,'sod',0.75],[[6.8],55,19,'sod',0.7],[[10.8,-10.8],32,16,'wled',0.6],[[5.6,-5.6],38,13,'sod',0.55],[[3.6],80,11,'warm',0.5],null,[[0],40,16,'sod',0.6],[[12.8,-12.8],30,16,'wled',0.62],null];
+// stage 6.1: street lights are objects of the world. One placement for both: the light tiles draw their pools on the ground,
+// the frame draws the lit heads at their height (Parallax). Along a lit street at the step of its class (offsets: kerb
+// sides or the median), plus one at each end of the street — at the crossing. HEADMPP: light tiles finer than this leave
+// the head out (the frame draws it with parallax); coarser tiles keep it baked (a head is under a pixel there)
+let LHB=false;const HEADMPP=2.5,LAMPH=[12,12,9,8,7,0,8,9,0];
+function roadLamps(r,out){const S=LAMP[r.k];if(!S)return;const offs=S[0],sp=S[1],col=S[3],ph=hr(r.id,3,3)*sp;
+  for(let oi=0;oi<offs.length;oi++){const off=offs[oi];for(let q=ph+oi*sp/2;q<r.L;q+=sp){const p=posAt(r,q);out.push(p[0]-p[3]*off,p[1]+p[2]*off,col)}}
+  if(r.L>sp*0.6){const off=offs[0]||0;for(const q of [M.min(5,r.L/2),M.max(r.L-5,r.L/2)]){const p=posAt(r,q);out.push(p[0]-p[3]*off,p[1]+p[2]*off,col)}}}
+// the street lights in a box, for the frame: [x, y, h, colour, …] (the same roads the light tiles see)
+function lampsIn(x0,y0,x1,y1){let rl=queryRoads(x0-60,y0-60,x1+60,y1+60);if(DEADN||HID.size)rl=rl.filter(r=>!r.dead&&!rHid(r));if(GROW.size)rl=growRoads(rl,true);
+  const tmp=[],out=[];for(const r of rl){if(!LAMP[r.k])continue;tmp.length=0;roadLamps(r,tmp);for(let i=0;i<tmp.length;i+=3){const x=tmp[i],y=tmp[i+1];if(x<x0||x>=x1||y<y0||y>=y1)continue;out.push(x,y,LAMPH[r.k],tmp[i+2])}}return out}
 // street lighting. All of it is drawn as opaque light intensity on black into its own layer G, where light from
 // different roads and lamps combines by maximum ('lighten'), so a crossing is no brighter than the street and pools do
 // not stack up; the glow along a road is a feathered band (three nested strokes), not a flat strip with hard edges.
@@ -2657,9 +2706,8 @@ function lightRoads(ctx,list,mpp,bx0,by0,bx1,by1){const s=1/mpp,W=ctx.canvas.wid
   for(const k of [4,3,6,2,7,1,0]){const L=byK[k];if(!L.length||!LAMP[k])continue;if((k===3&&mpp>70)||((k===2||k===7)&&mpp>130)||(k===4&&mpp>45)||(k===6&&mpp>30))continue;
     const [offs,sp,D,col,a]=LAMP[k];LCNT+=L.length;any=true;
     if(D*s>2.4){band(L,col,0.07,RW[k]*1.15);
-      for(const r of L){if(r.bb[2]<bx0-D||r.bb[0]>bx1+D||r.bb[3]<by0-D||r.bb[1]>by1+D)continue;const ph=hr(r.id,3,3)*sp;
-        for(let oi=0;oi<offs.length;oi++){const off=offs[oi];for(let q=ph+oi*sp/2;q<r.L;q+=sp){const p=posAt(r,q);const x=p[0]-p[3]*off,y=p[1]+p[2]*off;
-          if(x<bx0-D||x>bx1+D||y<by0-D||y>by1+D)continue;fdotO(g,col,x,y,D,a);fdotO(g,col,x,y,D*0.12,1)}}}}
+      const head=LHB?mpp>HEADMPP*4:mpp>HEADMPP,P=[];for(const r of L){if(r.bb[2]<bx0-D||r.bb[0]>bx1+D||r.bb[3]<by0-D||r.bb[1]>by1+D)continue;P.length=0;roadLamps(r,P);
+        for(let i=0;i<P.length;i+=3){const x=P[i],y=P[i+1];if(x<bx0-D||x>bx1+D||y<by0-D||y>by1+D)continue;fdotO(g,col,x,y,D,a);if(head)fdotO(g,col,x,y,D*0.12,1)}}}
     else{const w=M.max(D*0.8,mpp*1.15);const aa=a*0.4*M.min(1,D*0.8/w)*(k===0?1.3:k===3?0.8:k===7?1.1:1)*(k===3?1.7-smooth(22,70,mpp)*1.1:(k===2||k===7)?1-smooth(40,130,mpp)*0.5:1);band(L,col,M.min(1,aa),w)}}
   if(!any)return;
   g.setTransform(1,0,0,1,0,0);g.globalCompositeOperation='source-over';const im=g.getImageData(0,0,W,H),d=im.data;
@@ -2696,7 +2744,7 @@ function renderLights(z,tx,ty,hb){
   const ext=tsz+2*PAD*mpp;const mg=mpp<6?300:mpp*45;const qx0=x0-mg,qy0=y0-mg,qx1=x0+ext+mg,qy1=y0+ext+mg;
   let feats=queryF(qx0,qy0,qx1,qy1),rl=queryRoads(x0-mpp*20-60,y0-mpp*20-60,x0+ext+mpp*20+60,y0+ext+mpp*20+60);
   if(DEADN||HID.size){feats=feats.filter(f=>!f.dead&&!(f.kind==='zone'&&zHid(f)));rl=rl.filter(r=>!r.dead&&!rHid(r))}if(GROW.size){feats=feats.filter(featOn);rl=growRoads(rl,true)}
-  blockCache=new Map();mppG=mpp;LITE=mpp>2.2;LITE2=mpp>4.5;
+  blockCache=new Map();mppG=mpp;LITE=mpp>2.2;LITE2=mpp>4.5;LHB=!!hb; // the bloom levels used close up leave the heads out too
   ctx.setTransform(s,0,0,s,-x0*s,-y0*s);lightRoads(ctx,rl,mpp,x0-40,y0-40,x0+ext+40,y0+ext+40);
   for(const f of feats){if(f.kind==='city'||f.kind==='zone')lightFeat(ctx,f,x0,y0,s,mpp,qx0,qy0,qx1,qy1)}
   blockCache=null;if(!LCNT)return null;if(!hb)return cv;
@@ -2846,7 +2894,7 @@ function plazaPrims(f){if(f._pz)return f._pz;const R=rng(f.seed^0x77aa),P=[],r=f
 // zone cylinder shadows need stroke not fill: patch drawPrims pass1 for cyl via stroke
 const _dp=drawPrims;
 
-return {padFieldAt,padAt,padField,air2Rw:z=>{const y=AIR2RY,p=(x)=>[z.x+x*z.ca-y*z.sa,z.y+x*z.sa+y*z.ca];return [p(-900),p(900)]},roadShown,addPlace,addZone,removeZone,addDeposits,removeDeposit,moveDeposit,addRail,removeRail,railPts,zoneUp,setHidden,drawUav:(ctx,v,c,s)=>drawUav(ctx,v,c,s,0),isHid:id=>HID.has(id),
+return {padFieldAt,padAt,padField,lampsIn,HEADMPP,LC:()=>LC,air2Rw:z=>{const y=AIR2RY,p=(x)=>[z.x+x*z.ca-y*z.sa,z.y+x*z.sa+y*z.ca];return [p(-900),p(900)]},roadShown,addPlace,addZone,removeZone,addDeposits,removeDeposit,moveDeposit,addRail,removeRail,railPts,zoneUp,setHidden,drawUav:(ctx,v,c,s)=>drawUav(ctx,v,c,s,0),isHid:id=>HID.has(id),
   fieldReach:c=>EMPTY?fieldR(c)*1.3+3500:c.R+4700,blkFrame,cU,cW,deps:DEPS,zoneDead:id=>!zones[id]||!!zones[id].dead,forestAt,portAt:(x,y)=>portAt(x,y,820,900),setGrow,growOf:id=>GROW.has(id)?GROW.get(id):1,opt:OPT,setSeason,season:()=>SEASON,renderLights,WORLD,TS,SUNX,SUNY,WDX,WDY,LEANX,LEANY,cities:live,roads,zones,farms,ships,flights,emitters,airports,queryRoads,queryF,posAt,renderTile,sprites,drawShip,drawPlane,baseH,landE,rng,hh,noise,genTime:Date.now()-T0,mkCanvas,_dbg:{genVillage,genBlock,RW,riverV,riverW,avoidZ,zoneOnPath,waterRunOK,zoneExit,projOn,fieldOn,fieldR}};
 }
 

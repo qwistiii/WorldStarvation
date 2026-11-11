@@ -48,7 +48,7 @@ function reclaim(P){const maps=P===DPOOL?[cache,stale]:[LCS[1],LCS[2],LCS[3],LST
 function slotOf(v,P){if(v.s>=0)return v.s;if(!v.b)return -1;let s=P.upload(v.b);if(s<0){reclaim(P);s=P.upload(v.b)}if(s<0)return -1;v.s=s;v.P=P;if(!v.keep){if(v.b.close)v.b.close();v.b=null}return s}
 // draws an entry (whole tile or a source rect of it); false when it has nothing to show
 function drawE(v,P,sx,sy,sw,sh,X0,Y0,W0,H0){const s=slotOf(v,P);if(s<0)return false;ctx.tile(P,s,sx,sy,sw,sh,X0,Y0,W0,H0);return true}
-const workers=[];let mainRender=false;
+const workers=[];let mainRender=false;const SLC=new Map(); // street lights per cell (see drawStreetHeads)
 const NWQ=+(new URLSearchParams(location.search).get('workers')||0); // ?workers=N — a fixed number of tile workers (tests, slow devices)
 const NW=NWQ>0?M.min(8,NWQ|0):M.max(2,M.min((navigator.deviceMemory||4)>=8?7:5,(navigator.hardwareConcurrency||4)-2)); // stage 5.12: up to 7 workers on 8+ GB machines
 const wsrc=(typeof FlagArt==='function'?FlagArt.toString():'')+WorldGen.toString()+`
@@ -96,7 +96,7 @@ const hitBB=(a,b)=>a[0]<b[2]&&b[0]<a[2]&&a[1]<b[3]&&b[1]<a[3];
 const tileZ0=k=>M.floor(k/16777216);
 function outdated(k,gv){if(gv===undefined||gv>=GV)return false;const bb=tileBB(k),z=tileZ0(k);for(const e of INV)if(e.gv>gv&&z>=e.zmin&&z<=e.zmax&&hitBB(bb,e.bb))return true;return false}
 // zmin: coarse levels (whole regions per tile) are refreshed only on big growth steps — a town is a few pixels there
-function invalidate(bb,zmin,zmax){zmin=zmin||0;zmax=zmax==null?99:zmax;GV++;INV.push({gv:GV,bb,zmin,zmax});if(INV.length>64)INV.shift();
+function invalidate(bb,zmin,zmax){SLC.clear();zmin=zmin||0;zmax=zmax==null?99:zmax;GV++;INV.push({gv:GV,bb,zmin,zmax});if(INV.length>64)INV.shift();
   for(const [k,v] of cache){const tz=tileZ0(k);if(tz<zmin||tz>zmax||!hitBB(tileBB(k),bb))continue;const o=stale.get(k);if(o&&o!==v)freeE(o);stale.set(k,v);cache.delete(k)}staleT=0;
   for(let L=1;L<=3;L++)for(const [k,v] of LCS[L])if(tileZ0(k)>=zmin&&tileZ0(k)<=zmax&&hitBB(tileBB(k),bb)){const o=LST[L].get(k);if(o&&o!==v)freeE(o);LST[L].set(k,v);LCS[L].delete(k)}}
 const GSENT=new Map();function setGrow(id,g){g=g>=1?1:g;const g0=GROWS.has(id)?GROWS.get(id):1;if(g0===g)return;if(g>=1)GROWS.delete(id);else GROWS.set(id,g);W.setGrow(id,g);
@@ -480,6 +480,19 @@ function drawLightHeads(){if(!LV.length)return;ctx.setTransform(DPR,0,0,DPR,0,0)
     const g=M.max(3,(l.kind==='flood'?7:l.kind==='beacon'?3:4.5)*k*PJ[2]);ctx.globalAlpha=a*0.55;ctx.drawImage(GL_W,PJ[0]-g,PJ[1]-g,g*2,g*2);
     const c=M.max(1.5,(l.kind==='flood'?1.4:0.8)*k*PJ[2]);ctx.globalAlpha=a;ctx.drawImage(GL_W,PJ[0]-c,PJ[1]-c,c*2,c*2)}
   ctx.tint=null;ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}
+// stage 6.1: street lights are objects of the world (W.lampsIn — the same placement as the light pools of the tiles):
+// at night their heads glow at their height (8–12 m) through Parallax, so they slide against the ground as the camera
+// moves. Cached per 512 m cell; only the cells in view, at most SLCAP heads a frame; the light tiles finer than
+// W.HEADMPP leave the head out, coarser ones keep it baked (a head is under a pixel there)
+const SLCAP=SMALL?700:1800,SLCOL={},SLHOT=[1,0.93,0.8,1];let slDrawn=0;
+function slCol(c){let v=SLCOL[c];if(!v){const p=(W.LC()[c]||'255,226,184').split(',').map(Number);v=SLCOL[c]=[p[0]/255,p[1]/255,p[2]/255,1]}return v}
+function drawStreetHeads(z,a){slDrawn=0;if(a<0.01||WORLD/(1<<z)/256>W.HEADMPP)return;const C=512,k=1/cam.m;
+  const cx0=M.floor(vx0/C)-1,cy0=M.floor(vy0/C)-1,cx1=M.floor(vx1/C)+1,cy1=M.floor(vy1/C)+1;if((cx1-cx0+1)*(cy1-cy0+1)>400)return;
+  ctx.setTransform(DPR,0,0,DPR,0,0);ctx.globalCompositeOperation='lighter';const hal=M.max(3,4.2*k),cor=M.max(1.6,0.8*k);
+  for(let cy=cy0;cy<=cy1;cy++)for(let cx=cx0;cx<=cx1;cx++){const key=cx*65536+cy;let L=SLC.get(key);if(!L){L=W.lampsIn(cx*C,cy*C,cx*C+C,cy*C+C);SLC.set(key,L);if(SLC.size>900)SLC.delete(SLC.keys().next().value)}
+    for(let i=0;i<L.length;i+=4){if(slDrawn>=SLCAP)break;Parallax.project(cam,VW,VH,L[i],L[i+1],L[i+2],PJ);const X=PJ[0],Y=PJ[1];if(X<-20||Y<-20||X>VW+20||Y>VH+20)continue;
+      const g=hal*PJ[2],c=cor*PJ[2];ctx.tint=slCol(L[i+3]);ctx.globalAlpha=a*0.7;ctx.drawImage(GL_W,X-g,Y-g,g*2,g*2);ctx.tint=SLHOT;ctx.globalAlpha=a;ctx.drawImage(GL_W,X-c,Y-c,c*2,c*2);ctx.drawImage(GL_W,X-c*0.6,Y-c*0.6,c*1.2,c*1.2);slDrawn++}}
+  ctx.tint=null;ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}
 let bloomDone=false;const inWorldNow=()=>sxw(0)<=0&&syw(0)<=0&&sxw(WORLD)>=VW&&syw(WORLD)>=VH;
 // a permanently empty slot of the light pool: cells without lights still carry the bloom (lightLevel cover)
 const EMPTY=LPOOL.upload(mk(256,256));
@@ -643,7 +656,7 @@ function frameBody(now){const dt=M.min(0.06,(now-last)/1000);last=now;T+=dt;fram
   ctx.gpuMark('lights');ctx.ambient(1,1,1);ctx.lightmap(null); // the ambient point: from here on (lights, precipitation, clouds) nothing is darkened
   // emissive layers
   if(NL>0.01&&!DBG.lights){drawLights(zNow,NL);if(trafficOn&&!DBG.carl){drawCarLights(NL);if(cam.m<8)drawTrains(rs,NL)}if(opt.traffic||cam.m<120)drawShips(NL);drawTurbines(NL);}
-  drawFlares(NL);if(opt.traffic)drawFlightLights(LG.night);drawLightHeads();pf('lights');
+  drawFlares(NL);if(opt.traffic)drawFlightLights(LG.night);drawLightHeads();if(!DBG.slights)drawStreetHeads(zNow,NL);pf('lights');
   dispatch();pf('dispatch');
   pf('lights');drawPrecip(dt);
   ctx.gpuMark('clouds+vign');const merge=VM==='cloud';if(CLB){ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;
@@ -697,7 +710,7 @@ const API={gl:ctx,lights:LIGHTS,gflights:GFL,get ops(){return OPS},op,W,cam,setH
   sxw,syw,toWorld:(sx,sy)=>[cam.x+(sx-VW/2)*cam.m,cam.y+(sy-VH/2)*cam.m],setTodRate:r=>{todRate=r},isNight,
   showCity:c=>{sel={k:'city',o:c};showInsp()},
   setWeather:i=>{wxi=i;const w=WX[i];for(const k in wcur)wcur[k]=w[k]!==undefined?w[k]:(k==='dim'||k==='cd'?1:0)},
-  stats:()=>({fps:fpsA,cars:carCount,tiles:cache.size,lights:LCS[1].size+'/'+LCS[2].size+'/'+LCS[3].size,queue:queue.length,pending:pending.size+LPS[1].size+LPS[2].size+LPS[3].size,main:mainRender,lowQ,
+  stats:()=>({streetLights:slDrawn,fps:fpsA,cars:carCount,tiles:cache.size,lights:LCS[1].size+'/'+LCS[2].size+'/'+LCS[3].size,queue:queue.length,pending:pending.size+LPS[1].size+LPS[2].size+LPS[3].size,main:mainRender,lowQ,
     lights:{all:LIGHTS.size,visible:LV.length,near:LN.length},gl:{draws:ctx.stats.draws,inst:ctx.stats.inst,slots:DPOOL.used+LPOOL.used,cap:DPOOL.slots+LPOOL.slots,texMB:(DPOOL.slots+LPOOL.slots)*0.25+CLL.reduce((q,l)=>q+l.c.w*l.c.h*4/1048576,0)}}),
   stop:()=>{introOff=true;fly=null;zoomT=null}};
 window.__world=Object.assign({PROF,cache,lcache,cloudLayers:CLL,gl:ctx,overlay:ov,dbg:DBG,LMB,POOLref:POOL},API);

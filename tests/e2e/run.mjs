@@ -25,7 +25,7 @@ const INIT = () => { const B = window.__bench = { on: false, thr: [], px: new Ui
     const g = document.getElementById('c').getContext('webgl2'), t0 = performance.now(); sw = 3; for (let i = 0; i < 4; i++) cb(ts + i * 6); g.readPixels(0, 0, 1, 1, g.RGBA, g.UNSIGNED_BYTE, B.px); B.thr.push((performance.now() - t0) / 4); }); }; };
 
 // buildings the scenario places, in order (modules need the drone port, the farm needs a village)
-const ORDER = ['village', 'farm', 'city', 'factory', 'power', 'solar', 'sawmill', 'refinery', 'barracks', 'sam', 'station', 'airport', 'droneport', 'dronefab', 'port', 'oil', 'gaswell', 'mine', 'dramp', 'drwy', 'dstore', 'lamp'];
+const ORDER = ['village', 'farm', 'city', 'factory', 'power', 'solar', 'sawmill', 'refinery', 'barracks', 'sam', 'station', 'airport', 'droneport', 'dronefab', 'port', 'oil', 'gaswell', 'mine', 'dramp', 'drwy', 'dstore'];
 
 async function scenario(browser, dev, opts) {
   const ctx = await browser.newContext(opts);
@@ -126,7 +126,7 @@ async function scenario(browser, dev, opts) {
   // ---- place every building type through the UI
   const placed = [];
   // the desktop places every type with the mouse; the phone checks the touch flow on a representative set
-  const LIST = touch ? ['village', 'farm', 'factory', 'solar', 'station', 'droneport', 'dramp', 'lamp'] : ORDER;
+  const LIST = touch ? ['village', 'farm', 'factory', 'solar', 'station', 'droneport', 'dramp'] : ORDER;
   for (const k of LIST) {
     const site = await ev(async (k) => {
       const T = Game._test, G = Game.G, W = Game.api.W, p = G.states[0], c = W.cities.find((o) => o.cap === 0);
@@ -205,22 +205,28 @@ async function scenario(browser, dev, opts) {
   if (fac && !touch) check(dev, fac.za != null && Math.abs(Math.cos(fac.za - fac.a) - 1) < 1e-6, 'повёрнутый завод стоит в мире под тем же углом', `${fac.a} / ${fac.za}`);
 
   lap('build');
-  // ---- light sources: the lamp is a game object — it lights the ground at night (real light: the pixel under it is brighter
-  // than with the lamp off), goes dark by day in the 'auto' mode, the cap holds with 2000 lights in view
+  // ---- street lights (stage 6.1): objects of the world along the streets — at night the head glows at its height (the
+  // pixel where Parallax puts a head 8–12 m up is brighter with the heads than without), the ground around is lit, by day
+  // nothing glows; heads are capped; the light system keeps its cap with 2000 lights in view
   const lt = await ev(async () => {
-    const a = Game.api, L = a.lights, p = Game.G.states[0], sl = (ms) => new Promise((r) => setTimeout(r, ms)); Game.setSpeed(0); Game._test.syncLights();
-    const q = p.builds.find((b) => b.k === 'lamp' && b.done); if (!q) return { err: 'нет фонаря' }; const lid = q.uid * 8, lg = () => L.get(lid); if (!lg()) return { err: 'у фонаря нет источника света' };
-    const px = async () => { await sl(1400); const g = __world.gl.gl; let v = 0; await new Promise((r) => requestAnimationFrame(() => { const b = new Uint8Array(4 * 9), w = g.drawingBufferWidth, h = g.drawingBufferHeight; g.readPixels((w >> 1) - 1, (h >> 1) - 1, 3, 3, g.RGBA, g.UNSIGNED_BYTE, b); for (let i = 0; i < 9; i++) v += b[i * 4] + b[i * 4 + 1] + b[i * 4 + 2]; v /= 27; r() })); return v };
-    const until = async (f, ms) => { const t = performance.now(); while (!f() && performance.now() - t < ms) await sl(100); };
-    a.setTod(23); a.cam.x = q.x + 5; a.cam.y = q.y + 5; a.cam.m = 0.3; await until(() => lg().lv === 1, 8000); const on = await px(); const lvN = lg().lv; L.setMode(lid, 'off'); await until(() => lg().lv === 0, 8000); const off = await px(); L.setMode(lid, 'auto');
-    a.setTod(12); await until(() => lg().lv === 0, 8000); const lvD = lg().lv; a.setTod(23); await sl(1200);
-    // the cap: 2000 extra lights around the camera
-    for (let i = 0; i < 2000; i++) L.add({ x: q.x + (i % 50) * 9 - 225, y: q.y + Math.floor(i / 50) * 9 - 180, mode: 'on', owner: 'test' }); await sl(800);
+    const a = Game.api, W = a.W, L = a.lights, D = __world.dbg, c = W.cities.find((o) => o.cap === 0), sl = (ms) => new Promise((r) => setTimeout(r, ms)); Game.setSpeed(0);
+    const P = W.lampsIn(c.x - 900, c.y - 900, c.x + 900, c.y + 900); if (!P.length) return { err: 'нет фонарей у столицы' };
+    const lx = P[0], ly = P[1], lh = P[2]; const settle = async () => { for (let i = 0; i < 80; i++) { await sl(100); const s = a.stats(); if (!s.queue && !s.pending) break } await sl(500) };
+    const px = async (X, Y) => { const g = __world.gl.gl; let v = 0; await new Promise((r) => requestAnimationFrame(() => { const d = g.drawingBufferWidth / innerWidth, b = new Uint8Array(4 * 9), h = g.drawingBufferHeight; g.readPixels(Math.round(X * d) - 1, h - Math.round(Y * d) - 2, 3, 3, g.RGBA, g.UNSIGNED_BYTE, b); for (let i = 0; i < 9; i++) v += b[i * 4] + b[i * 4 + 1] + b[i * 4 + 2]; v /= 27; r() })); return v };
+    // the lamp off the centre of the screen: its head is drawn away from the ground point under it
+    a.stop(); a.setTod(23); a.cam.m = 0.35; a.cam.x = lx + innerWidth * 0.3 * a.cam.m; a.cam.y = ly + innerHeight * 0.25 * a.cam.m; await settle();
+    const J = Parallax.project(a.cam, innerWidth, innerHeight, lx, ly, lh), G0 = Parallax.project(a.cam, innerWidth, innerHeight, lx, ly, 0);
+    const n = a.stats().streetLights, headOn = await px(J[0], J[1]); D.slights = 1; await sl(300); const headOff = await px(J[0], J[1]); D.slights = 0;
+    const ground = await px(G0[0], G0[1]); D.lights = 1; await sl(300); const groundDark = await px(G0[0], G0[1]); D.lights = 0;
+    a.setTod(12); await sl(500); const nDay = a.stats().streetLights;
+    a.setTod(23); a.cam.m = 2.2; await sl(800); const nFar = a.stats().streetLights;
+    for (let i = 0; i < 2000; i++) L.add({ x: c.x + (i % 50) * 9 - 225, y: c.y + Math.floor(i / 50) * 9 - 180, mode: 'on', owner: 'test' }); a.cam.m = 0.6; a.cam.x = c.x; a.cam.y = c.y; await sl(800);
     const st = a.stats().lights; L.removeOwner('test'); a.setTod(12);
-    return { on: +on.toFixed(1), off: +off.toFixed(1), lvNight: lvN, lvDay: lvD, vis: st.visible, cap: L.cap, all: st.all };
+    return { n, nDay, nFar, shift: +Math.hypot(J[0] - G0[0], J[1] - G0[1]).toFixed(1), headOn: +headOn.toFixed(1), headOff: +headOff.toFixed(1), ground: +ground.toFixed(1), groundDark: +groundDark.toFixed(1), vis: st.visible, cap: L.cap, all: st.all };
   });
-  check(dev, !lt.err && lt.on > lt.off * 1.5, 'фонарь ночью освещает землю (ярче, чем выключенный)', JSON.stringify(lt));
-  check(dev, lt.lvNight === 1 && lt.lvDay === 0, 'фонарь «авто»: горит ночью, гаснет днём', JSON.stringify(lt));
+  check(dev, !lt.err && lt.n > 0 && lt.shift > 2 && lt.headOn > lt.headOff + 8, 'уличные фонари: ночью голова горит на своей высоте (параллакс)', JSON.stringify(lt));
+  check(dev, !lt.err && lt.ground > lt.groundDark + 8, 'уличные фонари: земля вокруг освещена', JSON.stringify(lt));
+  check(dev, !lt.err && lt.nDay === 0 && lt.nFar <= (touch ? 700 : 1800), 'уличные фонари: днём не горят, лимит голов держится', JSON.stringify(lt));
   check(dev, lt.vis <= lt.cap && lt.all > 2000, 'лимит одновременных источников света держится', `видно ${lt.vis} из ${lt.all}, лимит ${lt.cap}`);
   // ---- cancel: Esc, right button, ✕, the same key again
   if (!(await ev(() => document.querySelector('#bb-tabs [data-t="cities"]').classList.contains('on')))) await page.click('#bb-tabs [data-t="cities"]'); await ev(() => document.body.classList.remove('tray-off')); await page.waitForTimeout(80);

@@ -55,7 +55,7 @@ try {
   const st = await page.evaluate(() => Game.G.states.map((s) => ({ cap: !!s.cap, city: s.cityId >= 0 && Game.api.W.cities[s.cityId].cap === s.id, cells: s.cells })));
   check(st.length === 3 && st.every((s) => s.cap && s.city && s.cells > 0), 'игрок и 2 бота основали столицы, у всех есть территория', JSON.stringify(st));
 
-  check(await page.evaluate(() => /Село/.test(document.getElementById('hintt').textContent) && document.querySelectorAll('#bb-tabs button').length === 7 && document.querySelectorAll('#bb-cat .bcat').length === 17), 'подсказка «поставьте Село», внизу 7 вкладок, во вкладке «Города» 15 построек (с аэропортом и фонарём), «ЖД путь» и «Снести»');
+  check(await page.evaluate(() => /Село/.test(document.getElementById('hintt').textContent) && document.querySelectorAll('#bb-tabs button').length === 7 && document.querySelectorAll('#bb-cat .bcat').length === 16), 'подсказка «поставьте Село», внизу 7 вкладок, во вкладке «Города» 15 построек (с аэропортом и фонарём), «ЖД путь» и «Снести»');
   // село: кнопка в каталоге, затем клик по подходящему месту на карте
   await page.click('#bb-cat [data-k="village"]');
   const vs = await page.evaluate(() => { const A = Game.api, c = Game.G.states[0].places[0]; A.stop(); A.cam.x = c.x; A.cam.y = c.y; A.cam.m = 30;
