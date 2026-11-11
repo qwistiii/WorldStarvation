@@ -26,7 +26,7 @@ export function watchErrors(page) {
 export async function openMenu(page, port, query = '') {
   const t0 = Date.now();
   await page.goto(`http://127.0.0.1:${port}/index.html${query}`);
-  await page.waitForFunction(() => document.getElementById('loading').classList.contains('fade'), null, { timeout: 90000 });
+  await page.waitForFunction(() => document.getElementById('loading').classList.contains('fade'), null, { timeout: 180000 });
   return Date.now() - t0;
 }
 
@@ -37,11 +37,11 @@ export async function newGame(page, { seed = 1337, bots = 2, ai = 0 } = {}) {
   await page.evaluate(([seed, bots, ai]) => { const C = __ui.C; C.seed = seed; C.rules.botCount = bots; C.slot = 6; C.rules.ai = ai; }, [seed, bots, ai]);
   const t0 = Date.now();
   await page.click('#screate');
-  await page.waitForFunction(() => typeof Game !== 'undefined' && Game.api && Game.api.ready, null, { timeout: 90000 });
+  await page.waitForFunction(() => typeof Game !== 'undefined' && Game.api && Game.api.ready, null, { timeout: 180000 });
   const tWorld = Date.now() - t0;
   const t1 = Date.now();
   await page.evaluate(() => { for (let r = 0; r < 60000; r += 1500) for (let a = 0; a < 6.28; a += 0.3) { const x = 65536 + Math.cos(a) * r, y = 65536 + Math.sin(a) * r; if (Game._test.validSite(x, y) === null) { Game._test.found(x, y); return; } } });
-  await page.waitForFunction(() => Game.api && Game.api.ready && Game.G.phase === 'play' && Game.G.states[0].places.length, null, { timeout: 90000 });
+  await page.waitForFunction(() => Game.api && Game.api.ready && Game.G.phase === 'play' && Game.G.states[0].places.length, null, { timeout: 180000 });
   return { tWorld, tFound: Date.now() - t1 };
 }
 

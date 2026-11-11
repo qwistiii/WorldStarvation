@@ -469,7 +469,7 @@ function lightMap(A){if(DBG.glights||!LV.length)return false;const lw=M.ceil(cv.
 const LTC=[1,1,1,1],POLEC=[0.16,0.17,0.18,1],LHC=[1,1,1,1];
 // poles: from the foot on the ground to the head at its height (the parallax camera), their shadow along the sun by day
 function drawPoles(){if(cam.m>2.6||!LN.length)return;ctx.setTransform(DPR,0,0,DPR,0,0);const k=1/cam.m;
-  for(const l of LN){if(l.kind==='beacon')continue;const X=sxw(l.x),Y=syw(l.y);Parallax.project(cam,VW,VH,l.x,l.y,l.h,PJ);const w=M.max(1,(l.kind==='flood'?0.5:0.25)*k*PJ[2]);
+  for(const l of LN){if(l.kind!=='flood')continue;/* stage 6.1: lamps have no pole model, only the lit head */const X=sxw(l.x),Y=syw(l.y);Parallax.project(cam,VW,VH,l.x,l.y,l.h,PJ);const w=M.max(1,(l.kind==='flood'?0.5:0.25)*k*PJ[2]);
     if(LG.day>0.05){const [sx,sy]=Parallax.shadow(l.x,l.y,l.h);ctx.fillStyle=`rgba(10,20,30,${0.3*LG.day})`;ctx.line(X,Y,sxw(sx),syw(sy),w)}
     // the head: a dark housing with its lens (lit by the light map at night, the glow is added after the ambient point)
     ctx.fillStyle=POLEC;ctx.line(X,Y,PJ[0],PJ[1],w);const hs=M.max(1.6,(l.kind==='flood'?1.8:0.7)*k*PJ[2]);ctx.fillStyle='#34383e';ctx.fillRect(PJ[0]-hs/2,PJ[1]-hs/2,hs,hs);

@@ -204,6 +204,21 @@ async function scenario(browser, dev, opts) {
   const fac = done.find((d) => d.k === 'factory');
   if (fac && !touch) check(dev, fac.za != null && Math.abs(Math.cos(fac.za - fac.a) - 1) < 1e-6, 'повёрнутый завод стоит в мире под тем же углом', `${fac.a} / ${fac.za}`);
 
+  // nothing of a placed building stands on water without a base (stage 6.1: the port's cranes, ships and container stacks
+  // stood on the beach and in the sea): every object of a zone over water is on the zone's own ground (pier, quay)
+  if (!touch) {
+    await ev(() => { const T = Game._test, W = Game.api.W, p = Game.G.states[0], c = W.cities.find((o) => o.cap === 0); if (p.builds.some((b) => b.k === 'port')) return; p.res.money = 1e9; p.res.energy = 999;
+      for (let r = 1500; r < 20000; r += 400) for (let a = 0; a < 6.28; a += 0.15) { const x = c.x + Math.cos(a) * r, y = c.y + Math.sin(a) * r; if (T.canBuild('port', x, y) === 'Только на своей территории') T.claim(0, x, y, 1500); }
+      for (let r = 1500; r < 20000; r += 150) for (let a = 0; a < 6.28; a += 0.07) { const x = c.x + Math.cos(a) * r, y = c.y + Math.sin(a) * r; if (T.canBuild('port', x, y) === null) { T.startBuild('port', x, y); T.run(40); return; } } });
+    const wb = await ev(() => { const W = Game.api.W, p = Game.G.states[0], out = []; let n = 0, port = 0;
+      for (const q of p.builds) { if (!q.done || q.id < 0 || q.k === 'rail') continue; const z = W.zones[q.id]; if (!z || z.kind !== 'zone' || !z.prims) continue; if (q.k === 'port') port++;
+        const Gr = z.prims.filter((g) => g.k === 'g');
+        for (const o of z.prims) { if (o.k === 'g' || o.k === 'ship' || o.k === 'gl' || o.k === 'rail' || o.k === 'lflood' || o.k === 't') continue; let x = o.x, y = o.y; if (o.pts) { x = o.pts[0]; y = o.pts[1]; } if (x == null || y == null) continue;
+          const cx = o.w ? x + o.w / 2 : x, cy = o.h ? y + o.h / 2 : y, wx = z.x + cx * z.ca - cy * z.sa, wy = z.y + cx * z.sa + cy * z.ca; n++;
+          if (W.landE(wx, wy, 0) >= 0) continue; if (!Gr.some((g) => cx >= g.x - 1 && cx <= g.x + g.w + 1 && cy >= g.y - 1 && cy <= g.y + g.h + 1)) out.push(q.k + ':' + o.k); } }
+      return { n, port, bad: out.length, ex: [...new Set(out)].slice(0, 6) }; });
+    check(dev, wb.port > 0 && wb.bad === 0, 'порт и прибрежные постройки: на воде ничего не стоит без основы (пирс, причал)', JSON.stringify(wb));
+  }
   lap('build');
   // ---- street lights (stage 6.1): objects of the world along the streets — at night the head glows at its height (the
   // pixel where Parallax puts a head 8–12 m up is brighter with the heads than without), the ground around is lit, by day
@@ -221,12 +236,13 @@ async function scenario(browser, dev, opts) {
     a.setTod(12); await sl(500); const nDay = a.stats().streetLights;
     a.setTod(23); a.cam.m = 2.2; await sl(800); const nFar = a.stats().streetLights;
     for (let i = 0; i < 2000; i++) L.add({ x: c.x + (i % 50) * 9 - 225, y: c.y + Math.floor(i / 50) * 9 - 180, mode: 'on', owner: 'test' }); a.cam.m = 0.6; a.cam.x = c.x; a.cam.y = c.y; await sl(800);
-    const st = a.stats().lights; L.removeOwner('test'); a.setTod(12);
-    return { n, nDay, nFar, shift: +Math.hypot(J[0] - G0[0], J[1] - G0[1]).toFixed(1), headOn: +headOn.toFixed(1), headOff: +headOff.toFixed(1), ground: +ground.toFixed(1), groundDark: +groundDark.toFixed(1), vis: st.visible, cap: L.cap, all: st.all };
+    const st = a.stats().lights; L.removeOwner('test'); a.setTod(12); Game._test.syncLights(); const ent = L.all().filter((l) => l.kind === 'lamp' && typeof l.owner === 'number').length;
+    return { ent, n, nDay, nFar, shift: +Math.hypot(J[0] - G0[0], J[1] - G0[1]).toFixed(1), headOn: +headOn.toFixed(1), headOff: +headOff.toFixed(1), ground: +ground.toFixed(1), groundDark: +groundDark.toFixed(1), vis: st.visible, cap: L.cap, all: st.all };
   });
   check(dev, !lt.err && lt.n > 0 && lt.shift > 2 && lt.headOn > lt.headOff + 8, 'уличные фонари: ночью голова горит на своей высоте (параллакс)', JSON.stringify(lt));
   check(dev, !lt.err && lt.ground > lt.groundDark + 8, 'уличные фонари: земля вокруг освещена', JSON.stringify(lt));
   check(dev, !lt.err && lt.nDay === 0 && lt.nFar <= (touch ? 700 : 1800), 'уличные фонари: днём не горят, лимит голов держится', JSON.stringify(lt));
+  check(dev, !lt.err && lt.ent > 0, 'фонари у входов в здания (ворота, доки) поставлены', JSON.stringify({ ent: lt.ent }));
   check(dev, lt.vis <= lt.cap && lt.all > 2000, 'лимит одновременных источников света держится', `видно ${lt.vis} из ${lt.all}, лимит ${lt.cap}`);
   // ---- cancel: Esc, right button, ✕, the same key again
   if (!(await ev(() => document.querySelector('#bb-tabs [data-t="cities"]').classList.contains('on')))) await page.click('#bb-tabs [data-t="cities"]'); await ev(() => document.body.classList.remove('tray-off')); await page.waitForTimeout(80);
@@ -329,7 +345,22 @@ async function menuJob(browser) {
   const dev = 'menu', ctx = await browser.newContext({ viewport: { width: 1600, height: 900 } }), page = await ctx.newPage(), errors = watchErrors(page);
   const vis = () => page.evaluate(() => [...document.querySelectorAll('.gm')].filter((e) => getComputedStyle(e).display !== 'none' && e.offsetWidth > 0).map((e) => e.id));
   try {
-    await openMenu(page, PORT, '?workers=2'); await newGame(page); await settle(page, 15000);
+    await openMenu(page, PORT, '?workers=2');
+    // the capital (stage 6.1): one crosshair — the system cursor is hidden over the map, the game draws its own; the prompt
+    // is in the bar on top; over the sea the reason is red
+    await page.evaluate(() => localStorage.clear()); await page.click('[data-go="new"]');
+    await page.evaluate(() => { const C = __ui.C; C.seed = 1337; C.rules.botCount = 2; C.slot = 6; }); await page.click('#screate');
+    await page.waitForFunction(() => typeof Game !== 'undefined' && Game.api && Game.api.ready, null, { timeout: 180000 }); await settle(page, 10000);
+    await page.click('#a-found'); await page.mouse.move(800, 450); await page.waitForTimeout(400);
+    const cap = await page.evaluate(() => ({ cursor: getComputedStyle(document.getElementById('c')).cursor, bar: document.getElementById('pbar').classList.contains('show'), t: document.getElementById('pbt').textContent, hint: getComputedStyle(document.getElementById('hint')).display }));
+    const sea = await page.evaluate(() => { const a = Game.api; for (let y = 300; y < 700; y += 25) for (let x = 200; x < 1400; x += 25) { const [wx, wy] = a.toWorld(x, y); if (Game._test.validSite(wx, wy)) return [x, y]; } return null; });
+    let bad = null; if (sea) { await page.mouse.move(sea[0], sea[1]); await page.waitForTimeout(300); bad = await page.evaluate(() => ({ cls: document.getElementById('pbar').className, s: document.getElementById('pbs').textContent })); }
+    check(dev, cap.cursor === 'none' && cap.bar && /Столица/.test(cap.t) && cap.hint === 'none', 'столица: один крестик (системный курсор скрыт), подсказка в плашке сверху', JSON.stringify(cap));
+    check(dev, !sea || (bad && /bad/.test(bad.cls) && bad.s.length > 3), 'столица: над неподходящим местом — причина отказа в плашке', JSON.stringify(bad));
+    await page.evaluate(() => { for (let r = 0; r < 60000; r += 1500) for (let a = 0; a < 6.28; a += 0.3) { const x = 65536 + Math.cos(a) * r, y = 65536 + Math.sin(a) * r; if (Game._test.validSite(x, y) === null) { Game._test.found(x, y); return; } } });
+    await page.waitForFunction(() => Game.G.phase === 'play' && Game.G.states[0].places.length, null, { timeout: 180000 }); await settle(page, 15000);
+    check(dev, await page.evaluate(() => getComputedStyle(document.getElementById('c')).cursor !== 'none'), 'после основания столицы курсор над картой обычный');
+    await page.waitForFunction(() => document.getElementById('loading').classList.contains('fade') && document.getElementById('b-ores').offsetWidth > 0, null, { timeout: 180000 }); // the slow CI machine
     await page.click('#b-ores'); await page.waitForTimeout(200);
     check(dev, (await vis()).includes('orep'), 'в игре панель «Свободные залежи» открывается');
     await page.click('#bmenu'); await page.waitForTimeout(250); await page.click('#pexit'); await page.waitForTimeout(800);
