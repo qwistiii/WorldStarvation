@@ -4,7 +4,7 @@
 *{box-sizing:border-box}html,body{margin:0;height:100%;overflow:hidden;background:#0e2c4c;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--txt);user-select:none;-webkit-user-select:none}
 body{font-size:calc(13px*var(--ui))}
 #c{position:fixed;inset:0;width:100%;height:100%;touch-action:none;cursor:grab}#c2{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}#c:active{cursor:grabbing}
-body.placing #c{cursor:crosshair}
+body.placing-cap #c{cursor:none} /* the capital: the game draws the one crosshair */body.placing-k #c{cursor:default}
 .pn,.pn2,.win{background:var(--bg);backdrop-filter:blur(12px) saturate(1.2);-webkit-backdrop-filter:blur(12px) saturate(1.2);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 10px 34px rgba(0,0,0,0.38),inset 0 1px 0 rgba(255,255,255,0.05)}
 .pn{position:fixed}
 button{font:inherit;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.14);color:#eef;border-radius:9px;padding:6px 10px;font-size:12px;cursor:pointer;transition:background .15s,border-color .15s,transform .1s}
@@ -170,7 +170,7 @@ input,select{border-radius:var(--r);background:#0b0f14;border-color:var(--line2)
   --key:linear-gradient(var(--o2),var(--o2))}
 /* the HUD scales with the window (--z from ui.js: the window height and width × «Масштаб интерфейса»), as the UI of DroneFlames does */
 #hud,#topcol,#plan,#found,#lrail,#orep,#hqp,#bbar,#ktip,#mystate,#store,#dip,#confirm,.pause-win,.over-win,body.m-game #bl,body.m-game #insp{zoom:var(--z,1)}
-.gm{display:none}
+.gm{display:none}body:not(.m-game) .gm{display:none!important} /* game windows never show outside a game, whatever their state */
 body.m-game #hud,body.m-game #topcol,body.m-game #bbar,body.m-game #toasts{display:flex}
 body.m-game.ph-found #found,body.m-game.ph-play #plan,body.m-game.ph-play #lrail{display:flex}
 .ol{font-family:var(--df);color:var(--tx)}
@@ -318,20 +318,22 @@ body.sel #gpanel{display:flex}
 .pb-b{display:flex;gap:5px;flex:none}.pbb{width:40px;height:40px;padding:0;border:1px solid var(--k0);border-radius:0;background:var(--o4);color:#fff;font:900 20px/1 var(--df);text-shadow:var(--tsh);box-shadow:var(--bev);cursor:pointer}
 .pbb.ok{background:#4f9a3c}.pbb.no{background:#d9503c}.pbb:disabled{filter:saturate(.3) brightness(.6);cursor:default}.pbb[hidden]{display:none}
 #pbar:not(.touch) .pbb.ok{display:none}
-body.placing-k #hint{display:none}
+body.placing-k #hint,body.placing-cap #hint{display:none}
 @media (pointer:coarse){.pbb{width:48px;height:48px}}
 #toasts{flex-direction:column;align-items:center;gap:5px;pointer-events:none}
-.toast{position:relative;pointer-events:auto;display:flex;align-items:center;gap:9px;width:min(470px,92vw);padding:6px 42px 10px 6px;border:1px solid var(--k0);
-  background:var(--riv),var(--sla);box-shadow:var(--brass),0 3px 0 rgba(0,0,0,0.35);font:600 12px/1.36 var(--df);text-shadow:0 1px 0 var(--to);animation:tIn .25s}
-.toast .t-i{flex:none;width:36px;height:36px;display:flex;align-items:center;justify-content:center;background:var(--d1);border:2px solid var(--to);box-shadow:inset 1px 1px 0 var(--d4),inset -1px -1px 0 var(--d5)}
-.toast .t-i .ic{width:27px;height:27px}.toast .t-i canvas{width:28px;height:19px;box-shadow:0 0 0 1px var(--to)}
+/* stage 6.1: the notification lane of DroneFlames — 316 px cards, icon tab 32 px, no close cross (a tap dismisses), ×N */
+.toast{position:relative;pointer-events:auto;display:flex;align-items:center;gap:8px;width:min(316px,92vw);padding:5px 10px 7px 5px;border:1px solid var(--k0);
+  background:var(--riv),var(--sla);box-shadow:var(--brass),0 3px 0 rgba(0,0,0,0.35);font:600 12px/1.3 var(--df);color:var(--tx);text-shadow:0 1px 0 var(--to);cursor:pointer;
+  animation:tIn .18s cubic-bezier(.34,1.56,.64,1) both;transform-origin:50% 0}
+.toast.ask{cursor:default}
+.toast .t-i{flex:none;width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:var(--d1);border:2px solid var(--to);box-shadow:inset 1px 1px 0 var(--d4),inset -1px -1px 0 var(--d5)}
+.toast .t-i .ic{width:24px;height:24px}.toast .t-i canvas{width:26px;height:17px;box-shadow:0 0 0 1px var(--to)}
 .toast .t-b{flex:1;min-width:0}.toast b{color:var(--tgo)}
-.toast .xb{position:absolute;right:6px;top:6px;width:26px;height:24px;font-size:12px}
-.toast .t-bar{position:absolute;left:5px;right:5px;bottom:3px;height:3px;background:#191a15}
-.toast .t-bar i{display:block;height:100%;background:#d6463a;transform-origin:left;animation:tbar linear forwards}
-@keyframes tbar{to{transform:scaleX(0)}}
+.toast .t-n{position:absolute;right:-6px;top:-7px;min-width:22px;height:18px;padding:0 4px;display:flex;align-items:center;justify-content:center;background:var(--o4);border:1px solid var(--k0);font:800 11px var(--df);color:#fff}
 .toast .tb{display:flex;gap:6px;margin-top:5px}
-.toast.out{opacity:0;transform:translateY(-8px);transition:all .35s}@keyframes tIn{from{opacity:0;transform:translateY(-8px)}}
+.toast.out{opacity:0;transform:scale(.96);transition:opacity .15s,transform .15s}
+@keyframes tIn{from{opacity:0;transform:scale(.94)}}
+.t-more{pointer-events:auto;height:20px;padding:0 9px;border:1px solid var(--k0);border-radius:0;background:var(--o4);font:800 11px var(--df);color:#fff;box-shadow:0 2px 0 rgba(0,0,0,0.3)}
 
 /* ---- left: the development plan; in the founding phase the big «found the capital» key */
 #plan{position:fixed;left:6px;top:55px;z-index:5;align-items:center;gap:6px;padding:7px 11px;border:1px solid var(--k0);border-radius:0;background:var(--riv),var(--sla);
@@ -414,7 +416,7 @@ body.m-game #insp button{font:800 10.5px var(--df);text-transform:uppercase;colo
 .hq-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid rgba(29,29,21,0.45);font:600 11px var(--df)}
 .hq-row canvas{width:30px;height:20px;box-shadow:0 0 0 1px var(--o0)}.hq-row .ic{width:22px;height:22px}.hq-row span{flex:1;min-width:0}.hq-row small{display:block;color:var(--tm);font:500 10px var(--df)}
 .hq-row .btn{flex:none}
-.pc-h>.sl .ic[class*="ic-o-"]{width:28px;height:35px}
+.pc-h>.sl .ic[class*="ic-o-"]{width:30px;height:30px}
 
 /* ================================================================ stage 5.11: the menus as in DroneFlames
    main menu: the logo over the living world, a big green «Новая игра», a yellow «Продолжить», two olive keys; the
@@ -505,4 +507,4 @@ body.m-game #insp button{font:800 10.5px var(--df);text-transform:uppercase;colo
 :root{--bulb:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 21h6v-1H9zm3-19a7 7 0 0 0-4 12.7V18h8v-3.3A7 7 0 0 0 12 2z'/%3E%3C/svg%3E")}
 
 /* phones: news as in DroneFlames — one compact line at a time, never a stack over the middle of the map */
-@media (max-width:760px){#toasts .toast:nth-last-child(n+2){display:none}#toasts .toast{padding-top:4px;padding-bottom:7px}#toasts .toast .t-i{transform:scale(.85)}}
+@media (max-width:760px){#toasts .toast .t-i{transform:scale(.85)}}

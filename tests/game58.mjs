@@ -49,7 +49,7 @@ try {
     return { full: hud.left <= 0 && hud.right >= innerWidth && hud.top <= 0, name: name.left < 40, menu: menu.right > innerWidth - 8, score: sc.left > innerWidth * 0.6,
       res: res.top >= hud.bottom && Math.abs((res.left + res.right) / 2 - innerWidth / 2) < 4, hint: hint.top >= res.bottom && Math.abs((hint.left + hint.right) / 2 - innerWidth / 2) < 4,
       items: document.querySelectorAll('#hres .res').length, store: document.getElementById('rstore').textContent, race: document.getElementById('hrace').textContent, plan: document.getElementById('plann').textContent }; });
-  check(top.full && top.name && top.menu && top.score && top.res && top.hint && top.items === 10 && /лидер/.test(top.race) && /из 18/.test(top.plan), 'верх: страна слева, очки и гонка, меню в углу; под полосой по центру ресурсы (9 и «Склад») и план развития', JSON.stringify(top));
+  check(top.full && top.name && top.menu && top.score && top.res && top.hint && top.items === 10 && /лидер/.test(top.race) && /из 19/.test(top.plan), 'верх: страна слева, очки и гонка, меню в углу; под полосой по центру ресурсы (9 и «Склад») и план развития', JSON.stringify(top));
   await page.click('#hres');
   const store = await page.evaluate(() => ({ show: document.getElementById('store').classList.contains('show'), rows: document.querySelectorAll('#stb .stat').length, txt: document.getElementById('stb').textContent }));
   check(store.show && store.rows === 9 && /Металл/.test(store.txt) && /\/ 400/.test(store.txt), 'клик по ресурсам — окно «Склад»: запас / вместимость и изменение каждого ресурса', JSON.stringify({ show: store.show, rows: store.rows }));
@@ -62,7 +62,7 @@ try {
   await page.click('#hintx');
   const h1 = await page.evaluate(() => document.getElementById('hint').classList.contains('show'));
   await page.click('#plan');
-  const h2 = await page.evaluate(() => document.getElementById('hint').classList.contains('show') && /шаг 3 из 18/.test(document.getElementById('hintn').textContent));
+  const h2 = await page.evaluate(() => document.getElementById('hint').classList.contains('show') && /шаг 3 из 19/.test(document.getElementById('hintn').textContent));
   check(!h1 && h2, '✕ скрывает подсказку, «План развития» слева возвращает её');
 
   // ---- низ: вкладки во всю ширину, под ними панель; пауза и скорость слева, ключи — квадрат с иконкой, подпись и цена
@@ -102,13 +102,13 @@ try {
   const back = await page.evaluate(() => ({ sel: document.body.classList.contains('sel'), g: Game.G.sel, tray: getComputedStyle(document.getElementById('bb-tray')).display, tab: document.querySelector('#bb-tabs .on').dataset.t }));
   check(!back.sel && !back.g && back.tray !== 'none' && back.tab === 'map', 'клик по вкладке закрывает карточку и открывает её панель', JSON.stringify(back));
 
-  // ---- новости: по центру под планом, значок, ✕ и полоса времени; не больше трёх
+  // ---- новости (этап 6.1, как в DroneFlames): по центру под планом, значок; не больше двух; остальные ждут (+N); касание закрывает
   await page.evaluate(() => { for (let i = 0; i < 5; i++) Game._test.declareWar(1 + (i % 2)); });
   await page.waitForTimeout(300);
-  const news = await page.evaluate(() => { const t = [...document.querySelectorAll('#toasts .toast')], r = t[0] && t[0].getBoundingClientRect(), h = document.getElementById('hint').getBoundingClientRect();
-    return { n: t.length, center: r && Math.abs((r.left + r.right) / 2 - innerWidth / 2) < 4, below: r && r.top >= h.bottom - 1, parts: t[0] && !!t[0].querySelector('.t-i') && !!t[0].querySelector('.xb') && !!t[0].querySelector('.t-bar i') }; });
-  check(news.n >= 1 && news.n <= 3 && news.center && news.below && news.parts, 'новости по центру под планом: значок, ✕, полоса времени, не больше трёх', JSON.stringify(news));
-  await page.click('#toasts .toast .xb');
+  const news = await page.evaluate(() => { const t = [...document.querySelectorAll('#toasts .toast:not(.out)')], r = t[0] && t[0].getBoundingClientRect(), h = document.getElementById('hint').getBoundingClientRect();
+    return { n: t.length, center: r && Math.abs((r.left + r.right) / 2 - innerWidth / 2) < 4, below: r && r.top >= h.bottom - 1, parts: t[0] && !!t[0].querySelector('.t-i'), more: (document.getElementById('t-more') || {}).textContent }; });
+  check(news.n >= 1 && news.n <= 2 && news.center && news.below && news.parts, 'новости по центру под планом: значок, не больше двух, остальные в очереди', JSON.stringify(news));
+  await page.click('#toasts .toast');
   await page.waitForTimeout(500);
 
   // ---- масштаб: на большом окне интерфейс крупнее, на месте

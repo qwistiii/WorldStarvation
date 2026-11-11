@@ -2,7 +2,7 @@
 // in parallel. Checks: loading without console errors, every tab and panel of the HUD, placing every building type
 // through the UI (mouse: click; touch: tap + ✓), rotation, all ways to cancel, mouse-drag parallax, frame budget.
 // Screenshots go to .work/e2e/<device>-*.png (look at them: tests/visual/inspect.py crops and zooms the risky places).
-// node tests/e2e/run.mjs [--only=desktop|phone] [--no-perf]
+// node tests/e2e/run.mjs [--only=desktop|phone|menu] [--no-perf]
 import fs from 'node:fs';
 import { launch, server, DESKTOP, PHONE, openMenu, newGame, settle, watchErrors } from '../lib/game.mjs';
 
@@ -95,6 +95,32 @@ async function scenario(browser, dev, opts) {
     return { bad, off };
   });
   check(dev, !ov.bad.length && !ov.off.length, 'элементы HUD не налезают друг на друга и не обрезаны', JSON.stringify(ov));
+
+  // notifications (stage 6.1, the lane of DroneFlames): a burst of 10 — 4 identical, 6 of one kind — gives at most 2 cards
+  // (1 on a phone), no duplicate text, the rest merged in the queue (×N, «+N»); every card leaves by itself
+  const nt = await ev(async () => { const T = Game._test, L = T.LANE, sl = (ms) => new Promise((r) => setTimeout(r, ms)); for (const it of L.shown) it.until = 0; await sl(700);
+    for (let i = 0; i < 4; i++) T.toast('Построено: <b>Завод</b>', 'ic-b-factory');
+    for (let i = 0; i < 6; i++) T.toast(`Рейс прибыл в <b>город ${i}</b>`, 'ic-b-airport');
+    await sl(300); const cards = [...document.querySelectorAll('#toasts .toast:not(.out)')], txt = cards.map((c) => c.querySelector('.t-b').textContent);
+    const r0 = cards[0] && cards[0].getBoundingClientRect();
+    const out = { shown: cards.length, uniq: new Set(txt).size === txt.length, merged: L.queue.reduce((q, x) => q + x.n, 0), queue: L.queue.length, more: document.getElementById('t-more').textContent, w: r0 && Math.round(r0.width / (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--z')) || 1)), center: r0 && Math.abs((r0.left + r0.right) / 2 - innerWidth / 2) < 6 };
+    for (let i = 0; i < 80 && (L.shown.length || L.queue.length); i++) await sl(250);
+    out.left = L.shown.length + L.queue.length; return out; });
+  const maxN = touch ? 1 : 2;
+  check(dev, nt.shown >= 1 && nt.shown <= maxN && nt.uniq, `уведомления: не больше ${maxN} на экране, без повторов`, JSON.stringify(nt));
+  check(dev, nt.queue >= 1 && nt.merged >= 5 && nt.more === '+' + nt.queue, 'уведомления: одинаковые объединены в очереди (×N), «+N» показывает остаток', JSON.stringify(nt));
+  check(dev, nt.center && nt.w <= 320, 'уведомления: по центру сверху, ширина как в DroneFlames (316 px)', JSON.stringify(nt));
+  check(dev, nt.left === 0, 'уведомления: исчезают сами', JSON.stringify(nt));
+
+  // the tutorial: after the mine comes the station, then the railway (stage 6.1: it asked for the railway first)
+  if (!touch) {
+    const tu = await ev(async () => { const T = Game._test, H = T.HINTS.map((h) => h[1]), i = H.indexOf('station'), prev = T.hintStep(); T.hint(i);
+      await new Promise((r) => setTimeout(r, 200)); const tab = document.querySelector('#bb-tabs [data-t="cities"]'); if (tab && !tab.classList.contains('on')) tab.click(); await new Promise((r) => setTimeout(r, 300));
+      const pulse = [...document.querySelectorAll('#bb-cat .pulse')].map((e) => e.dataset.k || e.dataset.mode || e.id);
+      const out = { order: [H.indexOf('mine'), i, H.indexOf('rail')], text: document.getElementById('hintt').textContent, pulse }; T.hint(0); T.hint(prev); return out; });
+    check(dev, tu.order[1] === tu.order[0] + 1 && tu.order[2] === tu.order[1] + 1, 'туториал: рудник → вокзал → ЖД-путь', JSON.stringify(tu.order));
+    check(dev, /Вокзал/.test(tu.text) && tu.pulse.includes('station') && !tu.pulse.includes('rail'), 'туториал: на шаге «Вокзал» подсвечен ключ вокзала, а не ЖД-пути', JSON.stringify(tu));
+  }
 
   lap('panels');
   // ---- place every building type through the UI
@@ -290,14 +316,37 @@ async function scenario(browser, dev, opts) {
   return { perf, close: () => ctx.close(), errors };
 }
 
+// stage 6.1: a game panel showed on top of the main menu (left open when the player went to the menu; on a slow network the
+// whole HUD flashed before the stylesheet). Open panels → menu → none visible; reloads (normal and slow network, no cache):
+// no game panel at any moment of the load, polled every 30 ms
+async function menuJob(browser) {
+  const dev = 'menu', ctx = await browser.newContext({ viewport: { width: 1600, height: 900 } }), page = await ctx.newPage(), errors = watchErrors(page);
+  const vis = () => page.evaluate(() => [...document.querySelectorAll('.gm')].filter((e) => getComputedStyle(e).display !== 'none' && e.offsetWidth > 0).map((e) => e.id));
+  try {
+    await openMenu(page, PORT, '?workers=2'); await newGame(page); await settle(page, 15000);
+    await page.click('#b-ores'); await page.waitForTimeout(200);
+    check(dev, (await vis()).includes('orep'), 'в игре панель «Свободные залежи» открывается');
+    await page.click('#bmenu'); await page.waitForTimeout(250); await page.click('#pexit'); await page.waitForTimeout(800);
+    const left = await vis(); check(dev, left.length === 0, 'после выхода в главное меню не видно ни одной панели игры', left.join(', ') || 'нет');
+    const cdp = await ctx.newCDPSession(page); await cdp.send('Network.enable'); await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });
+    for (const [n, net, ms] of [['обычная сеть', null, 2500], ['обычная сеть', null, 2500], ['обычная сеть', null, 2500], ['медленная сеть без кэша', { offline: false, latency: 300, downloadThroughput: 1.5e6 / 8, uploadThroughput: 1.5e6 / 8 }, 9000]]) {
+      if (net) await cdp.send('Network.emulateNetworkConditions', net);
+      await page.reload({ waitUntil: 'commit' }); const seen = new Set(), t = Date.now();
+      while (Date.now() - t < ms) { try { for (const id of await vis()) seen.add(id); } catch (e) { /* navigating */ } await page.waitForTimeout(30); }
+      check(dev, seen.size === 0, `перезагрузка (${n}): панели игры не появляются в меню`, [...seen].join(', ') || 'нет');
+    }
+  } finally { check(dev, errors.length === 0, 'нет ошибок в консоли', errors.slice(0, 3).join(' | ')); await ctx.close(); }
+}
+
 const t0 = Date.now();
 const srv = await server(PORT);
 const browser = await launch();
 try {
   const jobs = [];
-  if (only !== 'phone') jobs.push(scenario(browser, 'desktop', DESKTOP));
-  if (only !== 'desktop') jobs.push(scenario(browser, 'phone', PHONE)); // the frame budget is measured with the CPU slowed down 4x
+  if (!only || only === 'desktop') jobs.push(scenario(browser, 'desktop', DESKTOP));
+  if (!only || only === 'phone') jobs.push(scenario(browser, 'phone', PHONE)); // the frame budget is measured with the CPU slowed down 4x
   const r = await Promise.allSettled(jobs);
+  if (!only || only === 'menu') { try { await menuJob(browser); } catch (e) { failed++; console.log('FAIL сценарий меню упал:', e && e.stack || e); } }
   for (const x of r) if (x.status === 'rejected') { failed++; console.log('FAIL сценарий упал:', x.reason && x.reason.stack || x.reason); }
   // the frame budget: one device at a time, nothing else running in the browser
   for (const x of r) if (x.status === 'fulfilled') { if (PERF) await x.value.perf(); await x.value.close(); }

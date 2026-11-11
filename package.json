@@ -1,6 +1,6 @@
 {
   "name": "world-starvation",
-  "version": "6.0.0",
+  "version": "6.1.0",
   "description": "World Starvation — браузерная стратегия наших дней на огромном процедурном мире (вид сверху, WebGL2 + Web Workers)",
   "private": true,
   "type": "module",
