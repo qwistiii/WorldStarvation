@@ -170,7 +170,7 @@ input,select{border-radius:var(--r);background:#0b0f14;border-color:var(--line2)
   --rivg:linear-gradient(var(--rg),var(--rg)) 0 0/2px 2px no-repeat,linear-gradient(var(--rg),var(--rg)) 100% 0/2px 2px no-repeat,linear-gradient(var(--rg),var(--rg)) 0 100%/2px 2px no-repeat,linear-gradient(var(--rg),var(--rg)) 100% 100%/2px 2px no-repeat;
   --key:linear-gradient(var(--o2),var(--o2))}
 /* the HUD scales with the window (--z from ui.js: the window height and width × «Масштаб интерфейса»), as the UI of DroneFlames does */
-#hud,#topcol,#plan,#spick,#found,#lrail,#orep,#hqp,#bbar,#ktip,#mystate,#store,#dip,#confirm,.pause-win,.over-win,body.m-game #bl,body.m-game #insp{zoom:var(--z,1)}
+#hud,#topcol,#plan,#spick,#strk,#adr,#found,#lrail,#orep,#hqp,#bbar,#ktip,#mystate,#store,#dip,#confirm,.pause-win,.over-win,body.m-game #bl,body.m-game #insp{zoom:var(--z,1)}
 .gm{display:none}body:not(.m-game) .gm{display:none!important} /* game windows never show outside a game, whatever their state */
 body.m-game #hud,body.m-game #topcol,body.m-game #bbar,body.m-game #toasts{display:flex}
 body.m-game.ph-found #found,body.m-game.ph-play #plan,body.m-game.ph-play #lrail{display:flex}
@@ -539,3 +539,24 @@ body.m-game #insp button{font:800 10.5px var(--df);text-transform:uppercase;colo
 #insp .ib{font-size:11px;opacity:.8;margin:0 0 6px;line-height:1.35}
 body.m-game #insp{width:auto;min-width:230px;max-width:340px;padding:10px 12px 8px}
 body.m-game #insp .k{margin-bottom:6px}body.m-game #insp .row{margin-top:2px}
+
+/* stage 6.2: the strike sheet of DroneFlames — the weapon chips (50 × 48, count in gold, a bar of the weapon colour) on the left */
+#strk{position:fixed;left:6px;bottom:calc(var(--bbh) / var(--z,1) + 52px);z-index:7;display:none;gap:6px;padding:6px;width:min(430px,calc(100vw / var(--z,1) - 12px));border:1px solid var(--k0);background:var(--riv),var(--sla);box-shadow:var(--brass),0 3px 0 rgba(0,0,0,0.35);animation:tIn .16s both}
+#strk.show{display:flex}.sk-w{display:grid;grid-template-columns:repeat(1,50px);gap:4px;align-content:start}
+.skc{position:relative;width:50px;height:48px;padding:0;border:1px solid var(--k0);border-radius:0;background:var(--o4);box-shadow:var(--bev);cursor:pointer}.skc.on{box-shadow:inset 0 0 0 2px #ffcf3a,inset 0 0 0 4px var(--k0)}
+.skc .ic{position:absolute;left:12px;top:3px;width:26px;height:26px}.skc b{position:absolute;left:0;right:0;bottom:6px;font:800 9px var(--df);color:var(--tx);text-transform:uppercase;text-shadow:var(--tsh)}
+.skc i{position:absolute;right:3px;top:1px;font:900 10px var(--df);font-style:normal;color:var(--tgo);text-shadow:var(--tsh)}.skc s{position:absolute;left:5px;right:5px;bottom:2px;height:2px}
+.sk-r{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}.sk-h{display:flex;align-items:flex-start;gap:6px}.sk-h>div{flex:1;min-width:0}
+.sk-h b{display:block;font:800 13px var(--df);text-transform:uppercase;color:var(--tt);text-shadow:var(--tsh)}.sk-h small{display:block;font:600 10px var(--df);color:var(--tm)}
+.sk-i{font:600 11px/1.35 var(--df);color:var(--tx);text-shadow:0 1px 0 var(--to);min-height:15px}.sk-i b{color:var(--tgo)}.sk-i .neg{display:block;color:#ff9c8e}
+.sk-b{display:flex;flex-wrap:wrap;gap:4px;align-items:center}.sk-b .btn.on{box-shadow:inset 0 0 0 2px #ffcf3a}.sk-n{display:inline-flex;align-items:center;gap:3px}.sk-n b{min-width:18px;text-align:center;font:900 13px var(--df);color:var(--tgo)}
+#skgo{margin-left:auto}#skgo:disabled{filter:saturate(.3) brightness(.7)}
+/* the «Цели ПВО» window: presets, then kinds × targets; a cell is green (fires), dark (holds fire) or locked (cannot) */
+#adr{position:fixed;left:50%;top:92px;transform:translateX(-50%);z-index:8;display:none;width:min(520px,calc(100vw / var(--z,1) - 12px))}#adr.show{display:block}
+.ar-p{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px}.ar-t{width:100%;border-collapse:collapse}.ar-t th{font:700 10px var(--df);color:var(--tm);text-align:center;padding:2px}.ar-t th small{display:block}
+.ar-t th .ic,.ar-t td .ic{display:inline-block;width:22px;height:22px;vertical-align:middle}.ar-t td{padding:3px;text-align:center}.ar-t td:first-child{text-align:left;white-space:nowrap}
+.ar-t td:first-child b{font:800 11px var(--df);color:var(--tx);margin-left:4px}.ar-t td:first-child small{display:block;font:600 9.5px var(--df);color:var(--tm);margin-left:30px}
+.ar-c{width:100%;min-width:56px;height:34px;border:2px solid #4d4234;border-radius:0;background:#2e1c17;color:#fff;font:900 15px var(--df);cursor:pointer}
+.ar-c.on{background:#27401c;border-color:#a2e35f}.ar-c.lock{background:#17150f;border-color:#2a2620;color:#ff6a4d;cursor:not-allowed}.ar-n{margin-top:8px;font:600 10.5px/1.35 var(--df);color:var(--tm)}
+body.busy-strike #plan{display:none!important}
+.pc-stall{display:flex;align-items:center;gap:8px;margin:4px 0 6px;padding:5px 7px;background:rgba(217,80,60,0.18);border:1px solid rgba(217,80,60,0.55);font:800 11px var(--df);color:#ffb0a0;text-shadow:var(--tsh)}.pc-stall span{flex:1}

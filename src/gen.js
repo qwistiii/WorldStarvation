@@ -531,7 +531,7 @@ for(const c of bigs){if(c.type!==3||EMPTY)continue;const n=96,pts=[],wat=[]; // 
 
 // ---------------------------------------------------------------- zones
 const zones=[],emitters=[],airports=[],farms=[];
-const ZS={ind:[1300,850],ref:[1500,1050],pow:[760,560],port:[820,900],air:[4300,1500],solar:[620,420],agro:[520,340],farm:[300,200],dacha:[760,520],cem:[380,260],quarry:[700,520],mil:[940,660],saw:[360,260],oil:[130,95],sam:[150,150],ref2:[1000,700],sol2:[72,46],mine:[300,220],gasw:[150,110],rst:[300,64],dport:[240,180],dramp:[84,40],drwy:[460,56],dstore:[120,76],dfab:[400,280],air2:[2000,440]};const OLDK=['ind','ref','pow','port','air','solar'];
+const ZS={ind:[1300,850],ref:[1500,1050],pow:[760,560],port:[820,900],air:[4300,1500],solar:[620,420],agro:[520,340],farm:[300,200],dacha:[760,520],cem:[380,260],quarry:[700,520],mil:[940,660],saw:[360,260],oil:[130,95],sam:[150,150],npp:[1100,760],zsu:[90,70],int:[80,60],rls:[90,90],reb:[70,60],ref2:[1000,700],sol2:[72,46],mine:[300,220],gasw:[150,110],rst:[300,64],dport:[240,180],dramp:[84,40],drwy:[460,56],dstore:[120,76],dfab:[400,280],air2:[2000,440]};const OLDK=['ind','ref','pow','port','air','solar'];
 function zoneFree(x,y,rad,self){
   for(const c of live){if(c===self)continue;const d=M.hypot(c.x-x,c.y-y);if(d<c.R*1.1+rad)return false}
   if(self&&M.hypot(self.x-x,self.y-y)<self.R*1.02+rad*0.6)return false;
@@ -895,6 +895,27 @@ function genZone(z){
     for(let q=0;q<4;q++){const a=q*PI/2+PI/4,x=M.cos(a)*W*0.32,y=M.sin(a)*H*0.32;P.push({k:'berm',x,y,r:11,a:a+PI});P.push({k:'veh',x,y,a:a+PI,v:3,c:cam})}
     P.push({k:'berm',x:0,y:0,r:9,a:0});P.push({k:'dome',x:0,y:0,r:4.5,c:[232,232,226],H:7,lvl:3,drum:[150,154,140]});P.push({k:'veh',x:W*0.05,y:H*0.36,a:0,v:4,c:cam});P.push({k:'veh',x:-W*0.16,y:H*0.36,a:0,v:4,c:cam});
     P.push({k:'gl',pts:[-W/2,H*0.36,W/2,H*0.36],w:3,c:[136,124,98]});
+  }else if(z.zk==='npp'){ // stage 6.2: nuclear power plant — two reactor buildings (a cylinder under a dome), the turbine halls
+    // along them, two cooling towers with steam, the switchyard, the spent fuel store; a fence round it all
+    G(P,-W/2,-H/2,W,H,[156,156,150]);
+    for(let q=0;q<2;q++){const cx=-W*0.3+q*W*0.2,cy=-H*0.18;G(P,cx-44,cy-44,88,88,[176,176,170]);CY(P,cx,cy,30,48,[214,214,208],'co');P.push({k:'dome',x:cx,y:cy,r:30,c:[226,226,222],H:62,lvl:3});
+      B(P,cx-30,cy+38,60,70,32,[184,188,194],'f');B(P,cx+34,cy-20,26,40,24,[170,174,178],'f')}
+    B(P,-W*0.42,H*0.12,W*0.38,H*0.12,22,[194,196,198],'co');
+    for(let q=0;q<2;q++){const cx=W*0.16+q*W*0.2,cy=-H*0.08;CY(P,cx,cy,62,150,[198,196,190],'cool');zemit(z,cx,cy,'steam',1.2,150)}
+    G(P,W*0.08,H*0.22,W*0.36,H*0.24,[128,126,118]);P.push({k:'switch',x:W*0.08,y:H*0.22,w:W*0.36,h:H*0.24});
+    B(P,-W*0.42,H*0.3,W*0.16,H*0.12,10,[150,156,150],'f');P.push({k:'fence',x:-W/2+2,y:-H/2+2,w:W-4,h:H-4});
+    P.push({k:'lflood',x:-W*0.45,y:-H*0.45,w:W*0.9,h:H*0.9,sp:70,r:22,c:'led'});
+  }else if(z.zk==='zsu'){ // stage 6.2: anti-aircraft gun ZU-23-2 on a BMP chassis in an earth revetment, an ammo truck
+    const cam=R()*3|0;P.push({k:'berm',x:0,y:0,r:12,a:0});P.push({k:'veh',x:0,y:0,a:R()*TAU,v:1,c:cam});
+    B(P,-1.6,-1.4,3.2,2.8,3.6,[92,98,78],'f');P.push({k:'gl',pts:[1.2,-0.6,7.5,-0.9],w:0.35,c:[40,42,40]});P.push({k:'gl',pts:[1.2,0.6,7.5,0.9],w:0.35,c:[40,42,40]});
+    P.push({k:'veh',x:-W*0.3,y:H*0.32,a:0,v:4,c:cam});
+  }else if(z.zk==='int'){ // stage 6.2: interceptor drone launcher («Ёлка»): a rack of launch tubes on a pad, the crew truck
+    const cam=R()*3|0;P.push({k:'berm',x:0,y:0,r:13,a:0});G(P,-9,-6,18,12,[120,118,104]);
+    for(let q=0;q<4;q++)B(P,-7+q*3.6,-3,2.6,6,1.8+(q%2)*0.4,[84,96,72],'f');P.push({k:'veh',x:W*0.28,y:H*0.3,a:PI/2,v:4,c:cam});
+  }else if(z.zk==='rls'){ // stage 6.2: radar: a cabin on a mound, the antenna turns (the game draws it over the map), a generator
+    const cam=R()*3|0;P.push({k:'berm',x:0,y:0,r:14,a:0});B(P,-3,-2,6,4,3,[96,104,86],'f');P.push({k:'veh',x:-W*0.3,y:H*0.3,a:0,v:4,c:cam});B(P,W*0.18,H*0.22,5,3,2.2,[110,112,100],'f');
+  }else if(z.zk==='reb'){ // stage 6.2: electronic warfare post: an equipment container and three antenna masts
+    G(P,-12,-8,24,16,[124,120,104]);B(P,-6,-2,12,4,2.8,[96,104,86],'f');for(const [x,y] of [[-9,-5],[0,6],[9,-5]])CY(P,x,y,0.5,14,[160,164,160],'co');
   }else if(z.zk==='ref2'){ // refinery of the game (stage 5.6): roads around and across, units in cells that never touch a road
     G(P,-W/2,-H/2,W,H,[164,158,144]);const RD=[166,162,154],X1=-W*0.12,Y1=0,ed=14;
     LN(P,[-W/2+ed,-H/2+ed,W/2-ed,-H/2+ed,W/2-ed,H/2-ed,-W/2+ed,H/2-ed,-W/2+ed,-H/2+ed],8,ASP);LN(P,[-W/2+ed,Y1,W/2-ed,Y1],10,ASP);LN(P,[X1,-H/2+ed,X1,H/2-ed],10,ASP);
@@ -1048,7 +1069,7 @@ const FCC=[[180,60,48],[46,110,164],[224,160,48],[58,125,68],[136,136,136],[200,
 // ground rectangle W × H) is replaced by the union of rounded pads around what actually stands there — the tank farm and
 // units of a refinery, the barns and silos of a farm, the halls and yards of a factory; the empty corners stay land. The
 // pads (z.pads, local rectangles) also shape the apron around the building (padAt) and bound its filler (zoneFill).
-const NOSHAPE={port:1,sam:1,oil:1,gasw:1,dramp:1,drwy:1,stn:1,sol2:1,solar:1,air:1,air2:1,dstore:1,mil:1}; // mil: fenced compounds on grass already
+const NOSHAPE={port:1,sam:1,zsu:1,int:1,rls:1,reb:1,oil:1,gasw:1,dramp:1,drwy:1,stn:1,sol2:1,solar:1,air:1,air2:1,dstore:1,mil:1}; // mil: fenced compounds on grass already
 function zoneShape(z){const P=z.prims,W=z.W,H=z.H,b=P[0];if(!b||b.k!=='g'||b.w<W*0.95||b.h<H*0.95)return;
   const cs=18,nx=M.ceil(W/cs),ny=M.ceil(H/cs),x0=-W/2,y0=-H/2,occ=new Uint8Array(nx*ny),mg=8;
   const mark=(ax,ay,bx,by)=>{const i0=M.max(0,M.floor((ax-mg-x0)/cs)),i1=M.min(nx-1,M.floor((bx+mg-x0)/cs)),j0=M.max(0,M.floor((ay-mg-y0)/cs)),j1=M.min(ny-1,M.floor((by+mg-y0)/cs));for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++)occ[j*nx+i]=1};
@@ -1183,7 +1204,7 @@ function addZone(q){const c=cities[q.city];if(!c)return -1;let x=q.x,y=q.y,a=q.a
 // a building of the game is linked by a straight road from the edge of its grounds to the nearest ordinary road
 // (or into its settlement when there is no road within 4 km); the road goes around other buildings. Air defence,
 // solar panels and the launch ramp / runway of a drone port get no road.
-const NOLINK={sam:1,sol2:1,dramp:1,drwy:1};
+const NOLINK={sam:1,sol2:1,dramp:1,drwy:1,zsu:1,int:1,rls:1,reb:1};
 function linkZone(z,c){if(NOLINK[z.zk])return;const cand=[];
   for(const r of queryRoads(z.x-4000,z.y-4000,z.x+4000,z.y+4000)){if(r.dead||r.k===0||r.k===5||r.k===6||r.k===8||r.ring)continue;
     const q=projOn(r,z.x,z.y),d=M.hypot(q[0]-z.x,q[1]-z.y);if(d>z.rad*0.5&&d<4000)cand.push([d,q[0],q[1],r])}
