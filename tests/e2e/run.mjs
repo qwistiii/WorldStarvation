@@ -117,7 +117,7 @@ async function scenario(browser, dev, opts) {
     const tu = await ev(async () => { const T = Game._test, H = T.HINTS.map((h) => h[1]), i = H.indexOf('station'), prev = T.hintStep(); T.hint(i);
       await new Promise((r) => setTimeout(r, 200)); const tab = document.querySelector('#bb-tabs [data-t="cities"]'); if (tab && !tab.classList.contains('on')) tab.click(); await new Promise((r) => setTimeout(r, 300));
       const pulse = [...document.querySelectorAll('#bb-cat .pulse')].map((e) => e.dataset.k || e.dataset.mode || e.id);
-      const out = { order: [H.indexOf('mine'), i, H.indexOf('rail')], text: document.getElementById('hintt').textContent, pulse }; T.hint(0); T.hint(prev); return out; });
+      const out = { order: [H.indexOf('mine'), i, H.indexOf('rail')], text: document.getElementById('hintn').textContent, pulse }; T.hint(0); T.hint(prev); return out; });
     check(dev, tu.order[1] === tu.order[0] + 1 && tu.order[2] === tu.order[1] + 1, 'туториал: рудник → вокзал → ЖД-путь', JSON.stringify(tu.order));
     check(dev, /Вокзал/.test(tu.text) && tu.pulse.includes('station') && !tu.pulse.includes('rail'), 'туториал: на шаге «Вокзал» подсвечен ключ вокзала, а не ЖД-пути', JSON.stringify(tu));
   }
@@ -352,10 +352,10 @@ async function menuJob(browser) {
     await page.evaluate(() => { const C = __ui.C; C.seed = 1337; C.rules.botCount = 2; C.slot = 6; }); await page.click('#screate');
     await page.waitForFunction(() => typeof Game !== 'undefined' && Game.api && Game.api.ready, null, { timeout: 180000 }); await settle(page, 10000);
     await page.click('#a-found'); await page.mouse.move(800, 450); await page.waitForTimeout(400);
-    const cap = await page.evaluate(() => ({ cursor: getComputedStyle(document.getElementById('c')).cursor, bar: document.getElementById('pbar').classList.contains('show'), t: document.getElementById('pbt').textContent, hint: getComputedStyle(document.getElementById('hint')).display }));
+    const cap = await page.evaluate(() => ({ cursor: getComputedStyle(document.getElementById('c')).cursor, bar: document.getElementById('pbar').classList.contains('show'), t: document.getElementById('pbt').textContent, hint: getComputedStyle(document.getElementById('plan')).display }));
     const sea = await page.evaluate(() => { const a = Game.api; for (let y = 300; y < 700; y += 25) for (let x = 200; x < 1400; x += 25) { const [wx, wy] = a.toWorld(x, y); if (Game._test.validSite(wx, wy)) return [x, y]; } return null; });
     let bad = null; if (sea) { await page.mouse.move(sea[0], sea[1]); await page.waitForTimeout(300); bad = await page.evaluate(() => ({ cls: document.getElementById('pbar').className, s: document.getElementById('pbs').textContent })); }
-    check(dev, cap.cursor === 'none' && cap.bar && /Столица/.test(cap.t) && cap.hint === 'none', 'столица: один крестик (системный курсор скрыт), подсказка в плашке сверху', JSON.stringify(cap));
+    check(dev, cap.cursor === 'none' && cap.bar && /место для столицы/.test(cap.t) && cap.hint === 'none', 'столица: один крестик (системный курсор скрыт), одна строка сверху «Выберите место для столицы», план скрыт', JSON.stringify(cap));
     check(dev, !sea || (bad && /bad/.test(bad.cls) && bad.s.length > 3), 'столица: над неподходящим местом — причина отказа в плашке', JSON.stringify(bad));
     await page.evaluate(() => { for (let r = 0; r < 60000; r += 1500) for (let a = 0; a < 6.28; a += 0.3) { const x = 65536 + Math.cos(a) * r, y = 65536 + Math.sin(a) * r; if (Game._test.validSite(x, y) === null) { Game._test.found(x, y); return; } } });
     await page.waitForFunction(() => Game.G.phase === 'play' && Game.G.states[0].places.length, null, { timeout: 180000 }); await settle(page, 15000);

@@ -161,13 +161,14 @@
   <span class="res" id="rpop" title="Население"><span class="ri ri-pop"></span><b id="rpop-v">0</b></span>
   <span class="res st"><span class="ri ri-store"></span><b id="rstore">Склад</b></span>
  </button>
- <div id="hint"><span class="hint-i"><span class="ic ic-hint"></span></span><div class="hint-c"><small id="hintn">План развития</small><div class="hint-t" id="hintt"></div></div><button class="xb st" id="hintx" title="Скрыть — вернуть: «План развития» слева">✕</button></div>
  <!-- stage 6: the armed building (as the hint box of DroneFlames): name, price, what to do or why not; ⟲ ✓ ✕ -->
  <div id="pbar"><span class="hint-i"><span class="ic" id="pbi"></span></span><div class="hint-c"><small id="pbt">—</small><div class="hint-t" id="pbs"></div></div>
   <div class="pb-b"><button class="pbb" id="pbrot" title="Повернуть (R, Shift+R — на 90°)">⟲</button><button class="pbb ok" id="pbok" title="Построить (Enter)">✓</button><button class="pbb no" id="pbno" title="Отмена (Esc, правая кнопка мыши)">✕</button></div></div>
  <div id="toasts"></div>
 </div>
-<button id="plan" class="gm ol" title="План развития: подсказки по шагам — показать или скрыть"><b>План развития</b><span id="plann"></span><i>▸</i></button>
+<!-- stage 6.2: the development plan of DroneFlames — a card at the top left: header only / the current goal / the whole list; drag by the header -->
+<div id="plan" class="gm ol"><div class="pl-h" id="planh" title="План развития: нажмите — подробнее, перетащите — переместить"><b id="plann">План развития</b><i id="plani">▶</i><button class="xb" id="hintx" title="Свернуть">✕</button></div>
+ <div id="hint"><div class="pl-g"><span class="pl-i"><span class="ic ic-hint" id="hinti"></span></span><div class="pl-c"><small id="hintn"></small><div class="hint-t" id="hintt"></div></div></div><button class="btn primary pl-go" id="plango">Показать</button><div class="pl-l" id="planl"></div></div></div>
 <div id="lrail" class="gm ol"><button class="bcat" id="b-hq" data-tn="Штаб" data-td="Войны и угрозы, все армии, дроны и ПВО"><span class="sl"><span class="ic ic-hq"></span></span><b>Штаб</b></button><button class="bcat" id="b-ores" data-tn="Свободные залежи" data-td="Месторождения на вашей земле, которые ещё не добываются: клик по строке — камера к залежи и карточка с постройкой"><span class="sl"><span class="ic ic-b-mine"></span><i class="bd" id="oren">0</i></span><b>Залежи</b></button></div>
 <div id="orep" class="gm ol"><div class="op-h"><b>Свободные залежи</b><button class="xb" id="orex" title="Закрыть">✕</button></div><div class="op-f" id="oref"></div><div class="op-l" id="orel"></div></div>
 <div id="hqp" class="gm ol win side-win"><div class="win-h"><span class="ri ri-hq"></span><h3>Штаб</h3><button class="xb" id="hqx" title="Закрыть">✕</button></div><div class="win-b" id="hqb"></div></div>
@@ -176,7 +177,7 @@
  <div id="gpanel"></div>
  <div class="bb-tabs" id="bb-tabs"></div>
  <div class="bb-tray" id="bb-tray">
-  <div class="bb-keys"><button class="bcat" id="bpause" data-tn="Пауза" data-td="Пробел или P"><span class="sl"><span class="ic ic-pause"></span></span><b>Пауза</b></button><button class="bcat" id="bspeed" data-tn="Скорость: ×1 → ×2 → ×4" data-td="F или Tab"><span class="sl"><span class="ic ic-speed"></span><i id="bspd">x1</i></span><b>Скорость</b></button></div>
+  <div class="bb-keys"><button class="bcat" id="bpause" data-tn="Пауза" data-td="Пробел или P"><span class="sl"><span class="ic ic-pause"></span></span><b>Пауза</b></button><button class="bcat" id="bspeed" data-tn="Скорость времени" data-td="x½, x1, x2, x5, x10, x20 · F — следующая"><span class="sl"><span class="ic ic-speed"></span><i id="bspd">x1</i></span><b>Скорость</b></button></div>
   <span class="bb-div"></span>
   <button class="bb-arr" id="bb-l" title="Назад">‹</button><div id="bb-cat"></div><button class="bb-arr" id="bb-r" title="Дальше">›</button>
  </div>
@@ -184,6 +185,7 @@
 <div id="ktip" class="gm ol"></div>
 <div id="mystate" class="gm ol win side-win"><div class="win-h"><canvas id="msf" width="54" height="36"></canvas><h3 id="msh">Государство</h3><button class="xb" id="msx" title="Закрыть">✕</button></div><div class="win-b" id="msb"></div></div>
 <div id="store" class="gm ol win side-win"><div class="win-h"><span class="ri ri-store"></span><h3>Склад</h3><button class="xb" id="stx" title="Закрыть">✕</button></div><div class="win-b" id="stb"></div></div>
+<div id="spick" class="gm ol"><div class="sp-h"><span class="ic ic-speed"></span><b>Скорость времени</b><button class="xb" id="spx" title="Закрыть (Esc)">✕</button></div><div class="sp-g" id="spg"></div></div>
 <div id="confirm" class="gm ol"><div class="cf-t" id="cft">Основать столицу здесь?</div><div class="cf-s" id="cfs"></div><div class="cf-b"><button class="btn primary" id="cfy">Да</button><button class="btn danger sq" id="cfn" title="Отмена">✕</button></div></div>
 <div id="dip" class="gm ol win side-win"><div class="win-h"><span class="ri ri-dip"></span><h3>Дипломатия</h3><button class="xb" id="dipx" title="Закрыть">✕</button></div><div class="win-b" id="dipb"></div></div>
 <div id="pause" class="screen dim"><div class="win pause-win ol"><h2>Пауза</h2><div class="pv" id="pinfo"></div>

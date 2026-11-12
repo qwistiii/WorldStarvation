@@ -26,7 +26,7 @@ try {
 
   await page.click('#screate');
   await page.waitForFunction(() => Game.api && Game.api.ready, null, { timeout: 60000 });
-  check(await page.evaluate(() => Game.G.phase === 'found' && document.getElementById('hint').classList.contains('show')), 'мир создан, подсказка «выберите место для столицы»');
+  check(await page.evaluate(() => Game.G.phase === 'found' && document.getElementById('pbar').classList.contains('show') && /Выберите место для столицы/.test(document.getElementById('pbt').textContent)), 'мир создан, сверху одна строка «Выберите место для столицы» (как в DroneFlames)');
 
   // перетаскивание карты мышью срабатывает каждый раз
   const moves = [];
@@ -55,7 +55,7 @@ try {
   const st = await page.evaluate(() => Game.G.states.map((s) => ({ cap: !!s.cap, city: s.cityId >= 0 && Game.api.W.cities[s.cityId].cap === s.id, cells: s.cells })));
   check(st.length === 3 && st.every((s) => s.cap && s.city && s.cells > 0), 'игрок и 2 бота основали столицы, у всех есть территория', JSON.stringify(st));
 
-  check(await page.evaluate(() => /Село/.test(document.getElementById('hintt').textContent) && document.querySelectorAll('#bb-tabs button').length === 7 && document.querySelectorAll('#bb-cat .bcat').length === 16), 'подсказка «поставьте Село», внизу 7 вкладок, во вкладке «Города» 15 построек (с аэропортом и фонарём), «ЖД путь» и «Снести»');
+  check(await page.evaluate(() => /Село/.test(document.getElementById('hintn').textContent) && document.querySelectorAll('#bb-tabs button').length === 7 && document.querySelectorAll('#bb-cat .bcat').length === 16), 'подсказка «поставьте Село», внизу 7 вкладок, во вкладке «Города» 15 построек (с аэропортом и фонарём), «ЖД путь» и «Снести»');
   // село: кнопка в каталоге, затем клик по подходящему месту на карте
   await page.click('#bb-cat [data-k="village"]');
   const vs = await page.evaluate(() => { const A = Game.api, c = Game.G.states[0].places[0]; A.stop(); A.cam.x = c.x; A.cam.y = c.y; A.cam.m = 30;
@@ -66,7 +66,7 @@ try {
   check(await page.evaluate(() => Game.G.states[0].builds.some((q) => q.k === 'village')), 'село строится');
   await page.evaluate(() => Game.setSpeed(4));
   await page.waitForFunction(() => Game.G.states[0].builds.some((q) => q.k === 'village' && q.done), null, { timeout: 20000 }).catch(() => {});
-  check(await page.evaluate(() => { const p = Game.G.states[0].places.find((q) => q.k === 'village'); return !!p && Game.api.W.cities[p.id].dyn && /Колхоз/.test(document.getElementById('hintt').textContent); }), 'село построено в мире, подсказка «Колхоз»');
+  check(await page.evaluate(() => { const p = Game.G.states[0].places.find((q) => q.k === 'village'); return !!p && Game.api.W.cities[p.id].dyn && /Колхоз/.test(document.getElementById('hintn').textContent); }), 'село построено в мире, подсказка «Колхоз»');
   const st2 = await page.evaluate(() => Game.G.states.map((s) => s.cells));
   check(st2[0] > st[0].cells, 'у села появилась своя земля', st2.join(','));
   // военная часть → армия, сборка, набор бойцов

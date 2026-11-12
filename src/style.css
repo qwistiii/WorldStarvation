@@ -76,7 +76,8 @@ body.m-menu #menu,body.m-setup #setup,body.m-settings #settings{display:flex}
 .sw.cust{background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red);position:relative;overflow:hidden}.sw.cust input{position:absolute;inset:0;opacity:0;cursor:pointer;padding:0;border:none}
 .fcols{display:flex;flex-direction:column;gap:8px}.fcol{display:flex;align-items:center;gap:10px}.fcol>span{font-size:12px;color:var(--mut);width:56px}
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(58px,1fr));gap:6px}
-.tile{padding:4px;border-radius:8px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;color:var(--mut)}
+.tile{padding:4px;border-radius:8px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;color:var(--mut);min-width:0;overflow:hidden}
+.tile span,.tile small{max-width:100%;text-align:center;line-height:1.15;overflow-wrap:anywhere;hyphens:auto}
 .tile canvas{width:48px;height:32px;border-radius:3px}.tile.on{color:#fff}
 .cards{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.cards.c3{grid-template-columns:repeat(3,1fr)}.cards.c2{grid-template-columns:repeat(2,1fr)}
 .card{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:10px 12px;border-radius:10px}
@@ -169,7 +170,7 @@ input,select{border-radius:var(--r);background:#0b0f14;border-color:var(--line2)
   --rivg:linear-gradient(var(--rg),var(--rg)) 0 0/2px 2px no-repeat,linear-gradient(var(--rg),var(--rg)) 100% 0/2px 2px no-repeat,linear-gradient(var(--rg),var(--rg)) 0 100%/2px 2px no-repeat,linear-gradient(var(--rg),var(--rg)) 100% 100%/2px 2px no-repeat;
   --key:linear-gradient(var(--o2),var(--o2))}
 /* the HUD scales with the window (--z from ui.js: the window height and width × «Масштаб интерфейса»), as the UI of DroneFlames does */
-#hud,#topcol,#plan,#found,#lrail,#orep,#hqp,#bbar,#ktip,#mystate,#store,#dip,#confirm,.pause-win,.over-win,body.m-game #bl,body.m-game #insp{zoom:var(--z,1)}
+#hud,#topcol,#plan,#spick,#found,#lrail,#orep,#hqp,#bbar,#ktip,#mystate,#store,#dip,#confirm,.pause-win,.over-win,body.m-game #bl,body.m-game #insp{zoom:var(--z,1)}
 .gm{display:none}body:not(.m-game) .gm{display:none!important} /* game windows never show outside a game, whatever their state */
 body.m-game #hud,body.m-game #topcol,body.m-game #bbar,body.m-game #toasts{display:flex}
 body.m-game.ph-found #found,body.m-game.ph-play #plan,body.m-game.ph-play #lrail{display:flex}
@@ -302,23 +303,18 @@ body.sel #gpanel{display:flex}
 #hres small{font:700 9.5px var(--df);color:var(--tg);text-shadow:var(--tsh)}#hres small.neg{color:var(--tr)}
 #hres b.neg{color:var(--tr)}#hres b.warn{color:var(--tgo)}
 #hres .st .ri{width:21px;height:21px}#hres .st b{color:var(--tgo);text-transform:uppercase}#hres .st b.neg{color:var(--tr)}
-#hint{display:none;position:relative;align-items:center;gap:9px;width:min(560px,92vw);padding:6px 46px 6px 6px;border:1px solid var(--k0);
-  background:var(--riv),var(--sla);box-shadow:var(--brass),0 3px 0 rgba(0,0,0,0.35);animation:hintIn .3s}
-#hint.show{display:flex}@keyframes hintIn{from{opacity:0;transform:translateY(-6px)}}
 .hint-i{flex:none;width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:#e8a62a;border:2px solid var(--to);box-shadow:inset 1px 1px 0 #fff3a6,inset 2px 2px 0 #ffd050,inset -1px -1px 0 #a86e14}
 .hint-i .ic{width:31px;height:31px}
 .hint-c{flex:1;min-width:0}
-#hintn{display:block;font:800 10px/1.2 var(--df);text-transform:uppercase;letter-spacing:.04em;color:var(--tt);text-shadow:var(--tsh)}
 .hint-t{font:600 12.5px/1.38 var(--df);text-shadow:0 1px 0 var(--to)}.hint-t b{color:var(--tgo)}
-#hint .xb{position:absolute;right:6px;top:50%;transform:translateY(-50%)}
 /* stage 6: the placement bar (armed building) — the hint box of DroneFlames with ⟲ ✓ ✕; touch targets ≥ 44 px */
 #pbar{display:none;align-items:center;gap:9px;width:min(600px,94vw);padding:6px;border:1px solid var(--k0);background:var(--riv),var(--sla);box-shadow:var(--brass),0 3px 0 rgba(0,0,0,0.35);animation:hintIn .2s}
 #pbar.show{display:flex}#pbar small{display:block;font:800 11px/1.2 var(--df);text-transform:uppercase;letter-spacing:.04em;color:var(--tgo);text-shadow:var(--tsh)}
+#pbar.one{width:auto;padding:5px 14px 5px 5px}#pbar.one .hint-t{display:none}#pbar.one small{font-size:12.5px}#pbar.one .hint-i{width:32px;height:32px}#pbar.one .hint-i .ic{width:24px;height:24px}
 #pbar.bad .hint-t{color:#ff9c8e}#pbar.bad .hint-i{background:#d9503c;box-shadow:inset 1px 1px 0 #ffb0a0,inset -1px -1px 0 #7a2014}
 .pb-b{display:flex;gap:5px;flex:none}.pbb{width:40px;height:40px;padding:0;border:1px solid var(--k0);border-radius:0;background:var(--o4);color:#fff;font:900 20px/1 var(--df);text-shadow:var(--tsh);box-shadow:var(--bev);cursor:pointer}
 .pbb.ok{background:#4f9a3c}.pbb.no{background:#d9503c}.pbb:disabled{filter:saturate(.3) brightness(.6);cursor:default}.pbb[hidden]{display:none}
 #pbar:not(.touch) .pbb.ok{display:none}
-body.placing-k #hint,body.placing-cap #hint{display:none}
 @media (pointer:coarse){.pbb{width:48px;height:48px}}
 #toasts{flex-direction:column;align-items:center;gap:5px;pointer-events:none}
 /* stage 6.1: the notification lane of DroneFlames — 316 px cards, icon tab 32 px, no close cross (a tap dismisses), ×N */
@@ -336,9 +332,22 @@ body.placing-k #hint,body.placing-cap #hint{display:none}
 .t-more{pointer-events:auto;height:20px;padding:0 9px;border:1px solid var(--k0);border-radius:0;background:var(--o4);font:800 11px var(--df);color:#fff;box-shadow:0 2px 0 rgba(0,0,0,0.3)}
 
 /* ---- left: the development plan; in the founding phase the big «found the capital» key */
-#plan{position:fixed;left:6px;top:55px;z-index:5;align-items:center;gap:6px;padding:7px 11px;border:1px solid var(--k0);border-radius:0;background:var(--riv),var(--sla);
-  box-shadow:var(--brass),0 3px 0 rgba(0,0,0,0.3);font:800 10.5px var(--df);text-transform:uppercase;text-shadow:var(--tsh);cursor:pointer}
-#plan:hover{background:var(--riv),#353b42;border-color:var(--k0)}#plan b{color:var(--tt)}#plan i{font-style:normal;color:var(--tt);font-size:9px}
+/* stage 6.2: the development plan card of DroneFlames (176 px, top left): header · current goal + «Показать» · the list */
+#plan{position:fixed;left:6px;top:55px;z-index:5;flex-direction:column;gap:5px;width:max-content;max-width:220px;padding:4px 5px 5px;border:1px solid var(--k0);border-radius:0;
+  background:var(--riv),var(--sla);box-shadow:var(--brass),0 3px 0 rgba(0,0,0,0.3);animation:hintIn .2s}@keyframes hintIn{from{opacity:0;transform:translateY(-6px)}}
+#plan.st1,#plan.st2{width:196px}
+.pl-h{display:flex;align-items:center;gap:6px;min-height:26px;padding:0 2px 0 4px;cursor:pointer;user-select:none;touch-action:none;font:800 10px var(--df);text-transform:uppercase;letter-spacing:.03em;color:var(--tt);text-shadow:var(--tsh)}
+.pl-h b{flex:1;white-space:nowrap}.pl-h i{font-style:normal;font-size:9px}.pl-h .xb{width:24px;height:24px;font-size:11px}
+#plan:not(.st1):not(.st2) .pl-h .xb{display:none}#plan.drag{opacity:.85;cursor:grabbing}
+#hint{display:none;flex-direction:column;gap:5px}#hint.show{display:flex}
+.pl-g{display:flex;gap:6px;align-items:flex-start}
+.pl-i{flex:none;width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:#e8a62a;border:2px solid var(--to);box-shadow:inset 1px 1px 0 #fff3a6,inset -1px -1px 0 #a86e14}.pl-i .ic{width:20px;height:20px}
+.pl-c{flex:1;min-width:0}#hintn{display:block;font:800 10px/1.2 var(--df);text-transform:uppercase;color:var(--tgo);text-shadow:var(--tsh)}
+#hint .hint-t{font:600 11px/1.3 var(--df)}
+.pl-go{height:28px;padding:0 10px;font-size:10.5px}.pl-go[hidden]{display:none}
+.pl-l{display:none;flex-direction:column;gap:1px;max-height:40vh;overflow:auto;font:700 10px/1.35 var(--df);color:var(--tm);text-shadow:0 1px 0 var(--to)}#plan.st2 .pl-l{display:flex}
+.pl-l .ok{color:var(--tg)}.pl-l .cur{color:var(--tgo)}
+body.placing-k #plan,body.placing-cap #plan,body.busy-ui #plan{display:none!important}
 #found{position:fixed;left:6px;top:50%;transform:translateY(-50%);z-index:5;flex-direction:column;align-items:center;gap:7px;padding:10px 7px 9px;border:1px solid var(--k0);
   background:var(--riv),var(--sla);box-shadow:var(--brass),0 3px 0 rgba(0,0,0,0.3)}
 #found .bcat{width:80px}#found .sl{width:58px;height:58px}#found .sl .ic{width:42px;height:42px}
@@ -470,9 +479,15 @@ body.m-game #insp button{font:800 10.5px var(--df);text-transform:uppercase;colo
 .ol .seg button:hover{background:#7d8459}
 .ol .seg button.on{background:#4caf3a;border-color:#0d260a;color:#fff;box-shadow:inset 0 0 0 1px #79d457,inset 1px 1px 0 1px #b4f185,inset -1px -1px 0 1px #2f7a25,0 2px 0 rgba(0,0,0,0.3)}
 .ol .tabs{gap:3px}
-.ol .tabs button{padding:9px 14px 7px;border:1px solid var(--o0);border-bottom:none;border-radius:0;background:var(--o4);clip-path:polygon(7px 0,calc(100% - 7px) 0,100% 7px,100% 100%,0 100%,0 7px);
-  box-shadow:inset 0 1px 0 var(--o7);font:800 11px var(--df);text-transform:uppercase;color:var(--tx);text-shadow:var(--tsh)}
-.ol .tabs button.on{background:var(--d1);color:#fff;box-shadow:inset 0 1px 0 var(--d4),inset 0 0 0 1px var(--d3)}
+/* the chamfered tab: the dark button is the outline, the fill is a layer 1 px inside with the same chamfer
+   (a border under clip-path loses its diagonal corners) */
+.ol .tabs button{position:relative;isolation:isolate;padding:9px 14px 7px;border:none;border-radius:0;background:var(--o0);clip-path:polygon(7px 0,calc(100% - 7px) 0,100% 7px,100% 100%,0 100%,0 7px);
+  font:800 11px var(--df);text-transform:uppercase;color:var(--tx);text-shadow:var(--tsh)}
+.ol .tabs button::before{content:'';position:absolute;inset:1px 1px 0;z-index:-1;background:var(--o4);box-shadow:inset 0 1px 0 var(--o7);
+  clip-path:polygon(6.6px 0,calc(100% - 6.6px) 0,100% 6.6px,100% 100%,0 100%,0 6.6px)}
+.ol .tabs button:hover::before{background:var(--o3)}
+.ol .tabs button.on{color:#fff}
+.ol .tabs button.on::before{background:var(--d1);box-shadow:inset 0 1px 0 var(--d4),inset 1px 0 0 var(--d3),inset -1px 0 0 var(--d3)}
 .ol input,.ol select{border-radius:0;background:var(--k1);border:1px solid var(--k0);box-shadow:var(--brass);color:var(--tx);font:700 13px var(--df);padding:7px 10px}
 .ol select option{background:var(--o2)}
 .ol .card,.ol .slot,.ol .tile,.ol .bot{border-radius:0;background:var(--o3);border:1px solid var(--o0);box-shadow:var(--bev),0 2px 0 rgba(0,0,0,0.25);color:var(--tx)}
@@ -497,14 +512,30 @@ body.m-game #insp button{font:800 10.5px var(--df);text-transform:uppercase;colo
    it opens slide out to its left; the diplomacy window moves under the top bar on the left */
 #lrail{left:auto;right:6px;top:calc(50% - var(--bbh) / var(--z,1) / 2 + 20px);transform:translateY(-50%)}
 #orep{left:auto;right:84px;top:92px}#hqp{left:auto;right:84px}#dip{right:auto;left:6px;top:92px}
-/* narrow screens (phones held upright): the plan button shrinks to its counter, the resources pill keeps the middle */
+/* narrow screens (phones held upright): the plan card moves under the resources pill, which keeps the middle */
 @media (max-width:760px){
-  #plan{padding:6px 7px}#plan b{display:none}#plan:before{content:'';width:16px;height:16px;background:currentColor;-webkit-mask:var(--bulb) center/contain no-repeat;mask:var(--bulb) center/contain no-repeat;color:var(--tgo)}
+  #plan{top:92px}
   #topcol{top:51px;width:calc(100vw / var(--z,1) - 12px)}#hres{max-width:calc(100vw / var(--z,1) - 120px)}
-  #hint,#pbar{width:calc(100vw / var(--z,1) - 12px)}
+  #pbar{width:calc(100vw / var(--z,1) - 12px)}
   #orep,#hqp,#mystate,#dip{left:6px;right:6px;width:auto}
 }
 :root{--bulb:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9 21h6v-1H9zm3-19a7 7 0 0 0-4 12.7V18h8v-3.3A7 7 0 0 0 12 2z'/%3E%3C/svg%3E")}
 
 /* phones: news as in DroneFlames — one compact line at a time, never a stack over the middle of the map */
 @media (max-width:760px){#toasts .toast .t-i{transform:scale(.85)}}
+
+/* stage 6.2: the speed picker of DroneFlames — 50 px chips, 3 px gap, the current one in a gold frame; over the speed key */
+#spick{position:fixed;z-index:9;display:none;flex-direction:column;gap:3px;padding:5px;border:1px solid var(--k0);background:var(--riv),var(--sla);box-shadow:var(--brass),0 3px 0 rgba(0,0,0,0.35);animation:tIn .16s cubic-bezier(.34,1.56,.64,1) both;transform-origin:20% 100%}
+#spick.show{display:flex}.sp-h{display:flex;align-items:center;gap:6px;min-height:30px}.sp-h .ic{width:22px;height:22px}.sp-h b{flex:1;font:800 12px var(--df);text-transform:uppercase;color:var(--tt);text-shadow:var(--tsh)}
+.sp-g{display:flex;gap:3px;flex-wrap:wrap;max-width:calc(100vw / var(--z,1) - 24px)}
+.spc{width:50px;height:50px;padding:0;border:1px solid var(--k0);border-radius:0;background:var(--o4);box-shadow:var(--bev);font:900 14px var(--df);text-shadow:var(--tsh);cursor:pointer}
+.spc:hover{background:var(--o3)}.spc.on{box-shadow:inset 0 0 0 2px #ffcf3a,inset 0 0 0 4px var(--k0)}
+
+/* stage 6.2: the inspector as the compact object card of DroneFlames: chips in a row instead of a two-column table */
+#insp .irs{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 6px}
+#insp .ir{display:inline-flex;align-items:baseline;gap:5px;padding:3px 7px;background:rgba(0,0,0,0.22);border:1px solid rgba(0,0,0,0.35);white-space:nowrap}
+#insp .ir i{font-style:normal;font-size:10px;text-transform:uppercase;letter-spacing:.03em;opacity:.7}#insp .ir b{font-weight:700}
+#insp .ir.own{align-items:center}#insp .ir.own .chip{width:10px;height:10px;display:inline-block;border:1px solid rgba(0,0,0,0.5)}
+#insp .ib{font-size:11px;opacity:.8;margin:0 0 6px;line-height:1.35}
+body.m-game #insp{width:auto;min-width:230px;max-width:340px;padding:10px 12px 8px}
+body.m-game #insp .k{margin-bottom:6px}body.m-game #insp .row{margin-top:2px}

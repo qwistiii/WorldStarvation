@@ -138,7 +138,13 @@ function updateCam(dt){
   const kx=(keys.ArrowRight||keys.KeyD?1:0)-(keys.ArrowLeft||keys.KeyA?1:0),ky=(keys.ArrowDown||keys.KeyS?1:0)-(keys.ArrowUp||keys.KeyW?1:0);
   if(kx||ky){cam.x+=kx*cam.m*VW*0.7*dt;cam.y+=ky*cam.m*VW*0.7*dt;fly=null}
   if(keys.Equal||keys.NumpadAdd)zoomAt(M.exp(-dt*2.2),VW/2,VH/2);if(keys.Minus||keys.NumpadSubtract)zoomAt(M.exp(dt*2.2),VW/2,VH/2);
-  const mg=WORLD*0.15;cam.x=clamp(cam.x,-mg,WORLD+mg);cam.y=clamp(cam.y,-mg,WORLD+mg);cam.m=clamp(cam.m,MINM,maxM())}
+  cam.m=clamp(cam.m,MINM,maxM());
+  // the game keeps the view inside the world near the ground, as DroneFlames clamps its camera to the map: beyond the edge
+  // there is only the flat sea colour, and up close its seam with the rippled water of the tiles shows (stage 6.2); from
+  // high up (≥ 120 m/px) the old margin of 15 % comes back, the seam cannot be seen from there
+  if(MODE==='game'){const sl=WORLD*0.15*smooth(30,120,cam.m),hw=VW/2*cam.m,hh=VH/2*cam.m,cx0=hw-sl,cx1=WORLD-hw+sl,cy0=hh-sl,cy1=WORLD-hh+sl;
+    cam.x=cx0>cx1?WORLD/2:clamp(cam.x,cx0,cx1);cam.y=cy0>cy1?WORLD/2:clamp(cam.y,cy0,cy1)}
+  else{const mg=WORLD*0.15;cam.x=clamp(cam.x,-mg,WORLD+mg);cam.y=clamp(cam.y,-mg,WORLD+mg)}}
 // input
 const ptr=new Map();let drag=false,lastMove=0,pinch=null,downAt=null;const keys={};
 const hover={x:-1,y:-1,on:false};
@@ -585,13 +591,16 @@ function pick(sx,sy){const x=cam.x+(sx-VW/2)*cam.m,y=cam.y+(sy-VH/2)*cam.m;let b
   for(const z of W.zones){if(!zoneOn(z))continue;const dx=x-z.x,dy=y-z.y;const lx=dx*z.ca+dy*z.sa,ly=-dx*z.sa+dy*z.ca;if(M.abs(lx)<z.W/2+20&&M.abs(ly)<z.H/2+20){best={k:'zone',o:z};bd=0;break}}
   if(!best)for(const c of W.cities){const d=M.hypot(x-c.x,y-c.y);const r=c.R*(c.type===0?1.2:1.05)+cam.m*8;if(d<r&&d/r<bd){bd=d/r;best={k:'city',o:c}}}
   if(!best){closeInsp();return}sel=best;showInsp()}
+// stage 6.2: a compact card, as the object card of DroneFlames — title, one line under it, the figures as short chips in a row
+const IR=(a,b)=>`<span class="ir"><i>${a}</i><b>${b}</b></span>`;
 function showInsp(){const el=document.getElementById('insp'),c=document.getElementById('inspc');let h='';
-  if(sel.k==='city'){const o=sel.o,st=cityStats(o);h=`<h2>${o.name}</h2><div class="k">${TN[o.type]} · ${(o.x/1000).toFixed(1)} : ${(o.y/1000).toFixed(1)} км</div><table>`;
-    h+=`<tr><td>Население</td><td>≈ ${fmtN(st.pop)} чел.</td></tr><tr><td>Площадь</td><td>${(st.area/1e6).toFixed(st.area<1e6?2:1).replace('.',',')} км²</td></tr>`;
-    if(o.type===0)h+=`<tr><td>Дворов</td><td>${st.cnt.houses}</td></tr><tr><td>Улиц</td><td>${o.vst.length}</td></tr>`;
-    else{h+=`<tr><td>Кварталов</td><td>${o.nblocks}</td></tr>`;const top=Object.entries(st.cnt).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([t,n])=>`${BTN[t]} — ${n}`).join('<br>');h+=`<tr><td>Застройка</td><td>${top}</td></tr>`}
-    if(st.zs.length)h+=`<tr><td>Объекты</td><td>${st.zs.map(z=>ZNAME[z.zk]).join(', ')}</td></tr>`;if(HK.inspect)h+=HK.inspect(o);h+='</table>'}
-  else{const z=sel.o;h=`<h2>${ZNAME[z.zk]}</h2><div class="k">при г. ${z.city.name} · ${fmtN(z.W)} × ${fmtN(z.H)} м</div><table>`;for(const [a,b] of zoneInfo(z))h+=`<tr><td>${a}</td><td>${b}</td></tr>`;h+='</table>'}
+  if(sel.k==='city'){const o=sel.o,st=cityStats(o);h=`<h2>${o.name}</h2><div class="k">${TN[o.type]} · ${(o.x/1000).toFixed(1)} : ${(o.y/1000).toFixed(1)} км</div><div class="irs">`;
+    h+=IR('Жители','≈ '+fmtN(st.pop))+IR('Площадь',(st.area/1e6).toFixed(st.area<1e6?2:1).replace('.',',')+' км²');
+    if(o.type===0)h+=IR('Дворов',st.cnt.houses)+IR('Улиц',o.vst.length);else h+=IR('Кварталов',o.nblocks);
+    if(HK.inspect)h+=HK.inspect(o);h+='</div>';
+    if(o.type!==0){const top=Object.entries(st.cnt).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([t,n])=>`${BTN[t]} ${n}`).join(' · ');if(top)h+=`<div class="ib">${top}</div>`}
+    if(st.zs.length)h+=`<div class="ib">${st.zs.map(z=>ZNAME[z.zk]).join(' · ')}</div>`}
+  else{const z=sel.o;h=`<h2>${ZNAME[z.zk]}</h2><div class="k">при г. ${z.city.name} · ${fmtN(z.W)} × ${fmtN(z.H)} м</div><div class="irs">`;for(const [a,b] of zoneInfo(z))h+=IR(a,b);h+='</div>'}
   h+=`<div class="row"><button id="inspgo">🔎 Приблизить</button></div>`;c.innerHTML=h;el.style.display='block';
   document.getElementById('inspgo').onclick=()=>{const o=sel.o;if(sel.k==='city')flyTo(o.x,o.y,o.type===3?2.2:o.type===2?1.4:o.type===1?0.9:0.45);else flyTo(o.x,o.y,M.max(o.W,o.H)*1.3/M.min(VW,VH))}}
 function closeInsp(){sel=null;document.getElementById('insp').style.display='none'}
