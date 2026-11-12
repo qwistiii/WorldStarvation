@@ -211,12 +211,15 @@ function buildCity(c){
   if(c.type===3){c.bu=140+R()*40;c.bv=110+R()*30}else if(c.type===2){c.bu=118+R()*30;c.bv=95+R()*25}else{c.bu=92+R()*25;c.bv=78+R()*20}
   if(EMPTY&&c.type>=2){cityLayout(c);riverWarp(c)}
   if(c.pol){buildPolar(c);return}
-  const N=c.N=M.ceil(c.R*CXT/M.min(c.bu,c.bv)),D=c.D=2*N+1;const ok=new Uint8Array(D*D);const j0=c.jit?0.6:0.7,jw=c.jit?0.85:0.6;if(c.lay)lineKinds(c);
+  const N=c.N=M.ceil(c.R*CXT/M.min(c.bu,c.bv)/(c.mix?(c.mix[0]+c.mix[1])/2:1)),D=c.D=2*N+1;const ok=new Uint8Array(D*D);const j0=c.jit?0.6:0.7,jw=c.jit?0.85:0.6;if(c.lay)lineKinds(c);
   const us=c.us=new Float64Array(D),vs=c.vs=new Float64Array(D);
   // the historic core (towns and up): the first lines from the centre are closer and more uneven — small irregular blocks
   // (never smaller than the usual least block — the fillers of the blocks along the avenues need it; the core differs by spread)
   const NC=!EMPTY?0:c.type>=2?3:c.type>=1?2:0,jc=k=>k<=NC?0.55:0;
-  for(let k=1;k<=N;k++){const g=jc(k);us[N+k]=us[N+k-1]+c.bu*(j0+(jw+g)*R());us[N-k]=us[N-k+1]-c.bu*(j0+(jw+g)*R());vs[N+k]=vs[N+k-1]+c.bv*(j0+(jw+g)*R());vs[N-k]=vs[N-k+1]-c.bv*(j0+(jw+g)*R())}
+  // the mixed layout: the step grows from the core (×mix[0]) to the edge (×mix[1]), faster on one side (fewer lines then, so the
+  // grid keeps its reach — the bent map is only safe within CXT·R)
+  const mx=(k,sd)=>{if(!c.mix)return 1;const t=M.min(1,k/(N*0.7)),b=sd===c.mix[2]?1.25:0.8;return c.mix[0]+(c.mix[1]-c.mix[0])*M.min(1,t*b)};
+  for(let k=1;k<=N;k++){const g=jc(k);us[N+k]=us[N+k-1]+c.bu*mx(k,1)*(j0+(jw+g)*R());us[N-k]=us[N-k+1]-c.bu*mx(k,-1)*(j0+(jw+g)*R());vs[N+k]=vs[N+k-1]+c.bv*mx(k,1)*(j0+(jw+g)*R());vs[N-k]=vs[N-k+1]-c.bv*mx(k,-1)*(j0+(jw+g)*R())}
   for(let j=0;j<D;j++)for(let i=0;i<D;i++){const u=us[i],v=vs[j];let x,y;if(c.cv)[x,y]=cW(c,u,v);else{x=c.x+u*c.ca-v*c.sa;y=c.y+u*c.sa+v*c.ca}
     if(cityF(c,x,y)<1){const e=landE(x,y,0.0025);if(e>=0&&e<0.42)ok[j*D+i]=1}}
   const BD=D-1;const bl=c.blocks=new Uint8Array(BD*BD);let stad=false,cnt=0;
@@ -262,23 +265,29 @@ function cpt(c,i,j){const u=c.us[i+c.N],v=c.vs[j+c.N];if(c.cv)return cW(c,u,v);r
 // Avenues and boulevards stand on their own lines in each town (c.kU / c.kV: road kind of every grid line).
 // Classic towns have none of this (plain grid, lineKind()).
 const FAMS=['radial','grid','fan','bent','organic'];
+// stage 6.2: the game world has no rings and rays (players found the polar towns odd): a free layout (a strongly bent grid of
+// uneven lines, big merged blocks), a mixed one (a dense old core, blocks growing larger and straighter towards the edge), the
+// bent and the organic grid and, now and then, a straight one
+const FAMS2=['free','mixed','bent','organic','grid'];
 function cityLayout(c){const Q=rng(c.seed^0x4c41a7);
   // capitals of one game all differ (the family rotates with the state), other towns draw theirs
-  const fam=c.lay=c.cap!==undefined?FAMS[(hh(SS|0,7,91)%5+c.cap)%5]:FAMS[Q()*5|0];
+  const FF=EMPTY?FAMS2:FAMS,fam=c.lay=c.cap!==undefined?FF[(hh(SS|0,7,91)%FF.length+c.cap)%FF.length]:FF[Q()*FF.length|0];
   if(fam==='radial'){c.pol={full:1,off:0,th:TAU,rin:120+Q()*60};c.cv=1;return}
   if(fam==='fan'){c.pol={full:0,off:c.R*(0.42+Q()*0.2),th:PI*(1.1+Q()*0.3),rin:95+Q()*45};c.cv=1;return}
   // block proportions: square-ish, long slabs along one axis or the other
-  const asp=Q()<0.3?1:0.62+Q()*0.8;c.bu*=M.sqrt(asp);c.bv/=M.sqrt(asp);c.mrg=fam==='organic'?0.3:0.16;c.opn=fam==='organic'?0.07:0.035;
-  if(fam==='grid'){c.diag=Q()<0.75?1+(Q()<0.55?1:0):0;return}
-  const s=fam==='organic'?1.25:1,a=(0.12+Q()*0.1)*s,aa=Q()*TAU,b=(0.015+Q()*0.035)*s,ba=Q()*TAU;
-  if(fam==='organic')c.jit=1;
+  const asp=Q()<0.3?1:0.62+Q()*0.8;c.bu*=M.sqrt(asp);c.bv/=M.sqrt(asp);c.mrg=fam==='organic'?0.3:fam==='free'?0.32:fam==='mixed'?0.22:0.16;c.opn=fam==='organic'||fam==='free'?0.07:0.035;
+  if(fam==='grid'){c.diag=EMPTY?(Q()<0.2?1:0):Q()<0.75?1+(Q()<0.55?1:0):0;return}
+  if(fam==='mixed')c.mix=[1,1.3+Q()*0.3,Q()<0.5?1:-1];
+  const s=fam==='organic'?1.25:fam==='free'?1:fam==='mixed'?0.8:1,a=(0.12+Q()*0.1)*s,aa=Q()*TAU,b=(0.015+Q()*0.035)*s,ba=Q()*TAU;
+  if(fam==='organic'||fam==='free')c.jit=1;
   c.wp=[a*M.cos(aa),a*M.sin(aa),b*M.cos(ba),b*M.sin(ba)];c.wL=c.R*1.3;c.cv=1;wpSafe(c)}
 // the conformal map stays gentle anywhere a town may reach (|z| up to CXT·R): |F'| within 0.55..1.45, so a block is
 // still the rectangle of its frame (the fillers of the blocks rely on it)
 function wpSafe(c){const w=c.wp,r=c.R*CXT/c.wL,k=2*M.hypot(w[0],w[1])*r+3*M.hypot(w[2],w[3])*r*r;if(k>0.45){const f=0.45/k;for(let i=0;i<4;i++)w[i]*=f}}
 // avenues and boulevards of a game town: the central lines and then a major line every 3..6 lines (organic: 2..6)
-function lineKinds(c){const R=rng(c.seed^0x1b2c3),D=c.D,N=c.N,g0=c.lay==='organic'?2:3;
-  const mk=()=>{const a=new Uint8Array(D).fill(3);a[N]=R()<0.55?7:2;for(const dir of [1,-1]){let since=0,gap=g0+(R()*4|0);for(let q=1;q<=N;q++){if(++since>=gap){a[N+dir*q]=R()<0.3?7:2;since=0;gap=g0+(R()*4|0)}}}return a};
+function lineKinds(c){const R=rng(c.seed^0x1b2c3),D=c.D,N=c.N,g0=c.lay==='organic'||c.lay==='free'?2:3;
+  // the game world: the central line is a main street only now and then — no avenue cross through the middle of every town
+  const mk=()=>{const a=new Uint8Array(D).fill(3);if(!EMPTY||R()<0.3)a[N]=R()<0.55?7:2;for(const dir of [1,-1]){let since=0,gap=g0+(R()*4|0);for(let q=1;q<=N;q++){if(++since>=gap){a[N+dir*q]=R()<0.3?7:2;since=0;gap=g0+(R()*4|0)}}}return a};
   c.kU=mk();c.kV=mk()}
 function lkU(c,i){return c.kU?c.kU[i]:lineKind(i-c.N)}
 function lkV(c,j){return c.kV?c.kV[j]:lineKind(j-c.N)}
@@ -338,7 +347,7 @@ function bigType(c,dn,R){const r=R(),core=c.type===3?0.26:0.16;
   if(dn<0.68)return pickW(r,[22,38,5,12,23,6,16,8,7,8,14,5,6,6,2,7,3,6]);
   return pickW(r,[22,22,5,16,16,10,13,10,17,5,8,4,7,6])}
 function mergeBlocks(c){const R=rng(c.seed^0x3e61),BD=c.D-1,bl=c.blocks,sp=c.sp=new Uint8Array(BD*BD),ms=c.ms=new Int32Array(BD*BD).fill(-1);let mi=0,mj=0,n=0;
-  const SH=c.lay==='organic'?[2,1,3,1,2,3,2,2,2,3,1,1,1,3,1,3,2,1,2,3,1]:[2,1,3,1,2,3,2,2,2];const tw=[];for(let q=2;q<SH.length;q+=3)tw.push(q/3|0,SH[q]);
+  const SH=c.lay==='organic'||c.lay==='free'?[2,1,3,1,2,3,2,2,2,3,1,1,1,3,1,3,2,1,2,3,1]:[2,1,3,1,2,3,2,2,2];const tw=[];for(let q=2;q<SH.length;q+=3)tw.push(q/3|0,SH[q]);
   for(let j=0;j<BD;j++)for(let i=0;i<BD;i++){const k=j*BD+i;if(!bl[k]||ms[k]>=0||sp[k]||bl[k]===21||bl[k]===20)continue;
     if(R()<c.opn){bl[k]=R()<0.55?23:5;continue} // an open square or a small park: the town is not built up wall to wall
     if(R()>c.mrg)continue;const q=pickW(R(),tw),si=SH[q*3],sj=SH[q*3+1];if(i+si>BD||j+sj>BD)continue;let good=true;
@@ -476,13 +485,13 @@ function sideRun(pts,k,stop){const c=plCum(pts),L=c[c.length-1];let run=0,best=0
   for(let s=0;s<L;s+=16){const p=plAt(pts,c,s);if(ridesOn(p[0],p[1],p[2],p[3],k)){run+=16;if(run>best){best=run;if(best>=stop)return best}}else run=0}return best}
 function connect(A,B,k){const key=A.id<B.id?A.id+'_'+B.id+'_'+k:B.id+'_'+A.id+'_'+k;if(pairs.has(key))return;pairs.add(key);
   const dx=B.x-A.x,dy=B.y-A.y,L=M.hypot(dx,dy),ux=dx/L,uy=dy/L;
-  const rr=(C,ang)=>k===5&&C.type>=1?C.R*(C.type===3?1.3:1.15):C.type===3?(k===0?ringR(C,ang):C.R*1.0):C.type===2?C.R*0.82:C.type===1?C.R*0.6:0;const ra=rr(A,M.atan2(uy,ux)),rb=rr(B,M.atan2(-uy,-ux));
+  const rr=(C,ang)=>k===5&&C.type>=1?C.R*(C.type===3?1.3:1.15):C.type===3?(k===0&&!EMPTY?ringR(C,ang):C.R*1.0):C.type===2?C.R*0.82:C.type===1?C.R*0.6:0;const ra=rr(A,M.atan2(uy,ux)),rb=rr(B,M.atan2(-uy,-ux));
   let ax=A.x+ux*ra,ay=A.y+uy*ra,bx=B.x-ux*rb,by=B.y-uy*rb;
   // roads that end inside a town end exactly on a street node (preferably on an avenue), not in the middle of a block
   const wA=k===0&&A.type===3&&landE(ax,ay,0)<0,wB=k===0&&B.type===3&&landE(bx,by,0)<0; // ring point in the water: go into the city
   if(k!==5){if(A.type>=1&&(!(k===0&&A.type===3)||wA))[ax,ay]=snapNode(A,ax,ay);if(B.type>=1&&(!(k===0&&B.type===3)||wB))[bx,by]=snapNode(B,bx,by)}
   const cfg=DYNW?[0.1,40,200,900,0.45]:k===0?[0.1,60,420,900,0.2]:k===1?[0.1,50,300,450,0.15]:k===5?[0.07,30,380,700,0.2]:[0.13,40,160,150,0.1];
-  let fb=null,fbr=1e9;const ring=(C)=>k===0&&C.type===3&&!(C===A?wA:wB);
+  let fb=null,fbr=1e9;const ring=(C)=>!EMPTY&&k===0&&C.type===3&&!(C===A?wA:wB); // the game has no ring roads: highways run into the town
   const NA=k===5?10:4;for(let a=0;a<=NA;a++){let pts;if(a<NA){const ph=hr(A.id,B.id,k*13+a)*100;
       if(k===5){const d=(a%2?-1:1)*(0.32+0.09*(a>>1)),th=M.atan2(uy,ux);ax=A.x+M.cos(th+d)*ra;ay=A.y+M.sin(th+d)*ra;bx=B.x-M.cos(th-d)*rb;by=B.y-M.sin(th-d)*rb} // rails approach towns off the highway bearing
       pts=routePts(ax,ay,bx,by,cfg[0]*(a%2?-1:1)*(1+(a>>2)*0.6),cfg[1],ph,cfg[2]);if(!waterRunOK(pts,cfg[3],cfg[4]))continue;
@@ -509,7 +518,7 @@ for(const c of bigs)for(const o of nearest(c,bigs,2,48000))connect(c,o,5);
 for(const c of towns)for(const o of nearest(c,live.filter(q=>q.type>=1),2,16000))connect(c,o,1);
 for(const c of vills){const nn=nearest(c,live,2,7000);if(nn[0])connect(c,nn[0],4);if(nn[1]&&hr(c.id,1,1)<0.45)connect(c,nn[1],4)}
 // ring roads
-for(const c of bigs){if(c.type!==3)continue;const n=96,pts=[],wat=[];
+for(const c of bigs){if(c.type!==3||EMPTY)continue;const n=96,pts=[],wat=[]; // stage 6.2: no ring road round the towns of the game
   for(let k=0;k<n;k++){const a=k/n*TAU;const rr=ringR(c,a);const x=c.x+M.cos(a)*rr,y=c.y+M.sin(a)*rr;pts.push([x,y]);wat.push(landE(x,y,0)<0)}
   let st=wat.indexOf(true);const runs=[];
   if(st<0){const p=[];for(let k=0;k<=n;k++)p.push(pts[k%n][0],pts[k%n][1]);runs.push(p)}else{
@@ -557,7 +566,7 @@ let ZSTRICT=true;
 // the access road starts on the edge of the zone's grounds (never runs under its buildings)
 function zoneExit(z,ux,uy){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;if(z.pads){x0=-z.W/2;y0=-z.H/2;x1=z.W/2;y1=z.H/2}else for(const p of z.prims)if(p.k==='g'){x0=M.min(x0,p.x);y0=M.min(y0,p.y);x1=M.max(x1,p.x+p.w);y1=M.max(y1,p.y+p.h)} // a shaped zone: its exit is at the edge of its footprint
   if(x0>x1){x0=-z.W/2;x1=z.W/2;y0=-z.H/2;y1=z.H/2}const lx=ux*z.ca+uy*z.sa,ly=-ux*z.sa+uy*z.ca;
-  const tx=lx>1e-9?x1/lx:lx<-1e-9?x0/lx:1e9,ty=ly>1e-9?y1/ly:ly<-1e-9?y0/ly:1e9,t=M.max(0,M.min(tx,ty)-3);return [z.x+ux*t,z.y+uy*t]}
+  const tx=lx>1e-9?x1/lx:lx<-1e-9?x0/lx:1e9,ty=ly>1e-9?y1/ly:ly<-1e-9?y0/ly:1e9,t=M.max(0,M.min(tx,ty)-(z.pads?0:3));return [z.x+ux*t,z.y+uy*t]} // a game zone: the gate on its very edge (its buildings may stand at the edge)
 let NOACC=false;
 function mkZoneRaw(c,kind,x,y,a,W,H){const rad=M.hypot(W,H)/2;const z={kind:'zone',zk:kind,id:zones.length,city:c,x,y,ang:a,ca:M.cos(a),sa:M.sin(a),W,H,rad,seed:hh(c?c.id:7,zones.length,93)};
   z.bb=[x-rad-50,y-rad-50,x+rad+50,y+rad+50];zones.push(z);genZone(z);addF(z,z.bb[0],z.bb[1],z.bb[2],z.bb[3]);return z}
@@ -1170,7 +1179,7 @@ function portAt(x,y,W,H){let best=null;for(let k=0;k<24;k++){const a=k*TAU/24,ca
   const pa=M.atan2(-gy,-gx),pc=M.cos(pa),ps=M.sin(pa);return [fx-pc*260,fy-ps*260,pa]}
 function addZone(q){const c=cities[q.city];if(!c)return -1;let x=q.x,y=q.y,a=q.a||0;const [W,H]=q.W?[q.W,q.H]:ZS[q.zk];
   if(q.zk==='port'){const p=portAt(x,y,W,H);if(!p)return -1;[x,y,a]=p}
-  const r0=roads.length;NOACC=true;ZOPT=q;const z=mkZone(c,q.zk,x,y,a,W,H,M.hypot(W,H)/2);ZOPT=null;NOACC=false;z.dyn=1;z.st=q.st;linkZone(z,c);dynCross(r0);return z.id}
+  const r0=roads.length;NOACC=true;ZOPT=q;const z=mkZone(c,q.zk,x,y,a,W,H,M.hypot(W,H)/2);ZOPT=null;NOACC=false;z.dyn=1;z.st=q.st;if(q.con)setCon(z,q.con);linkZone(z,c);dynCross(r0);return z.id}
 // a building of the game is linked by a straight road from the edge of its grounds to the nearest ordinary road
 // (or into its settlement when there is no road within 4 km); the road goes around other buildings. Air defence,
 // solar panels and the launch ramp / runway of a drone port get no road.
@@ -1210,7 +1219,8 @@ function avoidZm(pts,m,skip){let P=Array.from(pts),det=false;
   // would touch a zone again
   const Q=[P[0],P[1]];for(let i=1;i<P.length/2-1;i++){const x=P[i*2],y=P[i*2+1],ax=P[i*2-2]-x,ay=P[i*2-1]-y,bx=P[i*2+2]-x,by=P[i*2+3]-y,la=M.hypot(ax,ay),lb=M.hypot(bx,by);
     if(la<1||lb<1||(ax*bx+ay*by)/(la*lb)<-0.94){Q.push(x,y);continue}const r=M.min(30,la*0.4,lb*0.4);Q.push(x+ax/la*r,y+ay/la*r,x+bx/lb*r,y+by/lb*r)}
-  Q.push(P[P.length-2],P[P.length-1]);return zoneOnPath(Q,M.max(1,m-8),skip)?P:Q}
+  // (the narrowest detour keeps the margin of its sharp version: a rounded corner may not cut into a building, stage 6.2)
+  Q.push(P[P.length-2],P[P.length-1]);return zoneOnPath(Q,m<12?m-2:m-8,skip)?P:Q}
 // ---------- crossings of the roads laid during the game (the rules of world generation): a highway or a railway
 // crossing makes an overpass, other crossings and joins get junction zones (no markings or curbs across), boulevard
 // medians open where a road crosses them
@@ -1310,6 +1320,24 @@ function addRail(q){const A=zones[q.a],B=zones[q.b];if(!A||!B)return -1;const P=
 function removeRail(id){const r=roads[id];if(!r||r.dead||r.k!==5)return -1;r.dead=1;DEADN++;return id}
 // ---------- upgrades of a building (stage 5.7): the zone is laid out again with the extra parts (same seed, so the
 // base layout does not change)
+// stage 6.2: a building of the game stands at once and is built where it stands (DroneFlames: the object, a crane at its
+// foot and the progress bar). z.con = 1…3 — the construction site: bare ground and a fence, the footprints as concrete slabs,
+// the walls of grey concrete rising (¼, ½, ¾ of the height); 0 — done, the real building (and its smoke)
+function setCon(z,st){z.con=st|0;z.conP=null;if(z.con&&!z.crane){let top=null,ar=0;for(const p of z.prims)if(p.k==='b'&&p.w*p.h>ar){ar=p.w*p.h;top=p}
+    const R=rng(z.seed^0x7c1);z.crane=[top?M.min(z.W/2-4,top.x+top.w+4):z.W*0.2,top?top.y+top.h*0.5:0,M.min(120,M.max(28,M.max(z.W,z.H)*0.3)),R()*TAU,top?M.max(24,top.H*1.25):30]}for(let i=emitters.length-1;i>=0;i--)if(emitters[i].zid===z.id)emitters.splice(i,1);if(!z.con)genZone(z)}
+function zoneCon(q){const z=zones[q[0]];if(!z||z.dead)return -1;setCon(z,q[1]);return z.id}
+function conPrims(z){const W=z.W,H=z.H,st=z.con,f=[0,0.12,0.4,0.72][st]||0.72,R=rng(z.seed^0x7c0),out=[{k:'g',x:-W/2,y:-H/2,w:W,h:H,c:[136,120,94],rr:5}];
+  let top=null,area=0;
+  for(const p of z.prims){if(p.k==='b'){out.push({k:'g',x:p.x-1.5,y:p.y-1.5,w:p.w+3,h:p.h+3,c:[170,166,158]});if(st>=1&&p.H>2)out.push({k:'b',x:p.x,y:p.y,w:p.w,h:p.h,H:M.max(1.2,p.H*f),c:[152,150,144],r:'u'});
+      if(p.w*p.h>area){area=p.w*p.h;top=p}}
+    else if(p.k==='cyl'&&st>=2)out.push(Object.assign({},p,{H:p.H*f,c:[156,154,148]}));
+    else if(p.k==='path'||(p.k==='g'&&st>=3&&p.c&&p.c[1]<p.c[0]))out.push(p)}
+  // the materials of the site: stacks of slabs and a few containers by the fence; the tower crane by the biggest block
+  for(let i=0;i<3;i++)out.push({k:'g',x:-W/2+6+R()*(W-30),y:H/2-12-R()*10,w:8+R()*10,h:3+R()*3,c:[188,182,170]});
+  out.push({k:'fence',x:-W/2+1,y:-H/2+1,w:W-2,h:H-2});
+  // the tower crane is not in the tile: the game draws it over the map, slewing (z.crane: local x, y, jib, angle, height)
+  out.push({k:'g',x:z.crane[0]-4,y:z.crane[1]-4,w:8,h:8,c:[120,116,108]});
+  return out}
 function zoneUp(q){const z=zones[q[0]];if(!z||z.dead)return -1;z.o=Object.assign({},z.o||{});z.o.up=Object.assign({},z.o.up||{});z.o.up[q[1]]=1;
   for(let i=emitters.length-1;i>=0;i--)if(emitters[i].zid===z.id)emitters.splice(i,1);genZone(z);return z.id}
 // ---------- deposits under a new town move aside to the nearest free spot (the game decides where, all threads move it)
@@ -1817,7 +1845,12 @@ function dropCrowns(P){const G=mkBins();let nb=0;for(const p of P)if(p.k==='b'||
 function streetTrees(P,R,x0,y0,x1,y1,sp,O){if(LITE2)return;if(LITE)sp*=1.6;const v=R()*3|0;const T=(x,y)=>{const d=5+R()*3;if(!O||!occ(O,x,y,d*0.5))TR(P,x,y,d,v)};for(let x=x0+4;x<x1-4;x+=sp){T(x,y0+1.8);T(x,y1-1.8)}for(let y=y0+4+sp;y<y1-4-sp;y+=sp){T(x0+1.8,y);T(x1-1.8,y)}}
 function genBlock(c,bi,bj,t){
   const R=rng(hh(c.id,bi*1013+bj,61));const i=bi-c.N,j=bj-c.N;const sp=blkSpan(c,bi,bj);const hu0=(c.us[bi+sp[0]]-c.us[bi])/2,hv0=(c.vs[bj+sp[1]]-c.vs[bj])/2;let hu=hu0,hv=hv0,bf=null;if(c.cv||c.sp){bf=blkFrame(c,bi,bj);hu=bf[4];hv=bf[5]}
-  const iL=c.kU?KH(c.kU[bi]):lineHalf(i),iR=c.kU?KH(c.kU[bi+sp[0]]):lineHalf(i+1),iB=c.kV?KH(c.kV[bj]):lineHalf(j),iT=c.kV?KH(c.kV[bj+sp[1]]):lineHalf(j+1);
+  // a block of a bent grid (stage 6.2): along the block the street bows and its scale changes (most near the edge of a big
+  // town bent along its river) — the lots keep clear of that sag, the frame itself stays on the grid nodes
+  let sgU=0,sgV=0;if(c.wp){const u0=c.us[bi],u1=c.us[bi+sp[0]],v0=c.vs[bj],v1=c.vs[bj+sp[1]],u=(u0+u1)/2,v=(v0+v1)/2,ar=q=>M.atan2(q[1],q[0]),kk=q=>M.hypot(q[0],q[1]),dw=(x,y)=>{let t=x-y;t-=M.round(t/TAU)*TAU;return M.abs(t)};
+    {const a=wpD(c,u0,v),b=wpD(c,u1,v);sgU=hu*dw(ar(b),ar(a))/4+hv0*M.abs(kk(b)-kk(a))/2}{const a=wpD(c,u,v0),b=wpD(c,u,v1);sgV=hv*dw(ar(b),ar(a))/4+hu0*M.abs(kk(b)-kk(a))/2}
+    if(sgU<1)sgU=0;if(sgV<1)sgV=0}
+  const iL=(c.kU?KH(c.kU[bi]):lineHalf(i))+sgV,iR=(c.kU?KH(c.kU[bi+sp[0]]):lineHalf(i+1))+sgV,iB=(c.kV?KH(c.kV[bj]):lineHalf(j))+sgU,iT=(c.kV?KH(c.kV[bj+sp[1]]):lineHalf(j+1))+sgU;
   const sx0=-hu+iL,sy0=-hv+iB,sx1=hu-iR,sy1=hv-iT;const P=[],O=[];
   G(P,sx0,sy0,sx1-sx0,sy1-sy0,SIDEW);P[P.length-1].tr=1;
   const X0=sx0+3.5,Y0=sy0+3.5,X1=sx1-3.5,Y1=sy1-3.5,W=X1-X0,H=Y1-Y0,cx=(X0+X1)/2,cy=(Y0+Y1)/2;
@@ -1932,6 +1965,8 @@ function genBlock(c,bi,bj,t){
     break}
   case 14:{ // hospital
     G(P,X0,Y0,W,H,[118,140,94]);const fl=(5+(R()*4|0))*3.3;const col=[[214,212,206],[196,200,204]][R()*2|0];const d=14;
+    // a thin block (a bent grid near the edge of a town): a compact clinic that fits it instead of the hospital wings (stage 6.2)
+    if(H<64||W<84){if(H>14&&W>20){const w=M.min(W-8,70),h=M.min(H-8,24);bld(X0+(W-w)/2,Y0+(H-h)/2,w,h,fl*0.5,col,'f',{fc:[230,230,226]});treesIn(P,O,R,X0,Y0,W,H,12,4,7,[0,1,2,4])}streetTrees(P,R,sx0,sy0,sx1,sy1,12,O);break}
     const mw=M.min(W*0.5,W-2*d-14);bld(X0+6,Y0+6,d,H*0.7,fl,col,'f',{fc:[230,230,226]});bld(X0+6+d,Y0+6+H*0.3,mw,d,fl,col,'f',{fc:[230,230,226]});bld(X0+6+d+mw,Y0+6,d,H*0.7,fl,col,'f',{fc:[230,230,226]});
     bld(X0+6+d+mw*0.24,Y0+6+H*0.3+d,mw*0.5,H*0.18,8,[180,184,190],'f');
     P.push({k:'helipad',x:X1-16,y:Y0+16,r:9});O.push(X1-26,Y0+6,20,20);PK(P,X0+6,Y1-16,W-40,11,0.8,R()*1e9|0);
@@ -2755,7 +2790,9 @@ function lightRoads(ctx,list,mpp,bx0,by0,bx1,by1){const s=1/mpp,W=ctx.canvas.wid
   for(const k of [4,3,6,2,7,1,0]){const L=byK[k];if(!L.length||!LAMP[k])continue;if((k===3&&mpp>70)||((k===2||k===7)&&mpp>130)||(k===4&&mpp>45)||(k===6&&mpp>30))continue;
     const [offs,sp,D,col,a]=LAMP[k];LCNT+=L.length;any=true;
     if(D*s>2.4){band(L,col,0.07,RW[k]*1.15);
-      const head=LHB?mpp>HEADMPP*4:mpp>HEADMPP,P=[];for(const r of L){if(r.bb[2]<bx0-D||r.bb[0]>bx1+D||r.bb[3]<by0-D||r.bb[1]>by1+D)continue;P.length=0;roadLamps(r,P);
+      // stage 6.2 (the game world): the head is baked into the light tile on the ground at every scale — no head hangs at
+      // its pole height above the street any more (DroneFlames: a soft pool and the lamp in it, both on the ground)
+      const head=LHB?mpp>HEADMPP*4:EMPTY||mpp>HEADMPP,P=[];for(const r of L){if(r.bb[2]<bx0-D||r.bb[0]>bx1+D||r.bb[3]<by0-D||r.bb[1]>by1+D)continue;P.length=0;roadLamps(r,P);
         for(let i=0;i<P.length;i+=3){const x=P[i],y=P[i+1];if(x<bx0-D||x>bx1+D||y<by0-D||y>by1+D)continue;fdotO(g,col,x,y,D,a);if(head)fdotO(g,col,x,y,D*0.12,1)}}}
     else{const w=M.max(D*0.8,mpp*1.15);const aa=a*0.4*M.min(1,D*0.8/w)*(k===0?1.3:k===3?0.8:k===7?1.1:1)*(k===3?1.7-smooth(22,70,mpp)*1.1:(k===2||k===7)?1-smooth(40,130,mpp)*0.5:1);band(L,col,M.min(1,aa),w)}}
   if(!any)return;
@@ -2781,7 +2818,7 @@ function lightFeat(ctx,f,x0,y0,s,mpp,qx0,qy0,qx1,qy1){
         for(let y=-bh/2+12;y<bh/2-8;y+=sp)for(let x=-bw/2+12;x<bw/2-8;x+=sp){if(R()>a)continue;fdot(ctx,R()<0.25?'wled':cl,x+(R()-0.5)*sp*0.8,y+(R()-0.5)*sp*0.8,sp*(0.45+R()*0.5),0.6+R()*0.4)}continue}
       const key=(f.id*1e6+bj*1000+bi)*3+(LITE2?2:LITE?1:0)+(t!==f.blocks[bj*BD+bi]?0.5:0);let P=bcGet(key);if(!P){P=genBlock(f,bi,bj,t);bcSet(key,P)}drawLightPrims(ctx,P,mpp,false)}
     return}
-  if(f.kind==='zone'){setFrame(ctx,f.x,f.y,f.ca,f.sa,x0,y0,s);
+  if(f.kind==='zone'){if(f.con)return;setFrame(ctx,f.x,f.y,f.ca,f.sa,x0,y0,s);
     if(mpp>14){const a=ZLA[f.zk];if(a>0){const R=rng(f.seed^0x1a);const sp=M.max(70,mpp*2.2);for(let y=-f.H/2+sp/2;y<f.H/2;y+=sp)for(let x=-f.W/2+sp/2;x<f.W/2;x+=sp){if(R()<0.35)continue;fdot(ctx,R()<0.12?'wled':'sod',x+(R()-0.5)*sp*0.6,y+(R()-0.5)*sp*0.6,sp*0.9,a*(0.8+R()*1.4))}}
       if(f.zk==='air'){ctx.fillStyle=la(LC.led,0.4);ctx.fillRect(-1650,-30,3300,60);ctx.fillStyle=la(LC.sod,0.12);ctx.fillRect(-1000,-560,1500,350)}return}
     const zf=ZFL[f.zk];if(zf){const [sp,r,c,a]=zf;for(let y=-f.H/2+sp/2;y<f.H/2;y+=sp)for(let x=-f.W/2+sp/2;x<f.W/2;x+=sp){if(hh(x|0,y|0,f.id)%3===0&&f.zk!=='gas')continue;fdot(ctx,c,x,y,r*2,a);fdot(ctx,c,x,y,2,0.9)}}
@@ -2853,8 +2890,10 @@ function growFields(c){const g=GROW.get(c.id);return g===undefined?1:M.min(1,g*1
 function growShift(c){const g=GROW.get(c.id);return g===undefined?0:1-M.min(1,g+0.1)}
 function featOn(f){if(f.dead)return false;if(f.kind==='zone'&&zHid(f))return false;if(f.kind!=='zone'||!f.city||f.dyn)return true;const g=GROW.get(f.city.id);return g===undefined||g>=0.95}
 // visible intervals of a town street: sampled every 25 m (cached per growth value)
-function streetIv(r,g){if(r._gv===g)return r._gi;if(r.k===2||r.k===7){r._gv=g;r._gi=[[0,r.L]];return r._gi}const c=cities[r.city],out=[];let a=-1;const n=M.max(1,M.ceil(r.L/25));
-  for(let q=0;q<=n;q++){const sd=r.L*q/n,p=posAt(r,sd),on=cityF(c,p[0],p[1])<g+0.13;if(on&&a<0)a=sd;if((!on||q===n)&&a>=0){const b=on?r.L:sd;if(b-a>12)out.push([a,b]);a=-1}}
+// (stage 6.2: in the game the avenues grow with the town too, a little ahead of the blocks — before, they crossed the whole
+// future reach of a young capital as long lines over the fields)
+function streetIv(r,g){if(r._gv===g)return r._gi;const av=r.k===2||r.k===7;if(av&&!EMPTY){r._gv=g;r._gi=[[0,r.L]];return r._gi}const c=cities[r.city],out=[];let a=-1;const n=M.max(1,M.ceil(r.L/25)),reach=g+(av?0.3:0.13);
+  for(let q=0;q<=n;q++){const sd=r.L*q/n,p=posAt(r,sd),on=cityF(c,p[0],p[1])<reach;if(on&&a<0)a=sd;if((!on||q===n)&&a>=0){const b=on?r.L:sd;if(b-a>12)out.push([a,b]);a=-1}}
   r._gv=g;r._gi=out;return out}
 // a road is fully shown (traffic runs only on such roads)
 function roadShown(r){if(r.dead||rHid(r))return false;if(!GROW.size)return true;const id=r.city!==undefined?r.city:r.gz;const g=id===undefined?undefined:GROW.get(id);if(g===undefined)return true;if(r.city===undefined)return g>=0.95;const iv=streetIv(r,g);return iv.length===1&&iv[0][0]===0&&iv[0][1]===r.L}
@@ -2926,7 +2965,7 @@ function drawFeat(ctx,f,pass,x0,y0,s,mpp,qx0,qy0,qx1,qy1){
       const key=(f.id*1e6+bj*1000+bi)*3+(LITE2?2:LITE?1:0)+(t!==f.blocks[bj*BD+bi]?0.5:0);let P=bcGet(key);if(!P){P=genBlock(f,bi,bj,t);bcSet(key,P)}
       if(pass===1){ctx.beginPath();drawPrims(ctx,P,1,mpp);ctx.fillStyle=SHADOW;ctx.fill()}else drawPrims(ctx,P,pass,mpp)}
     return}
-  if(f.kind==='zone'){setFrame(ctx,f.x,f.y,f.ca,f.sa,x0,y0,s);if(pass===1){ctx.beginPath();drawPrims(ctx,f.prims,1,mpp);ctx.fillStyle=SHADOW;ctx.fill();return}drawPrims(ctx,f.prims,pass,mpp);return}
+  if(f.kind==='zone'){setFrame(ctx,f.x,f.y,f.ca,f.sa,x0,y0,s);const ZP=f.con?(f.conP||(f.conP=conPrims(f))):f.prims;if(pass===1){ctx.beginPath();drawPrims(ctx,ZP,1,mpp);ctx.fillStyle=SHADOW;ctx.fill();return}drawPrims(ctx,ZP,pass,mpp);return}
   if(f.kind==='farm'){if(pass===0)return;ctx.setTransform(s,0,0,s,-x0*s,-y0*s);if(pass===1)ctx.beginPath();
     for(const t of f.t){if(pass===1){ctx.moveTo(t.x,t.y);ctx.lineTo(t.x+SUNX*95-2,t.y+SUNY*95-2);ctx.lineTo(t.x+SUNX*95+2,t.y+SUNY*95+2);ctx.closePath()}
       else{ctx.fillStyle='#c8c8c4';ctx.beginPath();ctx.arc(t.x,t.y,M.max(2.5,mpp*0.8),0,TAU);ctx.fill();ctx.fillStyle='#9a9a90';ctx.fillRect(t.x-6,t.y-6,12,12)}}if(pass===1){ctx.fillStyle=SHADOW;ctx.fill()}}
@@ -2943,7 +2982,7 @@ function plazaPrims(f){if(f._pz)return f._pz;const R=rng(f.seed^0x77aa),P=[],r=f
 // zone cylinder shadows need stroke not fill: patch drawPrims pass1 for cyl via stroke
 const _dp=drawPrims;
 
-return {padFieldAt,padAt,padField,lampsIn,HEADMPP,LC:()=>LC,air2Rw:z=>{const y=AIR2RY,p=(x)=>[z.x+x*z.ca-y*z.sa,z.y+x*z.sa+y*z.ca];return [p(-900),p(900)]},roadShown,addPlace,addZone,removeZone,addDeposits,removeDeposit,moveDeposit,addRail,removeRail,railPts,zoneUp,setHidden,drawUav:(ctx,v,c,s)=>drawUav(ctx,v,c,s,0),isHid:id=>HID.has(id),
+return {padFieldAt,padAt,padField,lampsIn,HEADMPP,LC:()=>LC,air2Rw:z=>{const y=AIR2RY,p=(x)=>[z.x+x*z.ca-y*z.sa,z.y+x*z.sa+y*z.ca];return [p(-900),p(900)]},roadShown,addPlace,addZone,removeZone,addDeposits,removeDeposit,moveDeposit,addRail,removeRail,railPts,zoneUp,zoneCon,setHidden,drawUav:(ctx,v,c,s)=>drawUav(ctx,v,c,s,0),isHid:id=>HID.has(id),
   fieldReach:c=>EMPTY?fieldR(c)*1.3+3500:c.R+4700,blkFrame,cU,cW,deps:DEPS,zoneDead:id=>!zones[id]||!!zones[id].dead,forestAt,portAt:(x,y)=>portAt(x,y,820,900),setGrow,growOf:id=>GROW.has(id)?GROW.get(id):1,opt:OPT,setSeason,season:()=>SEASON,renderLights,WORLD,TS,SUNX,SUNY,WDX,WDY,LEANX,LEANY,cities:live,roads,zones,farms,ships,flights,emitters,airports,queryRoads,queryF,posAt,renderTile,sprites,drawShip,drawPlane,baseH,landE,rng,hh,noise,genTime:Date.now()-T0,mkCanvas,_dbg:{genVillage,genBlock,RW,riverV,riverW,avoidZ,zoneOnPath,waterRunOK,zoneExit,projOn,fieldOn,fieldR}};
 }
 

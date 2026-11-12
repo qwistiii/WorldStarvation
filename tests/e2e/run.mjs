@@ -220,9 +220,9 @@ async function scenario(browser, dev, opts) {
     check(dev, wb.port > 0 && wb.bad === 0, 'порт и прибрежные постройки: на воде ничего не стоит без основы (пирс, причал)', JSON.stringify(wb));
   }
   lap('build');
-  // ---- street lights (stage 6.1): objects of the world along the streets — at night the head glows at its height (the
-  // pixel where Parallax puts a head 8–12 m up is brighter with the heads than without), the ground around is lit, by day
-  // nothing glows; heads are capped; the light system keeps its cap with 2000 lights in view
+  // ---- street lights (stage 6.2: the game is 2D): along the streets, on the ground — no head is drawn at its pole height
+  // (nothing floats over the street), the ground around the lamp is lit at night and dark by day; the light system keeps
+  // its cap with 2000 lights in view
   const lt = await ev(async () => {
     const a = Game.api, W = a.W, L = a.lights, D = __world.dbg, c = W.cities.find((o) => o.cap === 0), sl = (ms) => new Promise((r) => setTimeout(r, ms)); Game.setSpeed(0);
     const P = W.lampsIn(c.x - 900, c.y - 900, c.x + 900, c.y + 900); if (!P.length) return { err: 'нет фонарей у столицы' };
@@ -239,9 +239,9 @@ async function scenario(browser, dev, opts) {
     const st = a.stats().lights; L.removeOwner('test'); a.setTod(12); Game._test.syncLights(); const ent = L.all().filter((l) => l.kind === 'lamp' && typeof l.owner === 'number').length;
     return { ent, n, nDay, nFar, shift: +Math.hypot(J[0] - G0[0], J[1] - G0[1]).toFixed(1), headOn: +headOn.toFixed(1), headOff: +headOff.toFixed(1), ground: +ground.toFixed(1), groundDark: +groundDark.toFixed(1), vis: st.visible, cap: L.cap, all: st.all };
   });
-  check(dev, !lt.err && lt.n > 0 && lt.shift > 2 && lt.headOn > lt.headOff + 8, 'уличные фонари: ночью голова горит на своей высоте (параллакс)', JSON.stringify(lt));
-  check(dev, !lt.err && lt.ground > lt.groundDark + 8, 'уличные фонари: земля вокруг освещена', JSON.stringify(lt));
-  check(dev, !lt.err && lt.nDay === 0 && lt.nFar <= (touch ? 700 : 1800), 'уличные фонари: днём не горят, лимит голов держится', JSON.stringify(lt));
+  check(dev, !lt.err && lt.n === 0 && lt.nFar === 0 && Math.abs(lt.headOn - lt.headOff) < 4, 'уличные фонари (2D): ни одна голова не висит над улицей на высоте столба', JSON.stringify(lt));
+  check(dev, !lt.err && lt.ground > lt.groundDark + 8, 'уличные фонари: свет лежит на земле, вокруг фонаря светло', JSON.stringify(lt));
+  check(dev, !lt.err && lt.nDay === 0, 'уличные фонари: днём не горят', JSON.stringify(lt));
   check(dev, !lt.err && lt.ent > 0, 'фонари у входов в здания (ворота, доки) поставлены', JSON.stringify({ ent: lt.ent }));
   check(dev, lt.vis <= lt.cap && lt.all > 2000, 'лимит одновременных источников света держится', `видно ${lt.vis} из ${lt.all}, лимит ${lt.cap}`);
   // ---- cancel: Esc, right button, ✕, the same key again

@@ -57,6 +57,7 @@ const env = await page.evaluate(() => {
 });
 console.log(`окно ${env.VW}x${env.VH} @${env.dpr} · ${env.gpu} · город ${env.city.name} R=${Math.round(env.city.R)} м`);
 if (GPU) await page.evaluate(() => { __world.gl.gpuOn = true; });
+if (process.env.DBG) await page.evaluate((s) => { for (const k of s.split(',')) __world.dbg[k] = 1; }, process.env.DBG); // A/B switches, e.g. DBG=noPF
 let cdp = null; if (PROFILE) { cdp = await ctx.newCDPSession(page); await cdp.send('Profiler.enable'); await cdp.send('Profiler.setSamplingInterval', { interval: 200 }); }
 const out = { label, env, at: new Date().toISOString(), rows: [], profile: {} };
 

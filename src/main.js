@@ -116,7 +116,7 @@ function op(f,q){const r0=W.roads.length,id=W[f](q);if(id<0)return id;const o={f
   const f0=f==='addPlace'?W.cities.find(c=>c.id===id):f==='addZone'||f==='removeZone'?W.zones.find(z=>z.id===id):null;let bb=f0?f0.bb.slice():q&&q.x!=null?[q.x-500,q.y-500,q.x+500,q.y+500]:null;
   // a town also changes the farmland around it (fields reach R + 4.5 km): redraw that ring too, or tiles meet with seams
   if(f==='addPlace'&&f0){const r=W.fieldReach(f0)+200;bb=[f0.x-r,f0.y-r,f0.x+r,f0.y+r]}if(f==='addDeposits'){bb=[0,0,WORLD,WORLD]}
-  if(f==='zoneUp'){const z=W.zones[id];bb=z.bb.slice()}if(f==='addRail'||f==='removeRail'){bb=W.roads[id].bb.slice()}
+  if(f==='zoneUp'||f==='zoneCon'){const z=W.zones[id];bb=z.bb.slice()}if(f==='addRail'||f==='removeRail'){bb=W.roads[id].bb.slice()}
   if(f==='moveDeposit'){const d=W.deps[id],o=q.length>4?[q[3],q[4]]:[d.x,d.y];bb=[M.min(o[0],d.x)-400,M.min(o[1],d.y)-400,M.max(o[0],d.x)+400,M.max(o[1],d.y)+400]}if(!bb)return id;
   for(let i=r0;i<W.roads.length;i++){const r=W.roads[i];bb=[M.min(bb[0],r.bb[0]),M.min(bb[1],r.bb[1]),M.max(bb[2],r.bb[2]),M.max(bb[3],r.bb[3])]}
   // detailed levels at once; the coarse ones (a whole region per tile) are refreshed in batches every 12 s
@@ -288,6 +288,7 @@ function ancestor(mp,z,tx,ty,X0,Y0,X1,Y1,md){for(let d=1;d<=M.min(z,md||99);d++)
 const FADE=0.3;
 function anc2(z,tx,ty,X0,Y0,X1,Y1){for(let d=1;d<=z;d++){const ax=tx>>d,ay=ty>>d,k=tkey(z-d,ax,ay);const a=cache.get(k)||stale.get(k);if(a&&hasC(a)){a.f=frameNo;const sz=256/(1<<d);if(drawE(a,DPOOL,(tx-(ax<<d))*sz,(ty-(ay<<d))*sz,sz,sz,X0,Y0,X1-X0,Y1-Y0))return true}}return false}
 function fallback(k,z,tx,ty,X0,Y0,X1,Y1){const st=stale.get(k);if(st&&hasC(st)){st.f=frameNo;if(drawE(st,DPOOL,0,0,256,256,X0,Y0,X1-X0,Y1-Y0))return true}return anc2(z,tx,ty,X0,Y0,X1,Y1)}
+const PF={t:0,x:0,y:0,m:0};
 function drawTiles(){
   const z=tileZ(),n=1<<z,ts=WORLD/n;
   const tx0=M.max(0,M.floor(vx0/ts)),tx1=M.min(n-1,M.floor(vx1/ts)),ty0=M.max(0,M.floor(vy0/ts)),ty1=M.min(n-1,M.floor(vy1/ts));
@@ -304,6 +305,16 @@ function drawTiles(){
     const st=stale.get(k);if(st){st.f=frameNo;if(drawE(st,DPOOL,0,0,256,256,X0,Y0,X1-X0,Y1-Y0))continue}
     anc2(z,tx,ty,X0,Y0,X1,Y1)}
   {const g=camGoal();if(g){const zt=tileZAt(g[2]);if(zt!==z)preRect(zt,g[0],g[1],g[2],g[3],0)}}
+  // stage 6.2: prefetch while panning — a ring of tiles around the view and the view where the camera will be in 0.6 s
+  // (its speed is measured from frame to frame), after every visible tile; a pan then meets sharp tiles instead of the
+  // blurry coarser fallback ("soapy squares"). Nothing is drawn from them until they come into view
+  if(!DBG.noPF){const dtp=M.max(1e-3,T-PF.t),vx=(cam.x-PF.x)/dtp,vy=(cam.y-PF.y)/dtp;PF.t=T;PF.x=cam.x;PF.y=cam.y;const zs=PF.m===cam.m;PF.m=cam.m;
+    // only while the camera moves and the visible tiles are nearly all in: the column or row of tiles on the side it moves
+    // to, and the view 0.6 s ahead (a still camera and a busy queue request nothing extra)
+    const sp=M.hypot(vx,vy)/cam.m;if(zs&&sp>60&&sp<20000&&queue.length<6){const sx=vx>0?1:vx<0?-1:0,sy=vy>0?1:vy<0?-1:0,ax=M.abs(vx)*2>M.abs(vy),ay=M.abs(vy)*2>M.abs(vx);
+      if(ax&&sx){const x=sx>0?tx1+1:tx0-1;if(x>=0&&x<n)for(let y=ty0;y<=ty1;y++)request(z,x,y,40+M.hypot((x+0.5)*ts-cam.x,(y+0.5)*ts-cam.y)/ts)}
+      if(ay&&sy){const y=sy>0?ty1+1:ty0-1;if(y>=0&&y<n)for(let x=tx0;x<=tx1;x++)request(z,x,y,40+M.hypot((x+0.5)*ts-cam.x,(y+0.5)*ts-cam.y)/ts)}
+      preRect(z,cam.x+vx*0.6,cam.y+vy*0.6,cam.m,60,0)}}
   if(z<12&&queue.length<4){const z2=z+1,n2=1<<z2,t2=WORLD/n2;const cx=M.floor(cam.x/t2),cy=M.floor(cam.y/t2);for(let y=cy-1;y<=cy+1;y++)for(let x=cx-1;x<=cx+1;x++)if(x>=0&&y>=0&&x<n2&&y<n2)request(z2,x,y,1e5)}
   return z}
 // night lights: sharp layer at the current LOD + two blurred "bloom" layers from coarser LODs
@@ -318,12 +329,14 @@ function lightLevel(z,a,L,prio,cover){const n=1<<z,ts=WORLD/n,mp=LCS[L];
 function drawLights(z,a){if(a<0.01)return;ctx.setTransform(1,0,0,1,0,0);ctx.globalCompositeOperation='lighter';
   const fogB=1+wcur.fog*0.9+wcur.rain*0.3;
   requestL(0,0,0,-1e9,1);
-  const far=1-smooth(15,200,cam.m)*0.55;
+  // the bloom of the coarser levels reads as the glow of a town from high up; close to the ground (the game) it smeared
+  // into big blobs over the blocks, so there it fades out under ~14 m/px (stage 6.2, as the small pools of DroneFlames)
+  const far=(1-smooth(15,200,cam.m)*0.55)*(MODE==='game'?smooth(1.5,14,cam.m):1);
   // stage 6: the two bloom levels (coarser LODs, already blurred in the tiles) are summed in a third-resolution buffer (stage 6: 1/3 — under the blur of these tiles) and
   // added in one pass — they carry no detail a full-resolution pass would keep; the sharp level stays full resolution
-  if(DBG.bloomFull){lightLevel(M.max(0,z-2),a*(lowQ?0.7:0.45)*fogB*far,3,-2e5);if(!lowQ)lightLevel(M.max(0,z-1),a*0.42*fogB,2,-1e5)}
+  if(DBG.bloomFull){lightLevel(M.max(0,z-2),a*(lowQ?0.7:0.45)*fogB*far,3,-2e5);if(!lowQ)lightLevel(M.max(0,z-1),a*0.42*fogB*(MODE==='game'?smooth(1.5,14,cam.m):1),2,-1e5)}
   else if(!DBG.bloom){const BQ=DBG.bloomHalf?2:3,bw=M.ceil(cv.width/BQ),bh=M.ceil(cv.height/BQ);BLB.resize(bw,bh);ctx.target(BLB);ctx.clear(0,0,0,0);ctx.setTransform(bw/cv.width,0,0,bh/cv.height,0,0);ctx.globalCompositeOperation='lighter';
-    lightLevel(M.max(0,z-2),a*(lowQ?0.7:0.45)*fogB*far,3,-2e5);if(!lowQ)lightLevel(M.max(0,z-1),a*0.42*fogB,2,-1e5);
+    lightLevel(M.max(0,z-2),a*(lowQ?0.7:0.45)*fogB*far,3,-2e5);if(!lowQ)lightLevel(M.max(0,z-1),a*0.42*fogB*(MODE==='game'?smooth(1.5,14,cam.m):1),2,-1e5);
     ctx.target(null);ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=1;ctx.globalCompositeOperation='lighter';
     // the bloom is added by the draws of the sharp level (one pass; the grid covers the screen) — or alone where the world
     // does not cover the screen
@@ -474,7 +487,8 @@ function lightMap(A){if(DBG.glights||!LV.length)return false;const lw=M.ceil(cv.
   ctx.tint=null;ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over';ctx.target(null);ctx.setTransform(T0[0],T0[1],T0[2],T0[3],T0[4],T0[5]);ctx.ambient(AM0[0],AM0[1],AM0[2]);ctx.lightmap(LMB);return true}
 const LTC=[1,1,1,1],POLEC=[0.16,0.17,0.18,1],LHC=[1,1,1,1];
 // poles: from the foot on the ground to the head at its height (the parallax camera), their shadow along the sun by day
-function drawPoles(){if(cam.m>2.6||!LN.length)return;ctx.setTransform(DPR,0,0,DPR,0,0);const k=1/cam.m;
+function drawPoles(){if(MODE==='game'||cam.m>2.6||!LN.length)return; // stage 6.2: no masts in the 2D game
+  ctx.setTransform(DPR,0,0,DPR,0,0);const k=1/cam.m;
   for(const l of LN){if(l.kind!=='flood')continue;/* stage 6.1: lamps have no pole model, only the lit head */const X=sxw(l.x),Y=syw(l.y);Parallax.project(cam,VW,VH,l.x,l.y,l.h,PJ);const w=M.max(1,(l.kind==='flood'?0.5:0.25)*k*PJ[2]);
     if(LG.day>0.05){const [sx,sy]=Parallax.shadow(l.x,l.y,l.h);ctx.fillStyle=`rgba(10,20,30,${0.3*LG.day})`;ctx.line(X,Y,sxw(sx),syw(sy),w)}
     // the head: a dark housing with its lens (lit by the light map at night, the glow is added after the ambient point)
@@ -482,7 +496,7 @@ function drawPoles(){if(cam.m>2.6||!LN.length)return;ctx.setTransform(DPR,0,0,DP
     const ls=hs*0.5;ctx.fillStyle='#e6e0c8';ctx.fillRect(PJ[0]-ls/2,PJ[1]-ls/2,ls,ls)}}
 // the glow of the burning heads (after the ambient point: emissive), at their height through the parallax camera
 function drawLightHeads(){if(!LV.length)return;ctx.setTransform(DPR,0,0,DPR,0,0);ctx.globalCompositeOperation='lighter';const k=1/cam.m,nb=0.35+0.65*LG.night;
-  for(const l of LV){Parallax.project(cam,VW,VH,l.x,l.y,l.h,PJ);const a=l.lv*l.i*nb;if(a<0.01)continue;LHC[0]=l.c[0];LHC[1]=l.c[1];LHC[2]=l.c[2];ctx.tint=LHC;
+  for(const l of LV){Parallax.project(cam,VW,VH,l.x,l.y,MODE==='game'?0:l.h,PJ);/* stage 6.2: on the ground in the 2D game */const a=l.lv*l.i*nb;if(a<0.01)continue;LHC[0]=l.c[0];LHC[1]=l.c[1];LHC[2]=l.c[2];ctx.tint=LHC;
     const g=M.max(3,(l.kind==='flood'?7:l.kind==='beacon'?3:4.5)*k*PJ[2]);ctx.globalAlpha=a*0.55;ctx.drawImage(GL_W,PJ[0]-g,PJ[1]-g,g*2,g*2);
     const c=M.max(1.5,(l.kind==='flood'?1.4:0.8)*k*PJ[2]);ctx.globalAlpha=a;ctx.drawImage(GL_W,PJ[0]-c,PJ[1]-c,c*2,c*2)}
   ctx.tint=null;ctx.globalAlpha=1;ctx.globalCompositeOperation='source-over'}
@@ -492,7 +506,7 @@ function drawLightHeads(){if(!LV.length)return;ctx.setTransform(DPR,0,0,DPR,0,0)
 // W.HEADMPP leave the head out, coarser ones keep it baked (a head is under a pixel there)
 const SLCAP=SMALL?700:1800,SLCOL={},SLHOT=[1,0.93,0.8,1];let slDrawn=0;
 function slCol(c){let v=SLCOL[c];if(!v){const p=(W.LC()[c]||'255,226,184').split(',').map(Number);v=SLCOL[c]=[p[0]/255,p[1]/255,p[2]/255,1]}return v}
-function drawStreetHeads(z,a){slDrawn=0;if(a<0.01||WORLD/(1<<z)/256>W.HEADMPP)return;const C=512,k=1/cam.m;
+function drawStreetHeads(z,a){slDrawn=0;if(MODE==='game'||a<0.01||WORLD/(1<<z)/256>W.HEADMPP)return;/* the game bakes them on the ground */const C=512,k=1/cam.m;
   const cx0=M.floor(vx0/C)-1,cy0=M.floor(vy0/C)-1,cx1=M.floor(vx1/C)+1,cy1=M.floor(vy1/C)+1;if((cx1-cx0+1)*(cy1-cy0+1)>400)return;
   ctx.setTransform(DPR,0,0,DPR,0,0);ctx.globalCompositeOperation='lighter';const hal=M.max(3,4.2*k),cor=M.max(1.6,0.8*k);
   for(let cy=cy0;cy<=cy1;cy++)for(let cx=cx0;cx<=cx1;cx++){const key=cx*65536+cy;let L=SLC.get(key);if(!L){L=W.lampsIn(cx*C,cy*C,cx*C+C,cy*C+C);SLC.set(key,L);if(SLC.size>900)SLC.delete(SLC.keys().next().value)}

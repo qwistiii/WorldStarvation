@@ -380,26 +380,27 @@ void main(){ float t = clamp((length(vP - uC) - uR.x) / (uR.y - uR.x), 0.0, 1.0)
   api.lost = () => gl.isContextLost();
   // ---------------------------------------------------------------- thick polylines (state borders): miter joins, the
   // quads of neighbouring segments share their edges — no overlap, so a translucent line does not darken at its bends
-  // (as one Canvas stroke). pts: device px [x0,y0,x1,y1,…]; w: device px; col: [r,g,b,a]
+  // (as one Canvas stroke). pts: device px [x0,y0,x1,y1,…]; w: device px; col: [r,g,b,a]; off: the line is moved by off device px
+  // along the left normal of its direction (stage 6.2: the bands of a border lie inside or outside the territory edge)
   const LVS = `#version 300 es
 layout(location=0) in vec2 aP; layout(location=1) in vec4 aC; uniform vec2 uS; out vec4 vC;
 void main(){ gl_Position = vec4(aP.x * uS.x - 1.0, 1.0 - aP.y * uS.y, 0.0, 1.0); vC = aC; }`;
   const LFS = `#version 300 es
 precision highp float; in vec4 vC; out vec4 o; void main(){ o = vec4(vC.rgb * vC.a, vC.a); }`;
-  let LP = null, lvao = null, lbuf = null, lv = new Float32Array(6 * 4096), ln = 0;
+  let LP = null, lvao = null, lbuf = null, lv = new Float32Array(6 * 4096), ln = 0, POX = new Float32Array(2048), PSX = new Float32Array(2048);
   function lineInit() { const p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, LVS)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, LFS)); gl.linkProgram(p); LP = { p, uS: gl.getUniformLocation(p, 'uS') };
     lvao = gl.createVertexArray(); gl.bindVertexArray(lvao); lbuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, lbuf);
     gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 24, 0); gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 24, 8); gl.bindVertexArray(vao) }
   function lpush(x, y, c, a) { if (ln * 6 + 6 > lv.length) { const d = new Float32Array(lv.length * 2); d.set(lv); lv = d } const o = ln * 6; lv[o] = x; lv[o + 1] = y; lv[o + 2] = c[0]; lv[o + 3] = c[1]; lv[o + 4] = c[2]; lv[o + 5] = a; ln++ }
-  api.polyline = function (pts, n, w, col) {
-    if (n < 2) return; const a = col[3] * api.globalAlpha, h = w / 2; if (a <= 0) return;
-    const OX = new Float32Array(n * 2);
+  api.polyline = function (pts, n, w, col, off) {
+    if (n < 2) return; const a = col[3] * api.globalAlpha, h = w / 2; if (a <= 0) return; off = off || 0;
+    if (POX.length < n * 2) { POX = new Float32Array(n * 4); PSX = new Float32Array(n * 4) } const OX = POX, SX = off ? PSX : null; // reused scratch (no garbage per line)
     for (let i = 0; i < n; i++) { // offset vector of vertex i (miter, limited to 2.5 half-widths)
       const px = pts[(i > 0 ? i - 1 : i) * 2], py = pts[(i > 0 ? i - 1 : i) * 2 + 1], qx = pts[(i < n - 1 ? i + 1 : i) * 2], qy = pts[(i < n - 1 ? i + 1 : i) * 2 + 1], cx = pts[i * 2], cy = pts[i * 2 + 1];
-      let ax = cx - px, ay = cy - py, la = M.hypot(ax, ay), bx = qx - cx, by = qy - cy, lb = M.hypot(bx, by); if (la < 1e-6) { ax = bx; ay = by; la = lb } if (lb < 1e-6) { bx = ax; by = ay; lb = la } if (la < 1e-6) { OX[i * 2] = 0; OX[i * 2 + 1] = h; continue }
+      let ax = cx - px, ay = cy - py, la = M.hypot(ax, ay), bx = qx - cx, by = qy - cy, lb = M.hypot(bx, by); if (la < 1e-6) { ax = bx; ay = by; la = lb } if (lb < 1e-6) { bx = ax; by = ay; lb = la } if (la < 1e-6) { OX[i * 2] = 0; OX[i * 2 + 1] = h; if (SX) SX[i * 2 + 1] = off; continue }
       const n1x = -ay / la, n1y = ax / la, n2x = -by / lb, n2y = bx / lb; let mx = n1x + n2x, my = n1y + n2y; const ml = M.hypot(mx, my) || 1; mx /= ml; my /= ml;
-      const d = mx * n1x + my * n1y; const k = M.min(2.5, 1 / M.max(0.2, d)) * h; OX[i * 2] = mx * k; OX[i * 2 + 1] = my * k }
-    for (let i = 0; i < n - 1; i++) { const x0 = pts[i * 2], y0 = pts[i * 2 + 1], x1 = pts[i * 2 + 2], y1 = pts[i * 2 + 3], o0x = OX[i * 2], o0y = OX[i * 2 + 1], o1x = OX[i * 2 + 2], o1y = OX[i * 2 + 3];
+      const d = mx * n1x + my * n1y, mk = M.min(2.5, 1 / M.max(0.2, d)), k = mk * h; OX[i * 2] = mx * k; OX[i * 2 + 1] = my * k; if (SX) { SX[i * 2] = mx * mk * off; SX[i * 2 + 1] = my * mk * off } }
+    for (let i = 0; i < n - 1; i++) { const x0 = pts[i * 2] + (SX ? SX[i * 2] : 0), y0 = pts[i * 2 + 1] + (SX ? SX[i * 2 + 1] : 0), x1 = pts[i * 2 + 2] + (SX ? SX[i * 2 + 2] : 0), y1 = pts[i * 2 + 3] + (SX ? SX[i * 2 + 3] : 0), o0x = OX[i * 2], o0y = OX[i * 2 + 1], o1x = OX[i * 2 + 2], o1y = OX[i * 2 + 3];
       lpush(x0 - o0x, y0 - o0y, col, a); lpush(x0 + o0x, y0 + o0y, col, a); lpush(x1 + o1x, y1 + o1y, col, a); lpush(x0 - o0x, y0 - o0y, col, a); lpush(x1 + o1x, y1 + o1y, col, a); lpush(x1 - o1x, y1 - o1y, col, a) }
   };
   // draws the polylines collected since the last call (one draw call)
