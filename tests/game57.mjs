@@ -33,12 +33,12 @@ try {
   const ui = await page.evaluate(() => { const r = (id) => document.getElementById(id).getBoundingClientRect(), tabs = r('bb-tabs'), tray = r('bb-tray'), pause = r('bpause');
     return { pauseLeft: pause.left < 120 && pause.top >= tray.top, tabsFull: tabs.left <= 4 && tabs.right >= innerWidth - 4, trayBelow: tray.top >= tabs.bottom - 1 && tray.bottom >= innerHeight - 1,
       tabs: document.querySelectorAll('#bb-tabs button').length, cards: document.querySelectorAll('#bb-cat .bcat').length, metal: !!document.getElementById('rmetal-v') }; });
-  check(ui.pauseLeft && ui.tabsFull && ui.trayBelow && ui.tabs === 7 && ui.cards === 16 && ui.metal, 'панели: вкладки во всю ширину, под ними панель с паузой и скоростью слева, металл в ресурсах', JSON.stringify(ui));
+  check(ui.pauseLeft && ui.tabsFull && ui.trayBelow && ui.tabs === 7 && ui.cards === 17 && ui.metal, 'панели: вкладки во всю ширину, под ними панель с паузой и скоростью слева, металл в ресурсах', JSON.stringify(ui));
   await page.click('#bb-tabs [data-t="cities"]');
   const off = await page.evaluate(() => document.body.classList.contains('tray-off'));
   await page.click('#bb-tabs [data-t="strike"]');
-  const strike = await page.evaluate(() => ({ on: !document.body.classList.contains('tray-off'), n: document.querySelectorAll('#bb-cat .bcat').length, title: document.querySelector('#bb-tabs .on').textContent }));
-  check(off && strike.on && strike.n === 8 && /Удар/.test(strike.title), 'повторный клик по вкладке сворачивает панель; вкладка «Удар»: дронопорт, 3 модуля, цех и 3 дрона', JSON.stringify(strike));
+  const strike = await page.evaluate(() => ({ on: !document.body.classList.contains('tray-off'), n: document.querySelectorAll('#bb-cat .bcat').length, title: document.querySelector('#bb-tabs .on').textContent, keys: [...document.querySelectorAll('#bb-cat .bcat b')].map((b) => b.textContent).join(',') }));
+  check(off && strike.on && strike.n === 5 && /Удар/.test(strike.title) && strike.keys === 'Маршрут,Разведка,Удар,Цех БПЛА,Дронопорт', 'повторный клик по вкладке сворачивает панель; вкладка «Удар» как в DroneFlames: маршрут, разведка, удар, цех, дронопорт (модули — в карточке дронопорта)', JSON.stringify(strike));
 
   // ---- туман войны: карта не затемняется, постройка бота вдали скрыта
   const fog = await page.evaluate(() => { const T = Game._test, G = Game.G, W = Game.api.W, b = G.states[1], c = b.places[0];

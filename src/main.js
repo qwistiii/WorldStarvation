@@ -169,7 +169,7 @@ const up=e=>{if(hold===e.pointerId){hold=null;if(HK.pup)try{HK.pup(cam.x+(e.clie
 let clickT=0;
 cv.addEventListener('pointerup',up,SIG);cv.addEventListener('pointercancel',up,SIG);
 cv.addEventListener('wheel',e=>{e.preventDefault();if(MODE==='bg')return;let d=e.deltaY;if(e.deltaMode===1)d*=18;else if(e.deltaMode===2)d*=400;zoomAt(M.exp(clamp(d,-300,300)*0.0022),e.clientX,e.clientY)},{passive:false,signal:AC.signal});
-cv.addEventListener('dblclick',e=>{clearTimeout(clickT);if(HK.dblclick&&HK.dblclick())return;zoomAt(0.35,e.clientX,e.clientY)},SIG);
+cv.addEventListener('dblclick',e=>{clearTimeout(clickT);if(HK.dblclick&&HK.dblclick(e.clientX,e.clientY))return;zoomAt(0.35,e.clientX,e.clientY)},SIG);
 addEventListener('keydown',e=>{if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||e.target.tagName==='TEXTAREA')return;if(MODE==='bg')return;keys[e.code]=true;if(e.code==='F3'){e.preventDefault();perfOn=!perfOn;if(!perfOn&&perfEl)perfEl.style.display='none';return}
   if(HK.key&&HK.key(e))return;
   if(MODE==='view'){if(e.code==='KeyN')setTod(isNight()?11:22.5);if(e.code==='KeyP')setSpeed(tSpeed?0:1)}if(e.code==='Escape')closeInsp()},SIG);
@@ -566,9 +566,9 @@ function drawPrecip(dt){const rain=wcur.rain,snow=wcur.snow,H=camH();const vis=s
     if(isSnow){const s=clamp(1.6/p.q,1.2,9);ctx.globalAlpha=vis*clamp(0.95-p.q*0.5,0.3,0.9)*br;ctx.drawImage(FLAKE,X-s/2,Y-s/2,s,s)}
     else{const qb=p.q*0.93;const X0=VW/2+(p.dx-wx*0.03*p.q)/(m*qb),Y0=VH/2+(p.dy-wy*0.03*p.q)/(m*qb);ctx.line(X0,Y0,X,Y,1)}}
   ctx.globalAlpha=1}
-const ZDYN={ref2:'НПЗ',farm:'Колхоз',ind:'Завод товаров',pow:'ТЭЦ',saw:'Лесопилка',oil:'Нефтевышка',ref:'НПЗ',port:'Порт',mil:'Военная часть',sam:'ПВО',
+const ZDYN={ref2:'НПЗ',farm:'Колхоз',ind:'Завод товаров',pow:'ТЭЦ',npp:'АЭС',zsu:'ЗСУ',int:'Пусковая перехватчиков',rls:'РЛС',reb:'РЭБ',saw:'Лесопилка',oil:'Нефтевышка',ref:'НПЗ',port:'Порт',mil:'Военная часть',sam:'ЗРК',
   sol2:'Солнечные панели',mine:'Рудник',gasw:'Газовая скважина',rst:'Вокзал',dport:'Дронопорт',dramp:'Пусковая рампа',drwy:'ВПП',dstore:'Склад БПЛА',dfab:'Цех БПЛА',air2:'Аэропорт'};
-const ZNAME={air2:'Аэропорт',ref2:'НПЗ',saw:'Лесопилка',oil:'Нефтевышка',sam:'ПВО',mil:'Военная база',air:'Аэропорт',ref:'НПЗ',pow:'ТЭЦ',port:'Порт',ind:'Промзона',solar:'Солнечная электростанция',agro:'Тепличный комбинат',farm:'Ферма',dacha:'СНТ',cem:'Кладбище',quarry:'Карьер',gas:'АЗС',stn:'Вокзал',sol2:'Солнечные панели',mine:'Рудник',gasw:'Газовая скважина',rst:'Вокзал',dport:'Дронопорт',dramp:'Пусковая рампа',drwy:'ВПП',dstore:'Склад БПЛА',dfab:'Цех БПЛА'};
+const ZNAME={air2:'Аэропорт',ref2:'НПЗ',saw:'Лесопилка',oil:'Нефтевышка',sam:'ЗРК',mil:'Военная база',air:'Аэропорт',ref:'НПЗ',pow:'ТЭЦ',npp:'АЭС',zsu:'ЗСУ',int:'Пусковая перехватчиков',rls:'РЛС',reb:'РЭБ',port:'Порт',ind:'Промзона',solar:'Солнечная электростанция',agro:'Тепличный комбинат',farm:'Ферма',dacha:'СНТ',cem:'Кладбище',quarry:'Карьер',gas:'АЗС',stn:'Вокзал',sol2:'Солнечные панели',mine:'Рудник',gasw:'Газовая скважина',rst:'Вокзал',dport:'Дронопорт',dramp:'Пусковая рампа',drwy:'ВПП',dstore:'Склад БПЛА',dfab:'Цех БПЛА'};
 const ZLIM={mil:12,gas:2.5,farm:5,cem:5,dacha:6,stn:5,sol2:2.5,dramp:2,gasw:4,dstore:4,drwy:5};
 function drawLabels(){const ctx=octx;ctx.setTransform(DPR,0,0,DPR,0,0);const m=cam.m;const boxes=[];ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineJoin='round';
   const lim=[9,32,95,380],fs=[11,12.5,15,19];const nl=LG.night;

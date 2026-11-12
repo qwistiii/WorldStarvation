@@ -1,6 +1,6 @@
 {
   "name": "world-starvation",
-  "version": "6.1.0",
+  "version": "6.2.0",
   "description": "World Starvation — браузерная стратегия наших дней на огромном процедурном мире (вид сверху, WebGL2 + Web Workers)",
   "private": true,
   "type": "module",
@@ -14,7 +14,7 @@
     "bench": "node tests/perf/bench.mjs",
     "bench:motion": "node tests/perf/motion.mjs",
     "parity": "node tests/visual/parity.mjs",
-    "test:mechanics": "node tools/build.mjs && node tests/smoke.mjs && node tests/visual.mjs && node tests/game.mjs && node tests/game57.mjs && node tests/game58.mjs && node tests/game59.mjs && node tests/game511.mjs"
+    "test:mechanics": "node tools/build.mjs && node tests/smoke.mjs && node tests/visual.mjs && node tests/game.mjs && node tests/game57.mjs && node tests/game58.mjs && node tests/game59.mjs && node tests/game511.mjs && node tests/game62.mjs"
   },
   "engines": {
     "node": ">=18"

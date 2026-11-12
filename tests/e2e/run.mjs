@@ -144,10 +144,11 @@ async function scenario(browser, dev, opts) {
     // a press on the open tab folds the panel (as in DroneFlames): press it only when another tab is open
     if (!(await ev((t) => document.querySelector(`#bb-tabs [data-t="${t}"]`).classList.contains('on') && !document.body.classList.contains('tray-off'), tab))) { await ev(() => document.body.classList.remove('tray-off')); await page.click(`#bb-tabs [data-t="${tab}"]`); }
     await page.waitForTimeout(80);
-    const card = `#bb-cat [data-k="${k}"]`;
-    await page.evaluate((s) => document.querySelector(s).scrollIntoView({ inline: 'center' }), card);
+    // stage 6.2: the modules of the drone port are armed from its card (as DroneFlames), the rest from the keys of the tab
+    const card = `#bb-cat [data-k="${k}"]`, mod = ['dramp', 'drwy', 'dstore'].includes(k);
+    if (!mod) await page.evaluate((s) => document.querySelector(s).scrollIntoView({ inline: 'center' }), card);
     const n0 = await ev(() => Game.G.states[0].builds.length);
-    if (touch) await tapSel(card); else await page.click(card);
+    if (mod) await ev((k) => Game._test.setBuild(k), k); else if (touch) await tapSel(card); else await page.click(card);
     await page.waitForTimeout(100);
     const armed = await ev(() => ({ k: Game.G.build, bar: document.getElementById('pbar').classList.contains('show'), touch: Game._test.PL.state.touch, has: Game._test.PL.state.has }));
     check(dev, armed.k === k && armed.bar, `«${k}»: ключ взводит постройку, плашка показана`, JSON.stringify(armed));
