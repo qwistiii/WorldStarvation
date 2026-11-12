@@ -45,11 +45,11 @@ try {
 
   // ---- верх: полоса во всю ширину, страна слева, очки и часы справа, меню в углу; ресурсы, план и новости — по центру под ней
   const top = await page.evaluate(() => { const r = (id) => document.getElementById(id).getBoundingClientRect();
-    const hud = r('hud'), res = r('hres'), hint = r('hint'), name = r('hstate'), menu = r('bmenu'), sc = r('hscore');
+    const hud = r('hud'), res = r('hres'), plan = r('plan'), name = r('hstate'), menu = r('bmenu'), sc = r('hscore');
     return { full: hud.left <= 0 && hud.right >= innerWidth && hud.top <= 0, name: name.left < 40, menu: menu.right > innerWidth - 8, score: sc.left > innerWidth * 0.6,
-      res: res.top >= hud.bottom && Math.abs((res.left + res.right) / 2 - innerWidth / 2) < 4, hint: hint.top >= res.bottom && Math.abs((hint.left + hint.right) / 2 - innerWidth / 2) < 4,
+      res: res.top >= hud.bottom && Math.abs((res.left + res.right) / 2 - innerWidth / 2) < 4, plan: plan.left < 20 && plan.top >= hud.bottom - 1,
       items: document.querySelectorAll('#hres .res').length, store: document.getElementById('rstore').textContent, race: document.getElementById('hrace').textContent, plan: document.getElementById('plann').textContent }; });
-  check(top.full && top.name && top.menu && top.score && top.res && top.hint && top.items === 10 && /лидер/.test(top.race) && /из 19/.test(top.plan), 'верх: страна слева, очки и гонка, меню в углу; под полосой по центру ресурсы (9 и «Склад») и план развития', JSON.stringify(top));
+  check(top.full && top.name && top.menu && top.score && top.res && top.plan && top.items === 10 && /лидер/.test(top.race) && /18/.test(top.plan), 'верх: страна слева, очки и гонка, меню в углу; под полосой по центру ресурсы (9 и «Склад»), план развития — карточка слева сверху (как в DroneFlames)', JSON.stringify(top));
   await page.click('#hres');
   const store = await page.evaluate(() => ({ show: document.getElementById('store').classList.contains('show'), rows: document.querySelectorAll('#stb .stat').length, txt: document.getElementById('stb').textContent }));
   check(store.show && store.rows === 9 && /Металл/.test(store.txt) && /\/ 400/.test(store.txt), 'клик по ресурсам — окно «Склад»: запас / вместимость и изменение каждого ресурса', JSON.stringify({ show: store.show, rows: store.rows }));
@@ -61,9 +61,9 @@ try {
   await page.click('#msx');
   await page.click('#hintx');
   const h1 = await page.evaluate(() => document.getElementById('hint').classList.contains('show'));
-  await page.click('#plan');
-  const h2 = await page.evaluate(() => document.getElementById('hint').classList.contains('show') && /шаг 3 из 19/.test(document.getElementById('hintn').textContent));
-  check(!h1 && h2, '✕ скрывает подсказку, «План развития» слева возвращает её');
+  await page.click('#planh');
+  const h2 = await page.evaluate(() => document.getElementById('hint').classList.contains('show') && /Село/.test(document.getElementById('hintn').textContent) && /1[/]18/.test(document.getElementById('plann').textContent));
+  check(!h1 && h2, '✕ сворачивает план до заголовка, нажатие на заголовок раскрывает текущую цель');
 
   // ---- низ: вкладки во всю ширину, под ними панель; пауза и скорость слева, ключи — квадрат с иконкой, подпись и цена
   const bot = await page.evaluate(() => { const r = (id) => document.getElementById(id).getBoundingClientRect(), tabs = r('bb-tabs'), tray = r('bb-tray'), p = r('bpause'), sp = r('bspeed');
@@ -75,9 +75,11 @@ try {
   await page.click('#bpause');
   const ps = await page.evaluate(() => ({ sp: Game.G.speed, on: document.getElementById('bpause').classList.contains('on') }));
   await page.click('#bspeed');
-  const sp2 = await page.evaluate(() => ({ sp: Game.G.speed, b: document.getElementById('bspd').textContent }));
+  const pick = await page.evaluate(() => ({ show: document.getElementById('spick').classList.contains('show'), chips: [...document.querySelectorAll('#spg .spc')].map((b) => b.textContent).join(' '), on: (document.querySelector('#spg .spc.on') || {}).textContent }));
+  await page.click('#spg .spc[data-v="5"]');
+  const sp2 = await page.evaluate(() => ({ sp: Game.G.speed, b: document.getElementById('bspd').textContent, shut: !document.getElementById('spick').classList.contains('show') }));
   await page.click('#bpause');
-  check(ps.sp === 1 && !ps.on && sp2.sp === 2 && sp2.b === 'x2', 'пауза и скорость: кнопки на панели, значок x2 на «Скорости»', JSON.stringify([ps, sp2]));
+  check(ps.sp === 1 && !ps.on && pick.show && pick.chips === 'x½ x1 x2 x5 x10 x20' && pick.on === 'x1' && sp2.sp === 5 && sp2.b === 'x5' && sp2.shut, 'пауза и скорость: «Скорость» открывает панель x½…x20 как в DroneFlames, выбор x5 ставит x5 и закрывает её', JSON.stringify([ps, pick, sp2]));
   await page.evaluate(() => Game.setSpeed(0));
   await page.hover('#bb-cat [data-k="factory"]');
   await page.waitForTimeout(200);
@@ -105,9 +107,9 @@ try {
   // ---- новости (этап 6.1, как в DroneFlames): по центру под планом, значок; не больше двух; остальные ждут (+N); касание закрывает
   await page.evaluate(() => { for (let i = 0; i < 5; i++) Game._test.declareWar(1 + (i % 2)); });
   await page.waitForTimeout(300);
-  const news = await page.evaluate(() => { const t = [...document.querySelectorAll('#toasts .toast:not(.out)')], r = t[0] && t[0].getBoundingClientRect(), h = document.getElementById('hint').getBoundingClientRect();
+  const news = await page.evaluate(() => { const t = [...document.querySelectorAll('#toasts .toast:not(.out)')], r = t[0] && t[0].getBoundingClientRect(), h = document.getElementById('hres').getBoundingClientRect();
     return { n: t.length, center: r && Math.abs((r.left + r.right) / 2 - innerWidth / 2) < 4, below: r && r.top >= h.bottom - 1, parts: t[0] && !!t[0].querySelector('.t-i'), more: (document.getElementById('t-more') || {}).textContent }; });
-  check(news.n >= 1 && news.n <= 2 && news.center && news.below && news.parts, 'новости по центру под планом: значок, не больше двух, остальные в очереди', JSON.stringify(news));
+  check(news.n >= 1 && news.n <= 2 && news.center && news.below && news.parts, 'новости по центру под ресурсами: значок, не больше двух, остальные в очереди', JSON.stringify(news));
   await page.click('#toasts .toast');
   await page.waitForTimeout(500);
 

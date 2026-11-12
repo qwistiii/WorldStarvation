@@ -117,7 +117,7 @@ async function scenario(browser, dev, opts) {
     const tu = await ev(async () => { const T = Game._test, H = T.HINTS.map((h) => h[1]), i = H.indexOf('station'), prev = T.hintStep(); T.hint(i);
       await new Promise((r) => setTimeout(r, 200)); const tab = document.querySelector('#bb-tabs [data-t="cities"]'); if (tab && !tab.classList.contains('on')) tab.click(); await new Promise((r) => setTimeout(r, 300));
       const pulse = [...document.querySelectorAll('#bb-cat .pulse')].map((e) => e.dataset.k || e.dataset.mode || e.id);
-      const out = { order: [H.indexOf('mine'), i, H.indexOf('rail')], text: document.getElementById('hintt').textContent, pulse }; T.hint(0); T.hint(prev); return out; });
+      const out = { order: [H.indexOf('mine'), i, H.indexOf('rail')], text: document.getElementById('hintn').textContent, pulse }; T.hint(0); T.hint(prev); return out; });
     check(dev, tu.order[1] === tu.order[0] + 1 && tu.order[2] === tu.order[1] + 1, 'туториал: рудник → вокзал → ЖД-путь', JSON.stringify(tu.order));
     check(dev, /Вокзал/.test(tu.text) && tu.pulse.includes('station') && !tu.pulse.includes('rail'), 'туториал: на шаге «Вокзал» подсвечен ключ вокзала, а не ЖД-пути', JSON.stringify(tu));
   }
