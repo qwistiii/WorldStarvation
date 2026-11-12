@@ -127,12 +127,14 @@ test('мир с постройками и поселениями игры про
   }
 });
 
-test('города игры — разные планировки: кольца и лучи, веер, прямые и изогнутые сетки, суперкварталы, диагонали', () => {
+test('города игры — разные планировки: свободная, смешанная, изогнутые и прямые сетки, суперкварталы; без колец и лучей (этап 6.2)', () => {
   const towns = [P1, P2].flatMap((P) => P.D.cities.filter((c) => c.type >= 2).map((c) => [P.D, c]));
   const fams = new Set(towns.map(([, c]) => c.lay));
-  assert.ok(fams.size >= 4, 'семейств планировок: ' + [...fams].join(', '));
+  assert.ok(fams.size >= 3, 'семейств планировок: ' + [...fams].join(', '));
   for (const P of [P1, P2]) { const L = P.D.cities.filter((c) => c.cap !== undefined).map((c) => c.lay); assert.equal(new Set(L).size, L.length, 'у столиц одной партии разные планировки: ' + L); }
-  assert.ok(towns.some(([, c]) => c.pol), 'есть радиально-кольцевые или веерные города');
+  assert.ok(towns.every(([, c]) => !c.pol), 'в игре нет радиально-кольцевых и веерных городов');
+  assert.ok(towns.some(([, c]) => c.lay === 'free' || c.lay === 'mixed'), 'есть свободная или смешанная планировка');
+  for (const P of [P1, P2]) assert.ok(P.D.roads.every((r) => !r.ring), 'в игре нет кольцевых дорог вокруг городов');
   assert.ok(towns.filter(([, c]) => !c.pol && c.msi + c.msj > 0).length >= 3, 'в сетках есть суперкварталы');
   for (const [W, c] of towns) {
     const BD = c.D - 1, RW = W._dbg.RW, own = W.roads.filter((r) => r.city === c.id && !r.dg);

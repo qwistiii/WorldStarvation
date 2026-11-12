@@ -26,7 +26,7 @@ try {
 
   // ---- столица — не квадратная решётка: у неё одна из планировок
   const lay = await page.evaluate(() => { const W = Game.api.W; return W.cities.filter((c) => c.cap !== undefined).map((c) => c.lay); });
-  check(lay.length >= 3 && new Set(lay).size === lay.length && lay.every((l) => ['radial', 'fan', 'grid', 'bent', 'organic'].includes(l)), 'у столиц разные планировки', lay.join(', '));
+  check(lay.length >= 3 && new Set(lay).size === lay.length && lay.every((l) => ['free', 'mixed', 'grid', 'bent', 'organic'].includes(l)), 'у столиц разные планировки (без колец и лучей, этап 6.2)', lay.join(', '));
 
   // ---- аэропорты: ключ на вкладке «Города», два своих и один у соседа
   await page.evaluate(() => { Game.setSpeed(0); Game._test.run(30); });

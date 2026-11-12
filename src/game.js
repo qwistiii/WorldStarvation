@@ -106,11 +106,12 @@ function claimDisc(s,x,y,r){const R=r/CSZ,i0=M.floor(x/CSZ),j0=M.floor(y/CSZ),n=
 function placeR(p){const c=W.cities[p.id];if(!c)return 900;if(p.k==='village')return 1300;return c.R*1.3+1500}
 function initTerritory(){own=new Uint8Array(N*N);vis=new Uint8Array(N*N);expl=new Uint8Array(N*N);for(const s of G.states)s.cells=0;claimAll()}
 // demolish: the zone leaves the world (op in all workers), 30 % of the price comes back; its army is disbanded
-function demolish(s,q){if(!q.done||q.k==='city'||q.k==='village')return false;const cost=q.k==='rail'?q.cost:BLD[q.k].cost;
+// a construction site (stage 6.2: it stands in the world) can be pulled down as well
+function demolish(s,q){if((!q.done&&!(q.con&&q.id>=0))||q.k==='city'||q.k==='village')return false;const cost=q.k==='rail'?q.cost:BLD[q.k].cost;
   if(q.k==='rail'){if(q.id>=0)api.op('removeRail',q.id)}else if(q.id>=0)api.op('removeZone',q.id);s.builds.splice(s.builds.indexOf(q),1);if(q.dep!=null&&G.dep[q.dep])G.dep[q.dep].used=-1;
   // a station takes its lines with it, a drone port its modules
   if(q.k==='station')for(const r of s.builds.slice())if(r.k==='rail'&&(r.a===q.uid||r.b===q.uid)){if(r.done)demolish(s,r);else s.builds.splice(s.builds.indexOf(r),1)}
-  if(q.k==='droneport')for(const r of s.builds.slice())if(r.port===q.uid&&BLD[r.k]&&BLD[r.k].mod){if(r.done)demolish(s,r);else s.builds.splice(s.builds.indexOf(r),1)}
+  if(q.k==='droneport')for(const r of s.builds.slice())if(r.port===q.uid&&BLD[r.k]&&BLD[r.k].mod){if(r.done||r.con)demolish(s,r);else s.builds.splice(s.builds.indexOf(r),1)}
   lightsDirty=true;const a=s.armies.find(x=>x.home===q);if(a)s.armies.splice(s.armies.indexOf(a),1);if(s.res.money!==Infinity)s.res.money+=cost*0.3;if(s.isP)toast(`Снесено: <b>${bName(q)}</b> · возвращено ${fmt(cost*0.3)}`,'ic-b-demolish');updPop();capUav(s);return true}
 const bName=q=>q.k==='rail'?'ЖД путь':BLD[q.k].n;
 // territory as merging drops: a cell is taken where the sum of (r/d)^2 over the state's places and buildings reaches 1,
@@ -220,6 +221,8 @@ function startBuild(s,k,x,y,ang){const b=BLD[k],c=creative()&&s.isP?0:b.cost;if(
   if(k==='station')q.a=ang!=null?ang:stationAng(s,x,y);else if(ang!=null&&b.zk&&ang)q.a=ang;
   if(b.mod){const p=portNear(s,x,y,1100);if(p)q.port=p.uid}
   if(k==='dronefab'){q.queue=[];q.pt=0;q.up={}}
+  // stage 6.2: the building stands on the map at once as a construction site and is built where it stands (DroneFlames)
+  if(b.zk){const h=homeOf(s,q.x,q.y);if(h){const o={zk:b.zk,x:q.x,y:q.y,city:h.id,st:s.id,W:b.W,H:b.H,con:1};if(q.a!=null)o.a=q.a;if(q.dep!=null)o.ore=G.dep[q.dep].k;const id=api.op('addZone',o);if(id>=0){q.id=id;q.con=1;q.t0=G.t;lightsDirty=true;if(!s.isP)hidDirty=true}}}
   s.builds.push(q);if(k==='city'||k==='village')placeNow(s,q);if(s.isP)onBuilt(k,false);return true}
 // a town or a village appears on the map at once and grows while it is being built (stage 5.9), as the capitals do
 function placeNow(s,q){const b=BLD[q.k],name=NAMES.capital(rngS(hsh(q.x|0,q.y|0)*1e9));const id=api.op('addPlace',{k:q.k,x:q.x,y:q.y,st:s.id,name,R:b.R});q.id=id;if(id<0)return;
@@ -237,8 +240,8 @@ function finishBuild(s,q){q.done=true;
   const b=BLD[q.k];lightsDirty=true;
   if(q.k==='city'||q.k==='village'){let p=s.places.find(o=>o.bq===q.uid);if(!p){placeNow(s,q);p=s.places.find(o=>o.bq===q.uid)}
     if(p){p.grow=q.k==='city'?M.max(p.grow,0.12):1;syncPlace(p)}}
-  else{const h=homeOf(s,q.x,q.y);const o={zk:b.zk,x:q.x,y:q.y,city:h.id,st:s.id,W:b.W,H:b.H};if(q.a!=null)o.a=q.a;if(q.dep!=null)o.ore=G.dep[q.dep].k;
-    q.id=api.op('addZone',o);if(q.id<0){q.failed=true}claimAll();
+  else{if(q.con&&q.id>=0){api.op('zoneCon',[q.id,0]);q.con=0;q.tDone=G.t}else{const h=homeOf(s,q.x,q.y);const o={zk:b.zk,x:q.x,y:q.y,city:h.id,st:s.id,W:b.W,H:b.H};if(q.a!=null)o.a=q.a;if(q.dep!=null)o.ore=G.dep[q.dep].k;
+    q.id=api.op('addZone',o)}if(q.id<0){q.failed=true}claimAll();
     if(q.k==='barracks'){const n=(s.armyN=(s.armyN||0)+1);s.armies.push(mkArmy(s,n,q))}
     if(q.id>=0&&q.up)for(const u in q.up)if(q.up[u])api.op('zoneUp',[q.id,u])}
   capUav(s);if(s.isP){toast(`Построено: <b>${b.n}</b>`,'ic-b-'+q.k);onBuilt(q.k,true)}updPop()}
@@ -413,7 +416,7 @@ function askAlly(o){const ai=cfg.rules.ai;const p=player();const like=(o.trait==
 // ---------- simulation tick (game seconds)
 function sim(dt){G.t+=dt;
   for(const s of G.states){if(s.dead||!s.places.length)continue;
-    for(const q of s.builds.slice())if(!q.done){if(q.k==='rail'){const A=byUid(s,q.a),B=byUid(s,q.b);if(!A||!B){s.builds.splice(s.builds.indexOf(q),1);continue}if(!A.done||!B.done)continue}q.t+=dt;if(q.t>=q.time)finishBuild(s,q)}
+    for(const q of s.builds.slice())if(!q.done){if(q.k==='rail'){const A=byUid(s,q.a),B=byUid(s,q.b);if(!A||!B){s.builds.splice(s.builds.indexOf(q),1);continue}if(!A.done||!B.done)continue}q.t+=dt;if(q.con&&q.id>=0){const st=M.min(3,1+M.floor(q.t/q.time*3));if(st!==q.con){q.con=st;api.op('zoneCon',[q.id,st])}}if(q.t>=q.time)finishBuild(s,q)}
     if(s.grow<1&&s.cityId>=0&&s.cap){s.grow=M.min(1,s.grow+dt*0.005*(s.isP?1:[0.6,1,1.6][cfg.rules.botGrowth]));syncGrow(s)}
     for(const p of s.places){if(p.grow>=1)continue;const q=p.bq&&s.builds.find(o=>o.uid===p.bq&&!o.done);
       if(q){p.grow=M.max(p.grow,0.05+(q.k==='city'?0.07:0.95)*q.t/q.time);syncPlace(p)}else if(p.k==='city'){p.grow=M.min(1,p.grow+dt*0.008);syncPlace(p)}}
@@ -450,9 +453,14 @@ function rebuildPol(){if(!polC){polC=document.createElement('canvas');polC.width
         switch(m){case 1:case 14:seg(lft,bot);break;case 2:case 13:seg(bot,rgt);break;case 3:case 12:seg(lft,rgt);break;case 4:case 11:seg(top,rgt);break;case 6:case 9:seg(top,bot);break;case 7:case 8:seg(lft,top);break;
           case 5:seg(lft,top);seg(bot,rgt);break;case 10:seg(top,rgt);seg(lft,bot);break}}a=b;e=c}}
     s.lx=(sx/s.cells+0.5)*CSZ;s.ly=(sy/s.cells+0.5)*CSZ;const LS=chainLines(SG),P=new Path2D();s._L=[];
-    for(const pl of LS){const q=new Path2D(),W=new Float32Array(pl.length);let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(let k=0;k<pl.length;k+=2){const X=pl[k]*CSZ,Y=pl[k+1]*CSZ;W[k]=X;W[k+1]=Y;if(k){q.lineTo(X,Y);P.lineTo(X,Y)}else{q.moveTo(X,Y);P.moveTo(X,Y)}x0=M.min(x0,X);y0=M.min(y0,Y);x1=M.max(x1,X);y1=M.max(y1,Y)}s._L.push({P:q,W,bb:[x0,y0,x1,y1]})}
+    for(const pl of LS){const q=new Path2D(),W=new Float32Array(pl.length);let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(let k=0;k<pl.length;k+=2){const X=pl[k]*CSZ,Y=pl[k+1]*CSZ;W[k]=X;W[k+1]=Y;if(k){q.lineTo(X,Y);P.lineTo(X,Y)}else{q.moveTo(X,Y);P.moveTo(X,Y)}x0=M.min(x0,X);y0=M.min(y0,Y);x1=M.max(x1,X);y1=M.max(y1,Y)}s._L.push(Object.assign({P:q,W,bb:[x0,y0,x1,y1]},bordSide(W,id)))}
     s._P=P;borders.push([s,P])}
   dirtyPol=false;dirtyOv=true;bordDirty=true}
+// stage 6.2: which side of a border line is the state (inS: +1 — the left normal (-dy, dx) of the line points inside) and
+// who is across it at every vertex (nb: owner + 1, 0 — no one): the bands of DroneFlames lie inside, the front of a war is red
+function bordSide(W,id){const n=W.length/2,nb=new Uint8Array(n),cel=(x,y)=>{const c=cellOf(x,y);return c>=0?own[c]:0},nrm=i=>{const a=M.max(0,i-1),b=M.min(n-1,i+1);let tx=W[b*2]-W[a*2],ty=W[b*2+1]-W[a*2+1];const L=M.hypot(tx,ty)||1;return [-ty/L,tx/L]};
+  let v=0;const st=M.max(1,M.floor(n/16));for(let i=0;i<n;i+=st){const [nx,ny]=nrm(i),d=CSZ*0.7;v+=(cel(W[i*2]+nx*d,W[i*2+1]+ny*d)===id?1:0)-(cel(W[i*2]-nx*d,W[i*2+1]-ny*d)===id?1:0)}
+  const inS=v>=0?1:-1;for(let i=0;i<n;i++){const [nx,ny]=nrm(i),d=CSZ*0.7;nb[i]=cel(W[i*2]-nx*d*inS,W[i*2+1]-ny*d*inS)}return {inS,nb}}
 // far views: all borders are rasterised into one 2048 x 2048 world layer (64 m per texel) when they change, then blitted
 let bordC=null,bordDirty=true,bordT=0;
 function rasterBorders(){bordT=performance.now();bordDirty=false;const R=2048;if(!bordC){bordC=document.createElement('canvas');bordC.width=bordC.height=R}const x=bordC.getContext('2d');x.setTransform(1,0,0,1,0,0);x.clearRect(0,0,R,R);
@@ -474,7 +482,7 @@ function chainLines(SG){const key=(x,y)=>M.round(x*1000)+','+M.round(y*1000),end
 // sees them — within the vision ring around the own (and allied) land, or revealed by an Orlan-10
 let hidSig='',hidDirty=true;
 function updHidden(){hidDirty=false;if(!api||!api.setHidden||!vis)return;const me=player(),ids=[];
-  if(fogOn())for(const s of G.states){if(s===me||me.allies.includes(s.id))continue;for(const q of s.builds){if(!q.done||q.id<0||q.k==='rail'||G.rev.has(q.id))continue;const c=cellOf(q.x,q.y);if(c>=0&&vis[c])continue;ids.push(q.id)}}
+  if(fogOn())for(const s of G.states){if(s===me||me.allies.includes(s.id))continue;for(const q of s.builds){if((!q.done&&!q.con)||q.id<0||q.k==='rail'||G.rev.has(q.id))continue;const c=cellOf(q.x,q.y);if(c>=0&&vis[c])continue;ids.push(q.id)}}
   const sig=ids.join(',');if(sig===hidSig)return;hidSig=sig;api.setHidden(ids)}
 const seenNow=(x,y)=>{if(!fogOn())return true;const c=cellOf(x,y);return c>=0&&!!vis[c]};
 function rebuildFog(){const me=player();const ids=[me.id+1,...me.allies.map(i=>i+1)];vis.fill(0);const R=9,R2=R*R;
@@ -506,13 +514,22 @@ function drawOverlay(ctx,A){if(!G||(G.phase==='play'&&!own))return;const m=A.cam
 // stage 6: the near state borders through GL (A.gl.polyline): the same two strokes (dark outline when near, then the colour),
 // device px, only the visible polylines; Canvas 2D re-tessellated these long paths every frame (~0.8 ms)
 let glB=false;const BPT=[];
-function glBorders(g,A){if(!glB||!borders)return;glB=false;const m=A.cam.m,VW=A.VW,VH=A.VH,D=A.DPR,near=m<45,bw=(m<5?1.3:2)*D,vx0=A.cam.x-VW/2*m,vy0=A.cam.y-VH/2*m,vx1=A.cam.x+VW/2*m,vy1=A.cam.y+VH/2*m;
-  g.globalAlpha=m<5?0.75:1;const k=D/m,ox=D*VW/2-A.cam.x*k,oy=D*VH/2-A.cam.y*k,dark=[6/255,10/255,16/255,0.5];
-  for(const pass of near?[0,1]:[1])for(const [s] of borders){if(!s._L)continue;const col=pass?(s._bcg||(s._bcg=s.rgb.map(v=>M.min(255,v*1.15+20)/255).concat(1))):dark;
-    for(const l of s._L){if(!(l.bb[2]>vx0&&l.bb[0]<vx1&&l.bb[3]>vy0&&l.bb[1]<vy1))continue;const W=l.W,n=W.length/2;if(BPT.length<W.length)BPT.length=W.length;
-      for(let i=0;i<W.length;i+=2){BPT[i]=W[i]*k+ox;BPT[i+1]=W[i+1]*k+oy}g.polyline(BPT,n,pass?bw:bw+2.2*D,col)}
-    if(!pass)g.linesFlush()}
-  g.globalAlpha=1}
+// stage 6.2: the border of DroneFlames (its territory shader), in screen px: a dark outline outside the edge, the colour band
+// of the state (2 px), a light inner line, and inside a tint of the state fading over ~12 px; where two states are at war the
+// band pulses red. Far out (≥ 45 m/px) the colour band alone, the fill comes from the political layer
+const BDK=[11/255,20/255,48/255,1],BWAR=[0.91,0.25,0.165,1],BC2=[0,0,0,0],BRUN=[];
+function glBorders(g,A){if(!glB||!borders)return;glB=false;const m=A.cam.m,VW=A.VW,VH=A.VH,D=A.DPR,near=m<45,vx0=A.cam.x-VW/2*m,vy0=A.cam.y-VH/2*m,vx1=A.cam.x+VW/2*m,vy1=A.cam.y+VH/2*m;
+  g.globalAlpha=1;const k=D/m,ox=D*VW/2-A.cam.x*k,oy=D*VH/2-A.cam.y*k,pulse=0.55+0.45*M.sin(A.T*4);
+  for(const [s] of borders){if(!s._L)continue;const col=s._bcg||(s._bcg=s.rgb.map(v=>v/255).concat(1)),lite=s._bcl||(s._bcl=s.rgb.map(v=>(v+(255-v)*0.55)/255).concat(0.85));
+    for(const l of s._L){if(!(l.bb[2]>vx0&&l.bb[0]<vx1&&l.bb[3]>vy0&&l.bb[1]<vy1))continue;const W=l.W,n=W.length/2,iS=l.inS||1;if(BPT.length<W.length)BPT.length=W.length;
+      for(let i=0;i<W.length;i+=2){BPT[i]=W[i]*k+ox;BPT[i+1]=W[i+1]*k+oy}
+      if(!near){g.polyline(BPT,n,2*D,BDK,0);g.polyline(BPT,n,1.2*D,col,0);continue}
+      BC2[0]=col[0];BC2[1]=col[1];BC2[2]=col[2];BC2[3]=0.05;g.polyline(BPT,n,8*D,BC2,iS*10*D);BC2[3]=0.09;g.polyline(BPT,n,6*D,BC2,iS*5.5*D);BC2[3]=0.15;g.polyline(BPT,n,4*D,BC2,iS*2*D);
+      g.polyline(BPT,n,1.4*D,BDK,-iS*0.7*D);g.polyline(BPT,n,2*D,col,iS*1*D);g.polyline(BPT,n,1*D,lite,iS*2.5*D);
+      // the front: runs of vertices whose neighbour is at war with this state
+      if(l.nb&&G.wars.size){let r0=-1;for(let i=0;i<=n;i++){const w=i<n&&l.nb[i]&&atWar(s.id,l.nb[i]-1);if(w&&r0<0)r0=i;if((!w||i===n)&&r0>=0){const c=i-r0;if(c>=2){BRUN.length=c*2;for(let j=0;j<c*2;j++)BRUN[j]=BPT[r0*2+j];
+          BWAR[3]=pulse;g.polyline(BRUN,c,2.4*D,BWAR,iS*1*D)}r0=-1}}}}}
+  g.linesFlush();g.globalAlpha=1}
 function smoothst(a,b,x){let t=(x-a)/(b-a);t=t<0?0:t>1?1:t;return t*t*(3-2*t)}
 // state names: each label is rendered once into its own canvas (per size step) and then just blitted
 const NAMEC=new Map();
@@ -903,9 +920,12 @@ function updModes(){tabSig=''}
 function drawObjects(ctx,A){const m=A.cam.m,T=A.T;drawPennants(ctx,A);ctx.textAlign='center';ctx.textBaseline='middle';
   const me=player(),mine=s=>s.isP||me.allies.includes(s.id);
   for(const s of G.states)for(const q of s.builds){if(q.done||q.k==='rail'||(!mine(s)&&!seenNow(q.x,q.y)))continue;const X=A.sxw(q.x),Y=A.syw(q.y);if(X<-40||Y<-40||X>A.VW+40||Y>A.VH+40)continue;const b=BLD[q.k],r=M.max(9,M.min(60,(b.R||(b.W?M.hypot(b.W,b.H)/2:340))/m));
+    // stage 6.2: a building on its site (it stands in the world): the crane at work and the progress bar, as DroneFlames
+    if(q.con&&q.id>=0&&W.zones[q.id]){conSite(ctx,A,q,W.zones[q.id],m);continue}
     ctx.fillStyle='rgba(10,15,23,0.55)';ctx.beginPath();ctx.arc(X,Y,r,0,7);ctx.fill();ctx.strokeStyle=s.isP?'#ffd25a':s.color;ctx.lineWidth=3;ctx.beginPath();ctx.arc(X,Y,r,-M.PI/2,-M.PI/2+M.PI*2*q.t/q.time);ctx.stroke();
     ctx.strokeStyle='rgba(255,255,255,0.25)';ctx.lineWidth=1;ctx.setLineDash([4,4]);ctx.lineDashOffset=-T*10;ctx.beginPath();ctx.arc(X,Y,r+5,0,7);ctx.stroke();ctx.setLineDash([]);
     const ic=bIcon(q.k);ctx.drawImage(ic,X-11,Y-11,22,22)}
+  conSparks(ctx,A);
   // railways under construction (as DroneFlames): the track is laid along the real route as the work goes, the rest is the
   // earthworks; until both stations stand — the earthworks only, and a chip «ждёт вокзалы»
   for(const s of G.states){if(!mine(s))continue;for(const q of s.builds){if(q.k!=='rail'||q.done)continue;const a=byUid(s,q.a),b=byUid(s,q.b);if(!a||!b)continue;
@@ -975,6 +995,25 @@ function drawRailTool(ctx,A){const m=A.cam.m,T=A.T,p=player();ctx.save();
   if(railDrag&&ev){const t=ev.bad||`${fmtKm(ev.L)} · ${fmt(ev.cost)}${ev.nb?' · новый вокзал':''}`;ctx.font='600 12px Rubik,system-ui,sans-serif';ctx.textAlign='left';ctx.textBaseline='middle';const w=ctx.measureText(t).width+16;
     ctx.fillStyle='rgba(10,15,23,0.9)';ctx.fillRect(railDrag.sx+16,railDrag.sy+14,w,22);ctx.fillStyle=ev.bad?'#ff9c8e':'#9fe3aa';ctx.fillText(t,railDrag.sx+24,railDrag.sy+25)}
   ctx.restore()}
+// stage 6.2: a construction site over the map — the bar of DroneFlames (dark rubber, steel, green fill, a light tip) over the
+// building, the tower crane slewing its jib with the trolley running along it, dust when the work starts, sparks at the end
+// (the sparks are drawn by conSparks for the sites finished a moment ago)
+function conSite(ctx,A,q,z,m){const X=A.sxw(z.x),Y=A.syw(z.y),k=1/m,ext=(M.abs(z.W*z.ca)+M.abs(z.H*z.sa))/2*k,eyt=(M.abs(z.W*z.sa)+M.abs(z.H*z.ca))/2*k,f=M.min(1,q.t/q.time),age=G.t-(q.t0||0);
+  if(z.crane&&m<9){const c=z.crane,cx=X+(c[0]*z.ca-c[1]*z.sa)*k,cy=Y+(c[0]*z.sa+c[1]*z.ca)*k,an=c[3]+M.sin(A.T*0.22+q.uid)*1.1,L=c[2]*k,ca=M.cos(an),sa=M.sin(an),sh=c[4]*0.45*k;
+    const jib=(ox,oy,col,w)=>{ctx.strokeStyle=col;ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(cx+ox-ca*L*0.28,cy+oy-sa*L*0.28);ctx.lineTo(cx+ox+ca*L,cy+oy+sa*L);ctx.stroke()};
+    ctx.save();ctx.lineCap='butt';jib(sh,sh*0.8,'rgba(10,14,22,0.3)',M.max(2,2.4*k));                          // the shadow of the jib on the ground
+    jib(0,0,'rgba(20,16,8,0.85)',M.max(4,3.4*k));jib(0,0,'#e8b41c',M.max(2.2,2*k));
+    {ctx.strokeStyle='rgba(20,16,8,0.7)';ctx.lineWidth=M.max(1,0.5*k);ctx.beginPath();for(let d=-0.2;d<0.98;d+=0.09){const px=cx+ca*L*d,py=cy+sa*L*d,o=M.max(1.1,1*k);ctx.moveTo(px-sa*o,py+ca*o);ctx.lineTo(px+ca*L*0.045+sa*o,py+sa*L*0.045-ca*o)}ctx.stroke()} // the lattice
+    const cw=M.max(4,5*k);ctx.fillStyle='#4a4e56';ctx.fillRect(cx-ca*L*0.26-cw/2,cy-sa*L*0.26-cw/2,cw,cw);         // counterweight
+    const tr=0.35+0.5*(0.5+0.5*M.sin(A.T*0.5+q.uid*1.7)),tw=M.max(3,2.6*k);ctx.fillStyle='#2a2c30';ctx.fillRect(cx+ca*L*tr-tw/2,cy+sa*L*tr-tw/2,tw,tw); // trolley
+    const mw=M.max(5,4*k);ctx.fillStyle='rgba(20,16,8,0.9)';ctx.fillRect(cx-mw/2-1,cy-mw/2-1,mw+2,mw+2);ctx.fillStyle='#e8b41c';ctx.fillRect(cx-mw/2,cy-mw/2,mw,mw);ctx.restore()}
+  if(age<2.5&&m<20){const g=age/2.5;ctx.save();for(let i=0;i<7;i++){const a=i*0.9+q.uid,d=(0.35+g*0.5)*M.max(ext,eyt),rr=M.max(4,(6+g*16)*k*3);ctx.fillStyle=`rgba(176,160,132,${0.35*(1-g)})`;ctx.beginPath();ctx.arc(X+M.cos(a)*d,Y+M.sin(a)*d,rr,0,7);ctx.fill()}ctx.restore()}
+  const bw=M.round(M.max(26,M.min(72,ext*1.2))),bx=M.round(X-bw/2),by=M.round(Y-M.max(10,eyt)-10),fill=M.floor((bw-2)*f);
+  ctx.fillStyle='rgba(11,20,48,0.92)';ctx.fillRect(bx-1,by-1,bw+2,7);ctx.fillStyle='#3a4250';ctx.fillRect(bx,by,bw,5);
+  if(fill>0){ctx.fillStyle='#8fd85a';ctx.fillRect(bx+1,by+1,fill,3);ctx.fillStyle='#fff3c4';ctx.fillRect(bx+fill,by+1,1,3)}}
+function conSparks(ctx,A){const m=A.cam.m;if(m>30)return;for(const s of G.states)for(const q of s.builds){if(!q.done||q.tDone==null||G.t-q.tDone>1.6||(!s.isP&&!seenNow(q.x,q.y)))continue;
+  const z=W.zones[q.id];if(!z)continue;const g=(G.t-q.tDone)/1.6,X=A.sxw(z.x),Y=A.syw(z.y),R=M.max(14,M.hypot(z.W,z.H)/2/m);ctx.save();ctx.lineCap='round';
+  for(let i=0;i<14;i++){const a=i/14*M.PI*2+q.uid,d0=R*(0.3+g*0.8),d1=d0+R*0.18*(1-g);ctx.strokeStyle=`rgba(255,${200+i%3*20},90,${0.9*(1-g)})`;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(X+M.cos(a)*d0,Y+M.sin(a)*d0);ctx.lineTo(X+M.cos(a)*d1,Y+M.sin(a)*d1);ctx.stroke()}ctx.restore()}}
 // army token: a framed counter in the state colour with the type symbol and the number of fighters
 function armyToken(ctx,s,a,X,Y,sel){const comp={};for(const u of a.units)comp[u]=(comp[u]||0)+1;const main=Object.entries(comp).sort((p,q)=>q[1]-p[1])[0][0];
   ctx.save();ctx.translate(X,Y);ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillRect(-15,-9,32,22);ctx.fillStyle=s.color;ctx.fillRect(-16,-11,32,22);ctx.strokeStyle=sel?'#fff':'rgba(10,15,23,0.9)';ctx.lineWidth=sel?2.5:1.5;ctx.strokeRect(-16,-11,32,22);
@@ -1097,7 +1136,7 @@ function drawPennants(ctx,A){const m=A.cam.m,a=smoothst(4,8,m)*smoothst(70,48,m)
     ctx.fillStyle='#131410';ctx.beginPath();ctx.moveTo(X-4,y0+s);ctx.lineTo(X+4,y0+s);ctx.lineTo(X,Y-1);ctx.closePath();ctx.fill();ctx.drawImage(bIcon(q.k),x0+2,y0+2,s-4,s-4)}ctx.restore()}
 function drawMiniBuilds(mx,s){const p=player();for(const q of p.builds){if(!q.done||q.k==='rail'||BLD[q.k].mod)continue;const x=q.x*s,y=q.y*s;mx.fillStyle='#131410';mx.fillRect(x-2.5,y-2.5,5,5);mx.fillStyle=PCOL[q.k]||'#fbf3e0';mx.fillRect(x-1.5,y-1.5,3,3)}}
 // ---------- engine hooks
-function ownBuildAt(x,y){for(const q of player().builds){if(!q.done||q.id<0||q.k==='rail')continue;const z=W.zones[q.id];if(z&&!z.dead&&rectHit(z,x,y,1,1))return q}return null}
+function ownBuildAt(x,y){for(const q of player().builds){if((!q.done&&!q.con)||q.id<0||q.k==='rail')continue;const z=W.zones[q.id];if(z&&!z.dead&&rectHit(z,x,y,1,1))return q}return null}
 function pickArmy(sx,sy){for(const s of G.states){if(!s.isP)continue;for(const a of s.armies){if(!a.units.length)continue;if(M.abs(api.sxw(a.x)-sx)<18&&M.abs(api.syw(a.y)-sy)<14)return a}}
   for(const s of G.states)if(s.isP)for(const a of s.armies){const q=a.home;if(!q.done)continue;const b=BLD.barracks;if(M.abs(q.x-api.toWorld(sx,sy)[0])<b.W/2&&M.abs(q.y-api.toWorld(sx,sy)[1])<b.H/2)return a}return null}
 const hooks={

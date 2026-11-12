@@ -90,7 +90,7 @@ try {
   // ---- карточка выбранной постройки: на месте панели над вкладками, ✕ и ключ «Снести»; клик по вкладке закрывает её
   const sel = await page.evaluate(() => { const T = Game._test, s = Game.G.states[0], c = s.places[0]; s.res.money = 1e6;
     for (let r = 1000; r < 12000; r += 200) for (let a = 0; a < 6.28; a += 0.2) { const x = c.x + Math.cos(a) * r, y = c.y + Math.sin(a) * r; if (T.canBuild('droneport', x, y) === null) { T.startBuild('droneport', x, y); T.run(20); Game.G.sel = { build: s.builds.find((q) => q.k === 'droneport') }; return true; } } return false; });
-  await page.waitForTimeout(500);
+  await page.waitForFunction(() => document.querySelector('#gpanel .pc-t b'), null, { timeout: 20000 }).catch(() => {}); // the card opens on the HUD tick (slow frames in CI)
   const card = await page.evaluate(() => { const r = (id) => document.getElementById(id).getBoundingClientRect(), g = r('gpanel'), tabs = r('bb-tabs'), tray = document.getElementById('bb-tray');
     return { sel: document.body.classList.contains('sel'), above: g.bottom <= tabs.top + 1 && g.width > innerWidth * 0.9, tabsBottom: tabs.bottom >= innerHeight - 1, tray: getComputedStyle(tray).display,
       title: document.querySelector('#gpanel .pc-t b').textContent, keys: [...document.querySelectorAll('#gpanel .bcat')].map((e) => e.querySelector('b').textContent).join(','), mini: r('mini').bottom <= g.top + 1 }; });

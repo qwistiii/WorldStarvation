@@ -1,0 +1,347 @@
+{
+ "label": "s62b",
+ "env": {
+  "VW": 1536,
+  "VH": 826,
+  "dpr": 1.25,
+  "city": {
+   "x": 65536,
+   "y": 65536,
+   "R": 2900,
+   "name": "Лунец"
+  },
+  "gpu": "ANGLE (Intel, Intel(R) UHD Graphics (0x0000A78B) Direct3D11 vs_5_0 ps_5_0, D3D11)"
+ },
+ "at": "2026-11-12T17:22:42.876Z",
+ "rows": [
+  {
+   "H": 1000,
+   "ph": "still",
+   "fps": 160,
+   "iv": {
+    "n": 318,
+    "p50": 6.1,
+    "p95": 6.4,
+    "p99": 12.1,
+    "max": 12.2
+   },
+   "js": {
+    "n": 319,
+    "p50": 0.8,
+    "p95": 2.2,
+    "p99": 3.2,
+    "max": 4.3
+   },
+   "over": 10,
+   "jsOver": 0,
+   "lt": 0,
+   "missing": 0,
+   "prof": {
+    "water": 0.16,
+    "tiles": 0.06,
+    "edge": 0,
+    "shadows": 0,
+    "traffic": 0.05,
+    "emit": 0,
+    "flights": 0,
+    "fog": 0,
+    "lights": 0,
+    "dispatch": 0,
+    "clouds": 0,
+    "labels": 0.38,
+    "hook": 0.07,
+    "js": 0.79
+   },
+   "gpu": 0,
+   "gpuPass": {}
+  },
+  {
+   "H": 1000,
+   "ph": "pan",
+   "fps": 162,
+   "iv": {
+    "n": 648,
+    "p50": 6.1,
+    "p95": 6.2,
+    "p99": 12.1,
+    "max": 24.2
+   },
+   "js": {
+    "n": 649,
+    "p50": 1.3,
+    "p95": 2.4,
+    "p99": 3.9,
+    "max": 26
+   },
+   "over": 8,
+   "jsOver": 3,
+   "lt": 0,
+   "missing": 24,
+   "prof": {
+    "water": 0.33,
+    "tiles": 0.29,
+    "edge": 0.01,
+    "shadows": 0,
+    "traffic": 0.08,
+    "emit": 0,
+    "flights": 0,
+    "fog": 0,
+    "lights": 0,
+    "dispatch": 0.04,
+    "clouds": 0.01,
+    "labels": 0.73,
+    "hook": 0.05,
+    "js": 1.63
+   },
+   "gpu": 0,
+   "gpuPass": {}
+  },
+  {
+   "H": 1000,
+   "ph": "jerk",
+   "fps": 164,
+   "iv": {
+    "n": 488,
+    "p50": 6.1,
+    "p95": 6.2,
+    "p99": 6.4,
+    "max": 12.2
+   },
+   "js": {
+    "n": 489,
+    "p50": 1.3,
+    "p95": 2.2,
+    "p99": 3.4,
+    "max": 7.4
+   },
+   "over": 4,
+   "jsOver": 2,
+   "lt": 0,
+   "missing": 24,
+   "prof": {
+    "water": 0.36,
+    "tiles": 0.16,
+    "edge": 0.01,
+    "shadows": 0,
+    "traffic": 0.05,
+    "emit": 0,
+    "flights": 0,
+    "fog": 0.01,
+    "lights": 0,
+    "dispatch": 0.04,
+    "clouds": 0,
+    "labels": 0.63,
+    "hook": 0.04,
+    "js": 1.43
+   },
+   "gpu": 0,
+   "gpuPass": {}
+  },
+  {
+   "H": 1000,
+   "ph": "zoom",
+   "fps": 164,
+   "iv": {
+    "n": 489,
+    "p50": 6.1,
+    "p95": 6.2,
+    "p99": 6.6,
+    "max": 12.2
+   },
+   "js": {
+    "n": 490,
+    "p50": 1.5,
+    "p95": 2.3,
+    "p99": 2.9,
+    "max": 5.3
+   },
+   "over": 4,
+   "jsOver": 0,
+   "lt": 0,
+   "missing": 4,
+   "prof": {
+    "water": 0.55,
+    "tiles": 0.15,
+    "edge": 0.02,
+    "shadows": 0,
+    "traffic": 0.07,
+    "emit": 0,
+    "flights": 0,
+    "fog": 0,
+    "lights": 0,
+    "dispatch": 0.01,
+    "clouds": 0,
+    "labels": 0.69,
+    "hook": 0.04,
+    "js": 1.59
+   },
+   "gpu": 0,
+   "gpuPass": {}
+  },
+  {
+   "H": 20000,
+   "ph": "still",
+   "fps": 165,
+   "iv": {
+    "n": 328,
+    "p50": 6.1,
+    "p95": 6.4,
+    "p99": 6.5,
+    "max": 6.7
+   },
+   "js": {
+    "n": 329,
+    "p50": 0.8,
+    "p95": 1,
+    "p99": 1.4,
+    "max": 3.5
+   },
+   "over": 0,
+   "jsOver": 0,
+   "lt": 0,
+   "missing": 0,
+   "prof": {
+    "water": 0.05,
+    "tiles": 0.13,
+    "edge": 0,
+    "shadows": 0,
+    "traffic": 0,
+    "emit": 0,
+    "flights": 0,
+    "fog": 0,
+    "lights": 0,
+    "dispatch": 0,
+    "clouds": 0.01,
+    "labels": 0.4,
+    "hook": 0.09,
+    "js": 0.76
+   },
+   "gpu": 0,
+   "gpuPass": {}
+  },
+  {
+   "H": 20000,
+   "ph": "pan",
+   "fps": 155,
+   "iv": {
+    "n": 620,
+    "p50": 6.1,
+    "p95": 12.1,
+    "p99": 12.2,
+    "max": 12.3
+   },
+   "js": {
+    "n": 621,
+    "p50": 0.5,
+    "p95": 1.7,
+    "p99": 3.1,
+    "max": 14.4
+   },
+   "over": 38,
+   "jsOver": 1,
+   "lt": 0,
+   "missing": 6,
+   "prof": {
+    "water": 0.18,
+    "tiles": 0.24,
+    "edge": 0.01,
+    "shadows": 0,
+    "traffic": 0,
+    "emit": 0.01,
+    "flights": 0,
+    "fog": 0,
+    "lights": 0,
+    "dispatch": 0.03,
+    "clouds": 0.02,
+    "labels": 0.03,
+    "hook": 0.11,
+    "js": 0.71
+   },
+   "gpu": 0,
+   "gpuPass": {}
+  },
+  {
+   "H": 20000,
+   "ph": "jerk",
+   "fps": 144,
+   "iv": {
+    "n": 428,
+    "p50": 6.1,
+    "p95": 12.2,
+    "p99": 12.2,
+    "max": 12.3
+   },
+   "js": {
+    "n": 429,
+    "p50": 0.8,
+    "p95": 2.4,
+    "p99": 3.3,
+    "max": 4.2
+   },
+   "over": 63,
+   "jsOver": 0,
+   "lt": 0,
+   "missing": 18,
+   "prof": {
+    "water": 0.13,
+    "tiles": 0.42,
+    "edge": 0.01,
+    "shadows": 0,
+    "traffic": 0,
+    "emit": 0,
+    "flights": 0,
+    "fog": 0,
+    "lights": 0,
+    "dispatch": 0.03,
+    "clouds": 0.01,
+    "labels": 0.1,
+    "hook": 0.12,
+    "js": 0.98
+   },
+   "gpu": 0,
+   "gpuPass": {}
+  },
+  {
+   "H": 20000,
+   "ph": "zoom",
+   "fps": 155,
+   "iv": {
+    "n": 461,
+    "p50": 6.1,
+    "p95": 12,
+    "p99": 12.2,
+    "max": 12.3
+   },
+   "js": {
+    "n": 462,
+    "p50": 0.8,
+    "p95": 2.4,
+    "p99": 3.9,
+    "max": 5.8
+   },
+   "over": 31,
+   "jsOver": 0,
+   "lt": 0,
+   "missing": 0,
+   "prof": {
+    "water": 0.16,
+    "tiles": 0.1,
+    "edge": 0,
+    "shadows": 0,
+    "traffic": 0,
+    "emit": 0,
+    "flights": 0.01,
+    "fog": 0,
+    "lights": 0,
+    "dispatch": 0,
+    "clouds": 0.01,
+    "labels": 0.44,
+    "hook": 0.21,
+    "js": 0.94
+   },
+   "gpu": 0,
+   "gpuPass": {}
+  }
+ ],
+ "profile": {}
+}
